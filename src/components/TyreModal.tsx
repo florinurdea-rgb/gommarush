@@ -5,8 +5,8 @@ import { SeasonSelector } from "./SeasonSelector";
 import { QuantitySelector } from "./QuantitySelector";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
-import { isValidTyreDimension } from "../lib/validation";
-import { Quantity, Season, Tyre } from "../lib/types";
+import { isValidQuantity, isValidTyreDimension } from "../lib/validation";
+import { Season, Tyre } from "../lib/types";
 
 interface TyreModalProps {
   open: boolean;
@@ -21,7 +21,7 @@ interface DraftState {
   profile: string;
   rim: string;
   season: Season | null;
-  quantity: Quantity;
+  quantity: string;
   notes: string;
 }
 
@@ -30,7 +30,7 @@ const EMPTY_DRAFT: DraftState = {
   profile: "",
   rim: "",
   season: null,
-  quantity: 4,
+  quantity: "",
   notes: "",
 };
 
@@ -44,6 +44,7 @@ export function TyreModal({ open, mode, initialTyre, onClose, onSave }: TyreModa
   const profileRef = useRef<HTMLInputElement>(null);
   const rimRef = useRef<HTMLInputElement>(null);
   const seasonWrapperRef = useRef<HTMLDivElement>(null);
+  const quantityRef = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState<DraftState>(EMPTY_DRAFT);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
@@ -56,7 +57,7 @@ export function TyreModal({ open, mode, initialTyre, onClose, onSave }: TyreModa
         profile: initialTyre.profile,
         rim: initialTyre.rim,
         season: initialTyre.season,
-        quantity: initialTyre.quantity,
+        quantity: String(initialTyre.quantity),
         notes: initialTyre.notes,
       });
     } else {
@@ -75,7 +76,8 @@ export function TyreModal({ open, mode, initialTyre, onClose, onSave }: TyreModa
   const profileValid = isValidTyreDimension(draft.profile);
   const rimValid = isValidTyreDimension(draft.rim);
   const seasonValid = draft.season !== null;
-  const canSubmit = widthValid && profileValid && rimValid && seasonValid;
+  const quantityValid = isValidQuantity(draft.quantity);
+  const canSubmit = widthValid && profileValid && rimValid && seasonValid && quantityValid;
 
   const showError = (field: string, valid: boolean) =>
     (touched[field] || attemptedSubmit) && !valid;
@@ -103,12 +105,16 @@ export function TyreModal({ open, mode, initialTyre, onClose, onSave }: TyreModa
       seasonWrapperRef.current?.querySelector<HTMLElement>('[role="radio"]')?.focus();
       return;
     }
+    if (!quantityValid) {
+      quantityRef.current?.focus();
+      return;
+    }
     onSave({
       width: draft.width.trim(),
       profile: draft.profile.trim(),
       rim: draft.rim.trim(),
       season: draft.season,
-      quantity: draft.quantity,
+      quantity: parseInt(draft.quantity, 10),
       notes: draft.notes.trim(),
     });
   }
@@ -202,8 +208,11 @@ export function TyreModal({ open, mode, initialTyre, onClose, onSave }: TyreModa
 
           <div className="mt-6">
             <QuantitySelector
+              ref={quantityRef}
               value={draft.quantity}
               onChange={(quantity) => setDraft((d) => ({ ...d, quantity }))}
+              onBlur={() => setTouched((t) => ({ ...t, quantity: true }))}
+              error={showError("quantity", quantityValid) ? "Inserisci una quantità valida" : undefined}
             />
           </div>
 

@@ -23,3 +23,9 @@ export function isValidEmailOrPhone(value: string): boolean {
 export function isValidTyreDimension(value: string): boolean {
   return /^[0-9]+$/.test(value.trim()) && value.trim().length > 0;
 }
+
+export function isValidQuantity(value: string): boolean {
+  const trimmed = value.trim();
+  if (!/^[0-9]+$/.test(trimmed)) return false;
+  return parseInt(trimmed, 10) >= 1;
+}

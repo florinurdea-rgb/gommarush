@@ -1,14 +1,12 @@
 export type Season = "estivo" | "invernale" | "quattro-stagioni";
 
-export type Quantity = 1 | 2 | 4;
-
 export interface Tyre {
   id: string;
   width: string;
   profile: string;
   rim: string;
   season: Season | null;
-  quantity: Quantity;
+  quantity: number;
   notes: string;
 }
 
