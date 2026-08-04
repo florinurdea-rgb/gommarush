@@ -1,26 +1,28 @@
-import heroCourier from "../assets/hero-courier.webp";
+import heroTireShop from "../assets/hero-tire-shop.webp";
 
-// Static illustration (courier handing a tyre to a fitting-shop worker),
-// kept out of the mobile layout and faded behind a white gradient so it
-// reads as a light background accent rather than competing with the copy.
+// Photo background of a tyre shop, faded to white on the left (behind the
+// copy), and softly on the top/bottom edges, so it reads as a light,
+// subtle backdrop rather than a busy full-strength photo.
 export function HeroBackground() {
   return (
     <div aria-hidden="true" className="absolute inset-0 overflow-hidden">
       <img
-        src={heroCourier}
+        src={heroTireShop}
         alt=""
         decoding="async"
-        className="absolute bottom-0 right-[-1%] hidden h-[80%] w-auto max-w-none select-none sm:block lg:right-[2%] lg:h-[86%]"
+        className="absolute inset-0 h-full w-full object-cover"
       />
       <div
         className="absolute inset-0"
         style={{
           background:
-            "linear-gradient(90deg, #FFFFFF 0%, #FFFFFF 28%, rgba(255,255,255,0.88) 42%, rgba(255,255,255,0.32) 58%, rgba(255,255,255,0.05) 72%, rgba(255,255,255,0) 100%)",
+            "linear-gradient(90deg, #FFFFFF 0%, #FFFFFF 22%, rgba(255,255,255,0.92) 38%, rgba(255,255,255,0.62) 55%, rgba(255,255,255,0.38) 72%, rgba(255,255,255,0.24) 100%)",
         }}
       />
-      <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-white to-transparent" />
-      <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-white to-transparent" />
+      {/* Text spans the full width below sm, so the photo needs a much stronger wash there to stay readable */}
+      <div className="absolute inset-0 bg-white/80 sm:hidden" />
+      <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-white to-transparent" />
+      <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-white to-transparent" />
     </div>
   );
 }
