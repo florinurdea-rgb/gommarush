@@ -13,8 +13,8 @@ import {
   checkRim,
   checkWidth,
   isValidQuantity,
-} from "../lib/validation";
-import { Season, Tyre } from "../lib/types";
+} from "../lib/validation/tyre-form";
+import { Tyre, TyreSeason } from "../lib/types/ui";
 
 interface TyreModalProps {
   open: boolean;
@@ -28,7 +28,7 @@ interface DraftState {
   width: string;
   profile: string;
   rim: string;
-  season: Season | null;
+  season: TyreSeason | null;
   quantity: string;
   extraLoad: boolean;
   commercial: boolean;

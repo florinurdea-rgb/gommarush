@@ -1,35 +1,50 @@
+"use client";
+
 import { useRef, useState } from "react";
-import { Logo } from "../components/Logo";
-import { LinkButton } from "../components/LinkButton";
-import { Button } from "../components/Button";
-import { FloatingInput, FloatingSelect } from "../components/FloatingField";
-import { TyreModal } from "../components/TyreModal";
-import { ConfirmDialog } from "../components/ConfirmDialog";
-import { TyreCard } from "../components/TyreCard";
-import { isValidEmailOrPhone } from "../lib/validation";
-import { DELIVERY_LABELS, DeliveryPreference, Tyre } from "../lib/types";
+import { useRouter } from "next/navigation";
+import { Logo } from "@/components/Logo";
+import { LinkButton } from "@/components/LinkButton";
+import { Button } from "@/components/Button";
+import { FloatingInput, FloatingSelect, FloatingTextarea } from "@/components/FloatingField";
+import { TyreModal } from "@/components/TyreModal";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { TyreCard } from "@/components/TyreCard";
+import { isValidEmailOrPhone } from "@/lib/validation/tyre-form";
+import { DELIVERY_LABELS, toRequestedTyre, Tyre } from "@/lib/types/ui";
+import type { DeliveryPreference } from "@/lib/types/ui";
+import type {
+  CreateOfferRequestPayload,
+  CreateOfferRequestResponse,
+} from "@/lib/types/offer-request";
+import { OFFER_CONFIRMATION_STORAGE_KEY } from "@/lib/offer-confirmation-storage";
 
 function createId() {
   return `tyre-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export default function GetOffer() {
+export default function GetOfferPage() {
+  const router = useRouter();
+
   const [companyName, setCompanyName] = useState("");
   const [contact, setContact] = useState("");
-  const [deliveryPreference, setDeliveryPreference] = useState<DeliveryPreference>("qualsiasi");
+  const [deliveryPreference, setDeliveryPreference] = useState<DeliveryPreference>("any");
   const [tyres, setTyres] = useState<Tyre[]>([]);
+  const [customerMessage, setCustomerMessage] = useState("");
+  const [website, setWebsite] = useState(""); // honeypot, must stay empty
 
   const [contactTouched, setContactTouched] = useState(false);
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"add" | "edit">("add");
   const [editingTyreId, setEditingTyreId] = useState<string | null>(null);
 
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
-  const [successVisible, setSuccessVisible] = useState(false);
 
   const contactRef = useRef<HTMLInputElement>(null);
+  const idempotencyKeyRef = useRef<string | null>(null);
 
   const contactValid = isValidEmailOrPhone(contact);
   const hasTyres = tyres.length > 0;
@@ -71,17 +86,69 @@ export default function GetOffer() {
     setDeleteTargetId(null);
   }
 
-  function handleSubmitRequest() {
+  async function handleSubmitRequest() {
     setAttemptedSubmit(true);
     if (!contactValid) {
       contactRef.current?.focus();
       return;
     }
-    if (!hasTyres) {
+    if (!hasTyres || submitting) {
       return;
     }
-    setSuccessVisible(true);
-    window.setTimeout(() => setSuccessVisible(false), 4000);
+
+    if (!idempotencyKeyRef.current) {
+      idempotencyKeyRef.current = crypto.randomUUID();
+    }
+
+    setSubmitting(true);
+    setSubmitError(false);
+
+    const payload: CreateOfferRequestPayload = {
+      companyName: companyName.trim() || undefined,
+      contact: contact.trim(),
+      deliveryPreference,
+      tyres: tyres.map(toRequestedTyre),
+      customerMessage: customerMessage.trim() || undefined,
+      idempotencyKey: idempotencyKeyRef.current,
+      website,
+    };
+
+    try {
+      const res = await fetch("/api/offer-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data: CreateOfferRequestResponse = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error("REQUEST_FAILED");
+      }
+
+      sessionStorage.setItem(
+        OFFER_CONFIRMATION_STORAGE_KEY,
+        JSON.stringify({
+          requestNumber: data.requestNumber,
+          emailSent: data.emailSent,
+          summary: data.summary,
+        })
+      );
+
+      // Only clear the form once the server has confirmed the row is saved.
+      setCompanyName("");
+      setContact("");
+      setDeliveryPreference("any");
+      setTyres([]);
+      setCustomerMessage("");
+      setAttemptedSubmit(false);
+      idempotencyKeyRef.current = null;
+
+      router.push("/request-confirmation");
+    } catch {
+      setSubmitting(false);
+      setSubmitError(true);
+    }
   }
 
   return (
@@ -124,6 +191,7 @@ export default function GetOffer() {
               placeholder="Autofficina Verona"
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
+              maxLength={150}
             />
             <FloatingInput
               ref={contactRef}
@@ -137,6 +205,7 @@ export default function GetOffer() {
               }
               onChange={(e) => setContact(e.target.value)}
               onBlur={() => setContactTouched(true)}
+              maxLength={200}
             />
             <FloatingSelect
               label="Preferenza di consegna"
@@ -181,6 +250,36 @@ export default function GetOffer() {
             </div>
           ) : null}
         </section>
+
+        <section aria-labelledby="message-section-title" className="mt-9">
+          <h2 id="message-section-title" className="sr-only">
+            Messaggio
+          </h2>
+          <FloatingTextarea
+            label="Messaggio per il fornitore (opzionale)"
+            placeholder="Contattatemi nel pomeriggio, orari di consegna preferiti, ecc."
+            value={customerMessage}
+            onChange={(e) => setCustomerMessage(e.target.value)}
+            maxLength={1000}
+          />
+        </section>
+
+        {/* Honeypot: real users never see or fill this in. */}
+        <div
+          aria-hidden="true"
+          style={{ position: "absolute", left: "-9999px", top: 0, width: 1, height: 1, overflow: "hidden" }}
+        >
+          <label htmlFor="website">Lascia questo campo vuoto</label>
+          <input
+            type="text"
+            id="website"
+            name="website"
+            tabIndex={-1}
+            autoComplete="off"
+            value={website}
+            onChange={(e) => setWebsite(e.target.value)}
+          />
+        </div>
       </main>
 
       <TyreModal
@@ -202,15 +301,21 @@ export default function GetOffer() {
         className="fixed inset-x-0 bottom-0 z-40 border-t border-ink/10 bg-white/95 backdrop-blur"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
-        {successVisible ? (
+        {submitError ? (
           <div
-            role="status"
-            className="mx-auto flex w-full max-w-content items-center gap-2 px-4 pt-3 text-sm font-semibold text-accent-dark sm:px-6"
+            role="alert"
+            className="mx-auto flex w-full max-w-content flex-col gap-2 px-4 pt-3 text-sm sm:flex-row sm:items-center sm:justify-between sm:px-6"
           >
-            <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-4 w-4 flex-none">
-              <path d="M4 10.5l3.5 3.5L16 5.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            Richiesta pronta per l&rsquo;invio.
+            <span className="text-red-600">
+              Non è stato possibile inviare la richiesta. Controlla i dati e riprova.
+            </span>
+            <button
+              type="button"
+              onClick={handleSubmitRequest}
+              className="self-start font-semibold text-accent underline decoration-2 underline-offset-2 hover:text-accent-dark sm:self-auto"
+            >
+              Riprova
+            </button>
           </div>
         ) : null}
         <div className="mx-auto w-full max-w-content px-4 py-3 sm:px-6">
@@ -218,10 +323,11 @@ export default function GetOffer() {
             type="button"
             size="lg"
             className="w-full"
-            visuallyDisabled={!canSubmit}
+            visuallyDisabled={!canSubmit || submitting}
+            disabled={submitting}
             onClick={handleSubmitRequest}
           >
-            Invia richiesta di offerta
+            {submitting ? "Invio in corso…" : "Invia richiesta di offerta"}
           </Button>
           {attemptedSubmit && !hasTyres ? (
             <p role="alert" className="mt-2 text-center text-sm text-red-600">

@@ -1,9 +1,9 @@
-import { Season, SEASON_LABELS } from "../lib/types";
+import { TyreSeason, SEASON_LABELS } from "../lib/types/ui";
 
-const SEASONS: Season[] = ["estivo", "invernale", "quattro-stagioni"];
+const SEASONS: TyreSeason[] = ["summer", "winter", "all_season"];
 
-const ICONS: Record<Season, JSX.Element> = {
-  estivo: (
+const ICONS: Record<TyreSeason, JSX.Element> = {
+  summer: (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="h-5 w-5">
       <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.8" />
       <path
@@ -14,7 +14,7 @@ const ICONS: Record<Season, JSX.Element> = {
       />
     </svg>
   ),
-  invernale: (
+  winter: (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="h-5 w-5">
       <path
         stroke="currentColor"
@@ -24,7 +24,7 @@ const ICONS: Record<Season, JSX.Element> = {
       />
     </svg>
   ),
-  "quattro-stagioni": (
+  all_season: (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="h-5 w-5">
       <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
       <path stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" d="M12 3v18M3 12h18" />
@@ -33,8 +33,8 @@ const ICONS: Record<Season, JSX.Element> = {
 };
 
 interface SeasonSelectorProps {
-  value: Season | null;
-  onChange: (season: Season) => void;
+  value: TyreSeason | null;
+  onChange: (season: TyreSeason) => void;
   error?: string;
 }
 

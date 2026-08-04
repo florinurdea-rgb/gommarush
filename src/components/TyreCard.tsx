@@ -1,4 +1,4 @@
-import { SEASON_LABELS, Tyre } from "../lib/types";
+import { SEASON_LABELS, Tyre } from "../lib/types/ui";
 
 interface TyreCardProps {
   tyre: Tyre;

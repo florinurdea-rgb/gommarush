@@ -1,9 +1,11 @@
+import Link from "next/link";
 import { AnchorHTMLAttributes } from "react";
 
 type Variant = "primary" | "secondary" | "ghost";
 type Size = "md" | "lg";
 
-interface LinkButtonProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
+interface LinkButtonProps extends Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href"> {
+  href: string;
   variant?: Variant;
   size?: Size;
 }
@@ -20,6 +22,7 @@ const sizeClasses: Record<Size, string> = {
 };
 
 export function LinkButton({
+  href,
   variant = "primary",
   size = "md",
   className = "",
@@ -27,11 +30,12 @@ export function LinkButton({
   ...rest
 }: LinkButtonProps) {
   return (
-    <a
+    <Link
+      href={href}
       className={`inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-all duration-150 ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
       {...rest}
     >
       {children}
-    </a>
+    </Link>
   );
 }

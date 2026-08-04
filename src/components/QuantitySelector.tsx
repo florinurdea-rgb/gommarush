@@ -1,4 +1,5 @@
 import { forwardRef } from "react";
+import { QUANTITY_RANGE } from "../lib/validation/tyre-form";
 
 interface QuantitySelectorProps {
   value: string;
@@ -11,7 +12,9 @@ function step(value: string, delta: number): string {
   const current = parseInt(value, 10);
   const base = Number.isFinite(current) && current > 0 ? current : 0;
   const next = base + delta;
-  return next >= 1 ? String(next) : "1";
+  if (next < QUANTITY_RANGE.min) return String(QUANTITY_RANGE.min);
+  if (next > QUANTITY_RANGE.max) return String(QUANTITY_RANGE.max);
+  return String(next);
 }
 
 export const QuantitySelector = forwardRef<HTMLInputElement, QuantitySelectorProps>(

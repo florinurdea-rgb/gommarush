@@ -1,4 +1,4 @@
-import logo from "../assets/logo.jpg";
+const logo = "/images/logo.jpg";
 
 interface LogoProps {
   className?: string;

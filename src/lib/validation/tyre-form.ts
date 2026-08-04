@@ -57,8 +57,11 @@ export function checkRim(value: string): TyreDimensionCheck {
   return checkDimension(value, RIM_RANGE);
 }
 
+export const QUANTITY_RANGE = { min: 1, max: 100 };
+
 export function isValidQuantity(value: string): boolean {
   const trimmed = value.trim();
   if (!/^[0-9]+$/.test(trimmed)) return false;
-  return parseInt(trimmed, 10) >= 1;
+  const n = parseInt(trimmed, 10);
+  return n >= QUANTITY_RANGE.min && n <= QUANTITY_RANGE.max;
 }

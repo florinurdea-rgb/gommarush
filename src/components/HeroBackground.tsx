@@ -1,13 +1,14 @@
-import heroTireShop from "../assets/hero-tire-shop.webp";
+const heroVanFleet = "/images/hero-van-fleet.webp";
 
-// Photo background of a tyre shop, faded to white on the left (behind the
-// copy), and softly on the top/bottom edges, so it reads as a light,
-// subtle backdrop rather than a busy full-strength photo.
+// Photo background of the branded GommaRush delivery fleet, faded to
+// white on the left (behind the copy), and softly on the top/bottom
+// edges, so it reads as a light, subtle backdrop rather than a busy
+// full-strength photo.
 export function HeroBackground() {
   return (
     <div aria-hidden="true" className="absolute inset-0 overflow-hidden">
       <img
-        src={heroTireShop}
+        src={heroVanFleet}
         alt=""
         decoding="async"
         className="absolute inset-0 h-full w-full object-cover"

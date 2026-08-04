@@ -1,6 +1,6 @@
-import { Logo } from "../components/Logo";
-import { LinkButton } from "../components/LinkButton";
-import { HeroBackground } from "../components/HeroBackground";
+import { Logo } from "@/components/Logo";
+import { LinkButton } from "@/components/LinkButton";
+import { HeroBackground } from "@/components/HeroBackground";
 
 const TRUST_POINTS = [
   { label: "Consegna rapida" },
@@ -35,7 +35,7 @@ export default function Landing() {
 
           <div className="mt-9">
             <LinkButton
-              href="/get-offer/"
+              href="/get-offer"
               size="lg"
               className="shadow-card focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
             >
