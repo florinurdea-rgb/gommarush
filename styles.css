@@ -85,10 +85,13 @@ body {
   background: var(--blue);
   color: #ffffff;
   padding: 0.9rem 2.4rem;
+  border: 0;
   border-radius: 8px;
   text-decoration: none;
+  font-family: inherit;
   font-weight: 600;
   font-size: 1.05rem;
+  cursor: pointer;
   box-shadow: 0 8px 20px rgba(31, 111, 209, 0.3);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
