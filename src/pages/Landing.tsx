@@ -12,15 +12,18 @@ export default function Landing() {
   return (
     <div className="flex min-h-screen flex-col bg-white">
       <header className="mx-auto w-full max-w-content px-4 pt-5 sm:px-6">
-        <Logo />
+        <Logo
+          iconClassName="h-16 w-16 sm:h-20 sm:w-20 lg:h-24 lg:w-24"
+          textClassName="text-3xl sm:text-4xl lg:text-5xl"
+        />
       </header>
 
       <main className="relative flex flex-1 flex-col justify-center overflow-hidden">
         <HeroBackground />
 
         <div className="relative mx-auto flex w-full max-w-content flex-col items-start px-4 py-16 sm:px-6 sm:py-24">
-          <h1 className="max-w-2xl text-[28px] font-extrabold leading-[1.15] tracking-tight text-ink sm:text-5xl lg:text-6xl">
-            GoRush, il tuo fornitore
+          <h1 className="max-w-xl text-[25px] font-extrabold leading-[1.15] tracking-tight text-ink sm:max-w-none sm:text-[34px] lg:text-5xl">
+            GommaRush, il tuo fornitore
             <br />
             affidabile di pneumatici
           </h1>
@@ -65,7 +68,7 @@ export default function Landing() {
 
       <footer className="w-full border-t border-ink/10 bg-surface-soft">
         <div className="mx-auto w-full max-w-content px-4 py-5 text-center text-sm text-ink-soft sm:px-6 sm:text-left">
-          &copy; 2026 GoRush Verona. Tutti i diritti riservati.
+          &copy; 2026 GommaRush Verona. Tutti i diritti riservati.
         </div>
       </footer>
     </div>

@@ -8,11 +8,27 @@ interface TyreCardProps {
 
 export function TyreCard({ tyre, onEdit, onDelete }: TyreCardProps) {
   const size = `${tyre.width}/${tyre.profile} R${tyre.rim}`;
+  const markings = [
+    tyre.extraLoad ? { code: "XL", label: "Extra Load" } : null,
+    tyre.commercial ? { code: "C", label: "Commerciale" } : null,
+  ].filter((m): m is { code: string; label: string } => m !== null);
 
   return (
     <li className="flex flex-col gap-3 rounded-xl border border-ink/10 bg-white p-4 shadow-card sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <p className="text-base font-bold text-ink">{size}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-base font-bold text-ink">{size}</p>
+          {markings.map((m) => (
+            <span
+              key={m.code}
+              title={m.label}
+              aria-label={m.label}
+              className="rounded-full border border-accent/30 bg-accent-light px-2 py-0.5 text-xs font-semibold text-accent-dark"
+            >
+              {m.code}
+            </span>
+          ))}
+        </div>
         <p className="mt-0.5 text-sm text-ink-soft">
           {tyre.season ? SEASON_LABELS[tyre.season] : "—"} &middot; Quantit&agrave;: {tyre.quantity}
         </p>

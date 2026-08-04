@@ -5,7 +5,15 @@ import { SeasonSelector } from "./SeasonSelector";
 import { QuantitySelector } from "./QuantitySelector";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
-import { isValidQuantity, isValidTyreDimension } from "../lib/validation";
+import {
+  PROFILE_RANGE,
+  RIM_RANGE,
+  WIDTH_RANGE,
+  checkProfile,
+  checkRim,
+  checkWidth,
+  isValidQuantity,
+} from "../lib/validation";
 import { Season, Tyre } from "../lib/types";
 
 interface TyreModalProps {
@@ -22,6 +30,8 @@ interface DraftState {
   rim: string;
   season: Season | null;
   quantity: string;
+  extraLoad: boolean;
+  commercial: boolean;
   notes: string;
 }
 
@@ -30,9 +40,17 @@ const EMPTY_DRAFT: DraftState = {
   profile: "",
   rim: "",
   season: null,
-  quantity: "",
+  quantity: "1",
+  extraLoad: false,
+  commercial: false,
   notes: "",
 };
+
+const DIMENSION_ERRORS = {
+  width: { empty: "Obbligatorio", invalid: `Larghezza non valida (${WIDTH_RANGE.min}–${WIDTH_RANGE.max}, multipli di 5)` },
+  profile: { empty: "Obbligatorio", invalid: `Profilo non valido (${PROFILE_RANGE.min}–${PROFILE_RANGE.max}, multipli di 5)` },
+  rim: { empty: "Obbligatorio", invalid: `Cerchio non valido (${RIM_RANGE.min}–${RIM_RANGE.max})` },
+} as const;
 
 function onlyDigits(value: string) {
   return value.replace(/[^0-9]/g, "");
@@ -58,6 +76,8 @@ export function TyreModal({ open, mode, initialTyre, onClose, onSave }: TyreModa
         rim: initialTyre.rim,
         season: initialTyre.season,
         quantity: String(initialTyre.quantity),
+        extraLoad: initialTyre.extraLoad,
+        commercial: initialTyre.commercial,
         notes: initialTyre.notes,
       });
     } else {
@@ -72,9 +92,12 @@ export function TyreModal({ open, mode, initialTyre, onClose, onSave }: TyreModa
 
   if (!open) return null;
 
-  const widthValid = isValidTyreDimension(draft.width);
-  const profileValid = isValidTyreDimension(draft.profile);
-  const rimValid = isValidTyreDimension(draft.rim);
+  const widthCheck = checkWidth(draft.width);
+  const profileCheck = checkProfile(draft.profile);
+  const rimCheck = checkRim(draft.rim);
+  const widthValid = widthCheck === "ok";
+  const profileValid = profileCheck === "ok";
+  const rimValid = rimCheck === "ok";
   const seasonValid = draft.season !== null;
   const quantityValid = isValidQuantity(draft.quantity);
   const canSubmit = widthValid && profileValid && rimValid && seasonValid && quantityValid;
@@ -82,9 +105,16 @@ export function TyreModal({ open, mode, initialTyre, onClose, onSave }: TyreModa
   const showError = (field: string, valid: boolean) =>
     (touched[field] || attemptedSubmit) && !valid;
 
+  const dimensionError = (field: keyof typeof DIMENSION_ERRORS, check: "empty" | "invalid" | "ok") =>
+    check === "ok" ? undefined : DIMENSION_ERRORS[field][check];
+
+  const markings = [draft.extraLoad ? "XL" : null, draft.commercial ? "C" : null]
+    .filter(Boolean)
+    .join(" ");
+
   const preview =
     draft.width || draft.profile || draft.rim
-      ? `${draft.width || "—"} / ${draft.profile || "—"} R${draft.rim || "—"}`
+      ? `${draft.width || "—"} / ${draft.profile || "—"} R${draft.rim || "—"}${markings ? ` ${markings}` : ""}`
       : null;
 
   function handleSubmit() {
@@ -115,6 +145,8 @@ export function TyreModal({ open, mode, initialTyre, onClose, onSave }: TyreModa
       rim: draft.rim.trim(),
       season: draft.season,
       quantity: parseInt(draft.quantity, 10),
+      extraLoad: draft.extraLoad,
+      commercial: draft.commercial,
       notes: draft.notes.trim(),
     });
   }
@@ -162,9 +194,10 @@ export function TyreModal({ open, mode, initialTyre, onClose, onSave }: TyreModa
                 label="Larghezza"
                 placeholder="225"
                 inputMode="numeric"
+                maxLength={3}
                 required
                 value={draft.width}
-                error={showError("width", widthValid) ? "Obbligatorio" : undefined}
+                error={showError("width", widthValid) ? dimensionError("width", widthCheck) : undefined}
                 onChange={(e) => setDraft((d) => ({ ...d, width: onlyDigits(e.target.value) }))}
                 onBlur={() => setTouched((t) => ({ ...t, width: true }))}
               />
@@ -173,9 +206,10 @@ export function TyreModal({ open, mode, initialTyre, onClose, onSave }: TyreModa
                 label="Profilo"
                 placeholder="45"
                 inputMode="numeric"
+                maxLength={2}
                 required
                 value={draft.profile}
-                error={showError("profile", profileValid) ? "Obbligatorio" : undefined}
+                error={showError("profile", profileValid) ? dimensionError("profile", profileCheck) : undefined}
                 onChange={(e) => setDraft((d) => ({ ...d, profile: onlyDigits(e.target.value) }))}
                 onBlur={() => setTouched((t) => ({ ...t, profile: true }))}
               />
@@ -184,13 +218,44 @@ export function TyreModal({ open, mode, initialTyre, onClose, onSave }: TyreModa
                 label="Cerchio"
                 placeholder="17"
                 inputMode="numeric"
+                maxLength={2}
                 required
                 value={draft.rim}
-                error={showError("rim", rimValid) ? "Obbligatorio" : undefined}
+                error={showError("rim", rimValid) ? dimensionError("rim", rimCheck) : undefined}
                 onChange={(e) => setDraft((d) => ({ ...d, rim: onlyDigits(e.target.value) }))}
                 onBlur={() => setTouched((t) => ({ ...t, rim: true }))}
               />
             </div>
+
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                type="button"
+                aria-pressed={draft.extraLoad}
+                onClick={() => setDraft((d) => ({ ...d, extraLoad: !d.extraLoad }))}
+                className={`flex h-9 items-center gap-1.5 rounded-full border px-3.5 text-sm font-semibold transition-colors ${
+                  draft.extraLoad
+                    ? "border-accent bg-accent-light text-accent-dark"
+                    : "border-ink/15 bg-white text-ink-soft hover:border-ink/30"
+                }`}
+              >
+                XL
+                <span className="hidden font-normal sm:inline">Extra Load</span>
+              </button>
+              <button
+                type="button"
+                aria-pressed={draft.commercial}
+                onClick={() => setDraft((d) => ({ ...d, commercial: !d.commercial }))}
+                className={`flex h-9 items-center gap-1.5 rounded-full border px-3.5 text-sm font-semibold transition-colors ${
+                  draft.commercial
+                    ? "border-accent bg-accent-light text-accent-dark"
+                    : "border-ink/15 bg-white text-ink-soft hover:border-ink/30"
+                }`}
+              >
+                C
+                <span className="hidden font-normal sm:inline">Commerciale</span>
+              </button>
+            </div>
+
             {preview ? (
               <p className="mt-2.5 text-sm font-medium text-ink-soft">
                 Anteprima: <span className="font-semibold text-ink">{preview}</span>

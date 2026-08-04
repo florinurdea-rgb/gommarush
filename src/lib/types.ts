@@ -7,6 +7,8 @@ export interface Tyre {
   rim: string;
   season: Season | null;
   quantity: number;
+  extraLoad: boolean;
+  commercial: boolean;
   notes: string;
 }
 

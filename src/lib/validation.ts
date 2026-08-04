@@ -24,6 +24,39 @@ export function isValidTyreDimension(value: string): boolean {
   return /^[0-9]+$/.test(value.trim()) && value.trim().length > 0;
 }
 
+// Real tyre width/profile markings are always multiples of 5; rim diameters
+// (inches) are whole numbers. Bounds match the realistic range seen on
+// passenger and light-commercial tyres.
+export const WIDTH_RANGE = { min: 115, max: 335, step: 5 };
+export const PROFILE_RANGE = { min: 20, max: 85, step: 5 };
+export const RIM_RANGE = { min: 10, max: 24, step: 1 };
+
+export type TyreDimensionCheck = "empty" | "invalid" | "ok";
+
+function checkDimension(
+  value: string,
+  { min, max, step }: { min: number; max: number; step: number }
+): TyreDimensionCheck {
+  const trimmed = value.trim();
+  if (!trimmed) return "empty";
+  if (!/^[0-9]+$/.test(trimmed)) return "invalid";
+  const n = parseInt(trimmed, 10);
+  if (n < min || n > max || n % step !== 0) return "invalid";
+  return "ok";
+}
+
+export function checkWidth(value: string): TyreDimensionCheck {
+  return checkDimension(value, WIDTH_RANGE);
+}
+
+export function checkProfile(value: string): TyreDimensionCheck {
+  return checkDimension(value, PROFILE_RANGE);
+}
+
+export function checkRim(value: string): TyreDimensionCheck {
+  return checkDimension(value, RIM_RANGE);
+}
+
 export function isValidQuantity(value: string): boolean {
   const trimmed = value.trim();
   if (!/^[0-9]+$/.test(trimmed)) return false;
