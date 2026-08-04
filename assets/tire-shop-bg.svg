@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <style>
+      .navy { fill: #0f1c2e; }
+      .blue { fill: #1f6fd1; }
+      .grey { fill: #4a5a70; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="900" fill="#f7f9fc" />
+
+  <!-- back wall / shelving -->
+  <rect x="0" y="0" width="1600" height="560" class="grey" opacity="0.25" />
+  <rect x="60" y="80" width="360" height="360" fill="none" stroke="#0f1c2e" stroke-width="6" opacity="0.35" />
+  <circle cx="150" cy="180" r="70" fill="none" stroke="#0f1c2e" stroke-width="14" opacity="0.4" />
+  <circle cx="150" cy="180" r="34" fill="none" stroke="#0f1c2e" stroke-width="8" opacity="0.4" />
+  <circle cx="330" cy="180" r="70" fill="none" stroke="#0f1c2e" stroke-width="14" opacity="0.4" />
+  <circle cx="330" cy="180" r="34" fill="none" stroke="#0f1c2e" stroke-width="8" opacity="0.4" />
+  <circle cx="150" cy="360" r="70" fill="none" stroke="#0f1c2e" stroke-width="14" opacity="0.4" />
+  <circle cx="150" cy="360" r="34" fill="none" stroke="#0f1c2e" stroke-width="8" opacity="0.4" />
+  <circle cx="330" cy="360" r="70" fill="none" stroke="#0f1c2e" stroke-width="14" opacity="0.4" />
+  <circle cx="330" cy="360" r="34" fill="none" stroke="#0f1c2e" stroke-width="8" opacity="0.4" />
+
+  <!-- floor -->
+  <rect x="0" y="560" width="1600" height="340" fill="#0f1c2e" opacity="0.10" />
+  <rect x="0" y="556" width="1600" height="6" fill="#0f1c2e" opacity="0.3" />
+
+  <!-- tool cart -->
+  <g opacity="0.4">
+    <rect x="1260" y="500" width="220" height="140" rx="10" class="navy" />
+    <rect x="1260" y="470" width="220" height="34" rx="6" class="navy" />
+    <circle cx="1290" cy="650" r="18" class="grey" />
+    <circle cx="1450" cy="650" r="18" class="grey" />
+  </g>
+
+  <!-- large tyre on stand (right side) -->
+  <g opacity="0.5">
+    <circle cx="1200" cy="700" r="150" fill="none" stroke="#0f1c2e" stroke-width="30" />
+    <circle cx="1200" cy="700" r="70" fill="none" stroke="#0f1c2e" stroke-width="14" />
+    <circle cx="1200" cy="700" r="14" class="navy" />
+    <rect x="1185" y="820" width="30" height="60" class="navy" />
+    <rect x="1140" y="878" width="120" height="16" rx="6" class="navy" />
+  </g>
+
+  <!-- mechanic figure crouching, fitting a tyre onto a hub (left/centre) -->
+  <g opacity="0.55">
+    <!-- wheel hub / car edge -->
+    <rect x="230" y="560" width="60" height="220" rx="10" class="navy" />
+    <circle cx="380" cy="700" r="120" fill="none" stroke="#1f6fd1" stroke-width="26" />
+    <circle cx="380" cy="700" r="54" fill="none" stroke="#1f6fd1" stroke-width="12" />
+
+    <!-- crouching figure -->
+    <circle cx="620" cy="560" r="42" class="navy" /> <!-- head -->
+    <path d="M560 780
+             C 560 660, 600 600, 660 600
+             C 700 600, 720 640, 700 700
+             C 690 730, 640 760, 610 790
+             C 590 810, 560 800, 560 780 Z" class="navy" /> <!-- torso/legs crouched -->
+    <!-- arm reaching to tyre with wrench -->
+    <path d="M660 630 C 560 650, 470 680, 400 690" stroke="#0f1c2e" stroke-width="24" fill="none" stroke-linecap="round" />
+    <rect x="380" y="660" width="70" height="18" rx="6" transform="rotate(-14 380 660)" class="navy" />
+    <!-- back leg -->
+    <path d="M600 790 C 640 830, 700 850, 760 850" stroke="#0f1c2e" stroke-width="26" fill="none" stroke-linecap="round" />
+  </g>
+
+  <!-- floor shadow under tyre -->
+  <ellipse cx="380" cy="835" rx="150" ry="18" fill="#0f1c2e" opacity="0.15" />
+  <ellipse cx="1200" cy="890" rx="140" ry="14" fill="#0f1c2e" opacity="0.15" />
+</svg>
