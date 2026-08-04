@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Get offer - GommaRush</title>
+  <link rel="icon" href="assets/logo.jpg" type="image/jpeg" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="offer.css" />
+</head>
+<body class="offer-page">
+  <header class="site-header offer-header">
+    <img src="assets/logo.jpg" alt="GommaRush logo" class="logo logo-small" />
+  </header>
+
+  <main class="offer-main">
+    <div class="offer-topbar">
+      <h1 class="offer-title">Get offer</h1>
+      <a href="index.html" class="home-button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 11.5 12 4l9 7.5" />
+          <path d="M5.5 10v9a1 1 0 0 0 1 1H10v-6h4v6h3.5a1 1 0 0 0 1-1v-9" />
+        </svg>
+        Home
+      </a>
+    </div>
+
+    <form class="offer-form" id="offerForm">
+      <div class="field">
+        <input type="text" id="companyName" name="companyName" placeholder=" " autocomplete="organization" />
+        <label for="companyName">Your company name</label>
+      </div>
+
+      <div class="field">
+        <input type="text" id="contactInfo" name="contactInfo" placeholder=" " autocomplete="email" required />
+        <label for="contactInfo">Contact email/phone <span class="required-mark">*</span></label>
+      </div>
+
+      <div class="field field-select">
+        <label for="deliveryPreference" class="static-label">Delivery preference</label>
+        <select id="deliveryPreference" name="deliveryPreference">
+          <option value="any">Any</option>
+          <option value="24h">24 hours</option>
+          <option value="48h">48 hours</option>
+          <option value="7d">7 days</option>
+        </select>
+      </div>
+
+      <button type="button" id="addTyreBtn" class="secondary-button">+ Add tyre</button>
+
+      <section id="tireListSection" class="tire-list-section" hidden>
+        <h2 class="tire-list-title">My tire selection</h2>
+        <ul id="tireList" class="tire-list"></ul>
+      </section>
+    </form>
+  </main>
+
+  <div class="sticky-bar">
+    <button type="button" class="cta-button send-offer-button" id="sendOfferBtn">Send offer request</button>
+  </div>
+
+  <footer class="footer">
+    <p>&copy; GommaRush Verona 2026</p>
+  </footer>
+
+  <div class="modal-overlay" id="modalOverlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-header">
+        <h2 id="modalTitle">Add tire</h2>
+        <button type="button" class="modal-close" id="modalClose" aria-label="Close">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <p class="modal-section-label">Dimensions</p>
+        <div class="dimensions-row">
+          <div class="field field-small">
+            <input type="text" id="dimWidth" placeholder=" " inputmode="numeric" />
+            <label for="dimWidth">Width</label>
+          </div>
+          <div class="field field-small">
+            <input type="text" id="dimProfile" placeholder=" " inputmode="numeric" />
+            <label for="dimProfile">Profile</label>
+          </div>
+          <div class="field field-small">
+            <input type="text" id="dimDiameter" placeholder=" " inputmode="numeric" />
+            <label for="dimDiameter">Diameter</label>
+          </div>
+        </div>
+
+        <p class="modal-section-label">Season</p>
+        <div class="segmented-control" id="seasonControl">
+          <button type="button" class="segment" data-value="summer">Summer</button>
+          <button type="button" class="segment" data-value="winter">Winter</button>
+          <button type="button" class="segment" data-value="all-season">All season</button>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="cta-button" id="placeTireBtn" disabled>Place tire</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="offer.js"></script>
+</body>
+</html>
