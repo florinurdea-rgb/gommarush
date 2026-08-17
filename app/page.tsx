@@ -17,12 +17,17 @@ export default function Landing() {
           textClassName="text-3xl sm:text-4xl lg:text-5xl"
         />
 
-        {/* Entry point to the internal logistics system. The page itself stays
-            the public marketing site; everything behind this button is gated
-            server-side. */}
-        <LinkButton href="/admin" variant="secondary" className="flex-none">
-          Admin
-        </LinkButton>
+        {/* Entry points to the internal tools. The page itself stays the
+            public marketing site; the admin panel is gated server-side, and
+            the barcode lookup is deliberately public/standalone. */}
+        <div className="flex flex-none items-center gap-2">
+          <LinkButton href="/cauta-cauciuc" variant="secondary" className="flex-none">
+            Caută cauciuc
+          </LinkButton>
+          <LinkButton href="/admin" variant="secondary" className="flex-none">
+            Admin
+          </LinkButton>
+        </div>
       </header>
 
       <main className="relative flex flex-1 flex-col justify-center overflow-hidden">

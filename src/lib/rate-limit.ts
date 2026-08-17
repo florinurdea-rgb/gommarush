@@ -100,3 +100,28 @@ export function recordLoginFailure(key: string): void {
 export function resetLoginFailures(key: string): void {
   loginFailures.delete(key);
 }
+
+/**
+ * Dedicated limiter for /api/tyre-lookup.
+ *
+ * That endpoint is public (the entry point is a homepage link, no login)
+ * and each request can trigger a real, paid web-search + LLM call, so it
+ * needs its own guard against being hammered — but the limit must stay
+ * generous enough for a warehouse operator genuinely scanning a stack of
+ * tyres in one sitting. Counts every request (there is no "failed attempt"
+ * concept here — every lookup costs the same regardless of outcome).
+ */
+const BARCODE_LOOKUP_WINDOW_MS =
+  readPositiveIntEnv("BARCODE_LOOKUP_RATE_LIMIT_WINDOW_MINUTES", 10) * 60 * 1000;
+const BARCODE_LOOKUP_MAX_REQUESTS = readPositiveIntEnv("BARCODE_LOOKUP_RATE_LIMIT_MAX_REQUESTS", 60);
+
+const barcodeLookupHits = new Map<string, number[]>();
+
+export function isBarcodeLookupRateLimited(key: string): boolean {
+  const now = Date.now();
+  const timestamps = (barcodeLookupHits.get(key) ?? []).filter((t) => now - t < BARCODE_LOOKUP_WINDOW_MS);
+  timestamps.push(now);
+  barcodeLookupHits.set(key, timestamps);
+
+  return timestamps.length > BARCODE_LOOKUP_MAX_REQUESTS;
+}
