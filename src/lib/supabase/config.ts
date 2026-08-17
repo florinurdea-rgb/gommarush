@@ -16,10 +16,22 @@ export interface SupabasePublicConfig {
   key: string;
 }
 
+/**
+ * Trims env values before use. A stray trailing space or newline from
+ * copy-pasting into Vercel's env var UI is a real, recurring failure mode:
+ * it doesn't make the value "missing" (so the app looks configured), but a
+ * newline inside an HTTP header value makes the *entire request* fail at
+ * the network layer with an opaque "fetch failed" — nothing about
+ * credentials, just an error before the request is even sent.
+ */
+function trimmedEnv(name: string): string | undefined {
+  const value = process.env[name];
+  return value ? value.trim() : value;
+}
+
 export function resolveSupabasePublicConfig(): SupabasePublicConfig | null {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key =
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = trimmedEnv("NEXT_PUBLIC_SUPABASE_URL");
+  const key = trimmedEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY") ?? trimmedEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
   if (!url || !key) return null;
   return { url, key };
 }

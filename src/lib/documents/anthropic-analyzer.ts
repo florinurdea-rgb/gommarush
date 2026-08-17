@@ -203,12 +203,15 @@ export class AnthropicDocumentAnalyzer implements DocumentAnalyzer {
   }
 
   async analyze(document: AnalyzableDocument): Promise<AnalysisResult> {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    // Trimmed: a stray trailing space/newline pasted into Vercel's env var
+    // UI would otherwise make every request fail at the network layer
+    // instead of just being "missing" — see src/lib/supabase/config.ts.
+    const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
     if (!apiKey) {
       return emptyResult("unconfigured", this.name, ["ANTHROPIC_API_KEY nu este configurat."]);
     }
 
-    const model = process.env.ANTHROPIC_MODEL ?? DEFAULT_MODEL;
+    const model = process.env.ANTHROPIC_MODEL?.trim() || DEFAULT_MODEL;
     const base64 = document.bytes.toString("base64");
 
     let contentBlock: Record<string, unknown>;

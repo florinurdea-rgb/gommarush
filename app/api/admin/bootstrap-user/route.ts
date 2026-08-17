@@ -36,8 +36,8 @@ export async function POST(request: NextRequest) {
   const parsed = bootstrapAdminSchema.safeParse(body);
   if (!parsed.success) return fail(400, "VALIDATION_FAILED");
 
-  const expectedSecret = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!expectedSecret || parsed.data.secret !== expectedSecret) {
+  const expectedSecret = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!expectedSecret || parsed.data.secret.trim() !== expectedSecret) {
     logEvent("admin_bootstrap_wrong_secret", { ip });
     return fail(401, "UNAUTHORIZED");
   }

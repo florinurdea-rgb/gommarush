@@ -212,12 +212,15 @@ export class AnthropicTyreLookup {
   }
 
   async lookup(barcode: string): Promise<TyreLookupResult> {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    // Trimmed: a stray trailing space/newline pasted into Vercel's env var
+    // UI would otherwise make every request fail at the network layer
+    // instead of just being "missing" — see src/lib/supabase/config.ts.
+    const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
     if (!apiKey) {
       return emptyResult("unconfigured", barcode, ["Căutarea automată nu este configurată."], "UNCONFIGURED");
     }
 
-    const model = process.env.ANTHROPIC_MODEL ?? DEFAULT_MODEL;
+    const model = process.env.ANTHROPIC_MODEL?.trim() || DEFAULT_MODEL;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
