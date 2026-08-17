@@ -372,6 +372,7 @@ const ro: Dictionary = {
     INVALID_CREDENTIALS: "Email sau parolă greșite",
     SUPABASE_NOT_CONFIGURED:
       "Configurare server incompletă (Supabase) — contactează administratorul",
+    RATE_LIMITED: "Prea multe încercări — așteaptă câteva minute și reîncearcă",
     ADMIN_SESSION_SECRET_MISSING:
       "Configurare server incompletă (ADMIN_SESSION_SECRET lipsă) — contactează administratorul",
     VALIDATION_FAILED: "Date incomplete sau invalide",
