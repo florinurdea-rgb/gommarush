@@ -1,0 +1,89 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { Button } from "@/components/Button";
+import { errorMessage, t } from "@/lib/i18n/logistics";
+
+export function LoginForm() {
+  const router = useRouter();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      const payload = (await response.json()) as { ok: boolean; code?: string };
+
+      if (!payload.ok) {
+        setError(errorMessage(payload.code));
+        return;
+      }
+
+      // replace(), not push(): the login page must not sit in history behind
+      // the dashboard.
+      router.replace("/admin");
+      router.refresh();
+    } catch {
+      setError(errorMessage("UNKNOWN"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="mt-6 space-y-4">
+      <div>
+        <label htmlFor="username" className="mb-1 block text-sm font-semibold text-ink">
+          {t("username")}
+        </label>
+        <input
+          id="username"
+          name="username"
+          autoComplete="username"
+          autoFocus
+          required
+          value={username}
+          onChange={(event) => setUsername(event.target.value)}
+          className="h-12 w-full rounded-xl border border-ink/15 px-3 text-base text-ink outline-none focus:border-accent"
+        />
+      </div>
+
+      <div>
+        <label htmlFor="password" className="mb-1 block text-sm font-semibold text-ink">
+          {t("password")}
+        </label>
+        <input
+          id="password"
+          name="password"
+          type="password"
+          autoComplete="current-password"
+          required
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          className="h-12 w-full rounded-xl border border-ink/15 px-3 text-base text-ink outline-none focus:border-accent"
+        />
+      </div>
+
+      {error && (
+        <p role="alert" className="rounded-lg bg-state-danger-soft p-3 text-sm font-medium text-state-danger">
+          {error}
+        </p>
+      )}
+
+      <Button type="submit" size="lg" disabled={busy} className="w-full">
+        {busy ? t("loading") : t("signIn")}
+      </Button>
+    </form>
+  );
+}

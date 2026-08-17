@@ -17,6 +17,23 @@ module.exports = {
           DEFAULT: "#FFFFFF",
           soft: "#F6F8FB",
         },
+        // Warehouse status palette. Deliberately saturated and few: an operator
+        // must read state from across a room, and every extra hue costs
+        // recognition speed. Each has a `soft` background pair for badges.
+        state: {
+          waiting: "#B45309",
+          "waiting-soft": "#FEF3C7",
+          progress: "#1E5FD9",
+          "progress-soft": "#E0EBFC",
+          success: "#15803D",
+          "success-soft": "#DCFCE7",
+          warning: "#C2410C",
+          "warning-soft": "#FFEDD5",
+          danger: "#B91C1C",
+          "danger-soft": "#FEE2E2",
+          neutral: "#475569",
+          "neutral-soft": "#F1F5F9",
+        },
       },
       fontFamily: {
         sans: [
@@ -27,6 +44,7 @@ module.exports = {
           "Roboto",
           "sans-serif",
         ],
+        mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "monospace"],
       },
       boxShadow: {
         card: "0 1px 2px rgba(21, 34, 56, 0.06), 0 4px 16px rgba(21, 34, 56, 0.06)",
@@ -34,6 +52,13 @@ module.exports = {
       },
       maxWidth: {
         content: "900px",
+        admin: "1400px",
+      },
+      fontSize: {
+        // The stand letter on the scan-success screen. Sized to be legible at
+        // arm's length on a phone held in a warehouse.
+        stand: ["11rem", { lineHeight: "1", letterSpacing: "-0.05em" }],
+        "stand-sm": ["7rem", { lineHeight: "1", letterSpacing: "-0.04em" }],
       },
     },
   },
