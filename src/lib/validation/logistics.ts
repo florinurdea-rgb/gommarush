@@ -29,6 +29,19 @@ export const adminLoginSchema = z
   })
   .strict();
 
+/**
+ * One-time admin-account bootstrap (see app/api/admin/bootstrap-user). Gated
+ * by SUPABASE_SERVICE_ROLE_KEY itself, not a separate secret — see that
+ * route's comment for why that's an acceptable trust boundary here.
+ */
+export const bootstrapAdminSchema = z
+  .object({
+    secret: z.string().min(1),
+    email: z.string().trim().email().max(200),
+    password: z.string().min(6).max(200),
+  })
+  .strict();
+
 // ---------------------------------------------------------------------------
 // Orders
 // ---------------------------------------------------------------------------
