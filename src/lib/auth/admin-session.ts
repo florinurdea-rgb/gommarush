@@ -1,182 +1,90 @@
 import "server-only";
-import { createHmac, timingSafeEqual, randomBytes } from "node:crypto";
+import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
 /**
- * Phase 1 Admin authentication.
+ * Admin authentication via Supabase Auth.
  *
- * ⚠️ THIS IS DEVELOPMENT AUTHENTICATION. It is a single shared username and
- * password, and it is not presented as production security anywhere in the UI.
- * It exists so the Admin screens can be built and operated now.
+ * Replaces the earlier locally-signed-cookie design. That design failed on
+ * Vercel because it fell back to a per-process random signing key when
+ * ADMIN_SESSION_SECRET wasn't set: the login route and the very next page
+ * request can land on two different serverless instances, each with its own
+ * random key, so a cookie signed by one silently failed verification on the
+ * other — "log in, nothing happens, still on the login page."
  *
- * What makes it more than "hiding buttons in the browser":
- *   * the session is a server-side HMAC-signed cookie the browser cannot forge
- *   * the cookie is httpOnly + sameSite=lax (+ secure in production)
- *   * every privileged route calls `requireAdminSession()` server-side; nothing
- *     relies on the client not rendering a button
+ * Supabase Auth has no equivalent failure mode: the cookie stores Supabase's
+ * own access token, and every request validates it against Supabase's Auth
+ * service directly (`supabase.auth.getUser(token)`). There is no local secret
+ * to go out of sync between instances.
  *
- * REPLACING THIS WITH SUPABASE AUTH LATER
- * The Admin UI never touches this file directly — it goes through
- * `getAdminSession()` / `requireAdminSession()` and the `AdminSession` shape.
- * Swapping in Supabase Auth means reimplementing those two functions against
- * `supabase.auth.getUser()` and returning the same shape. No page, route or
- * component changes. `AdminAuthProvider` below documents that contract.
+ * Creating an admin user: Supabase dashboard → Authentication → Users →
+ * Add user. Set "Auto Confirm User" so no email-confirmation step blocks the
+ * first login. Any confirmed user in this Supabase project can sign in here —
+ * Phase 1 has no separate admin-role table, matching the rest of the app's
+ * single-admin-tier model.
+ *
+ * Trade-off accepted for now: sessions last as long as the Supabase access
+ * token (its default TTL, typically 1 hour) — there is no refresh-token flow
+ * yet, so an admin has to sign in again after it expires. Good enough for
+ * Phase 1; a refresh flow can be added later without changing this module's
+ * public contract (`getAdminSession` / `requireAdminSession`).
  */
 
 const COOKIE_NAME = "gorush_admin_session";
-const SESSION_TTL_SECONDS = 60 * 60 * 12; // 12h — a warehouse shift plus slack.
+/** Matches Supabase's default access-token TTL; the cookie should never outlive the token it holds. */
+const SESSION_TTL_SECONDS = 60 * 60;
 
 export interface AdminSession {
-  /** Stable identifier for audit trails (`changed_by`, `operator_session`). */
+  /** The Supabase user id — stable identifier for audit trails. */
   subject: string;
   displayName: string;
   issuedAt: number;
   expiresAt: number;
-  /** Which auth backend issued this. Lets audit rows record how it was granted. */
-  provider: "dev-credentials" | "supabase";
+  provider: "supabase";
 }
 
-/**
- * The contract the Admin UI depends on. Implement this against Supabase Auth to
- * replace the dev login without touching any page.
- */
-export interface AdminAuthProvider {
-  signIn(username: string, password: string): Promise<AdminSession | null>;
-  getSession(): Promise<AdminSession | null>;
-  signOut(): Promise<void>;
-}
-
-// ---------------------------------------------------------------------------
-// Signing
-// ---------------------------------------------------------------------------
-
-/**
- * The signing secret. In production ADMIN_SESSION_SECRET must be set — without
- * it we fall back to a per-process random key. On a serverless platform (Vercel)
- * "per-process" means per lambda instance: the login route and the very next
- * page request can land on two different instances, each with its own random
- * key, so a cookie signed by one fails verification on the other. That looks
- * to the user like "I log in and nothing happens, it stays on the login page."
- * We deliberately do NOT fall back to a hardcoded constant — see
- * `isSigningSecretMissingInProduction()`, which the login route checks BEFORE
- * issuing any cookie so this fails as a loud, immediate error instead.
- */
-let ephemeralSecret: string | null = null;
-
-/**
- * True when we're in production with no stable signing secret configured.
- * Call this at the top of any route that creates a session, before doing
- * anything else — issuing a cookie that is doomed to fail verification on the
- * next request is worse than refusing up front.
- */
-export function isSigningSecretMissingInProduction(): boolean {
-  const configured = process.env.ADMIN_SESSION_SECRET;
-  return process.env.NODE_ENV === "production" && !(configured && configured.length >= 16);
-}
-
-function signingSecret(): string {
-  const configured = process.env.ADMIN_SESSION_SECRET;
-  if (configured && configured.length >= 16) return configured;
-
-  if (!ephemeralSecret) {
-    ephemeralSecret = randomBytes(32).toString("hex");
-    if (process.env.NODE_ENV === "production") {
-      console.warn(
-        JSON.stringify({
-          event: "admin_session_secret_missing",
-          message:
-            "ADMIN_SESSION_SECRET is not set; using an ephemeral per-instance key. Admin sessions will not survive a redeploy.",
-        })
-      );
-    }
+function authClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) {
+    throw new Error("Missing Supabase client configuration");
   }
-  return ephemeralSecret;
+  // The anon key is intentional here (not the service-role key): signing in
+  // and validating a token are both public Supabase Auth operations that do
+  // not need to bypass Row Level Security.
+  return createClient(url, anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 }
 
-function base64UrlEncode(value: string): string {
-  return Buffer.from(value, "utf8").toString("base64url");
+export interface VerifiedCredentials {
+  session: AdminSession;
+  accessToken: string;
 }
-
-function base64UrlDecode(value: string): string {
-  return Buffer.from(value, "base64url").toString("utf8");
-}
-
-function sign(payload: string): string {
-  return createHmac("sha256", signingSecret()).update(payload).digest("base64url");
-}
-
-/** Constant-time comparison — a length mismatch alone must not leak. */
-function signaturesMatch(a: string, b: string): boolean {
-  const bufferA = Buffer.from(a);
-  const bufferB = Buffer.from(b);
-  if (bufferA.length !== bufferB.length) return false;
-  return timingSafeEqual(bufferA, bufferB);
-}
-
-export function encodeSessionToken(session: AdminSession): string {
-  const payload = base64UrlEncode(JSON.stringify(session));
-  return `${payload}.${sign(payload)}`;
-}
-
-export function decodeSessionToken(token: string | undefined | null): AdminSession | null {
-  if (!token) return null;
-
-  const separator = token.lastIndexOf(".");
-  if (separator <= 0) return null;
-
-  const payload = token.slice(0, separator);
-  const signature = token.slice(separator + 1);
-  if (!signaturesMatch(signature, sign(payload))) return null;
-
-  try {
-    const parsed = JSON.parse(base64UrlDecode(payload)) as AdminSession;
-    if (typeof parsed.subject !== "string" || typeof parsed.expiresAt !== "number") return null;
-    if (parsed.expiresAt <= Date.now()) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Credential check
-// ---------------------------------------------------------------------------
 
 /**
- * Phase 1 credentials, overridable by env so a deployment isn't stuck with
- * test/test. Defaults are the documented development pair.
+ * Verifies email/password against Supabase Auth. Returns the access token to
+ * store in the session cookie — that token, not any local signature, is what
+ * every subsequent request will be checked against.
  */
-function expectedCredentials(): { username: string; password: string } {
-  return {
-    username: process.env.ADMIN_USERNAME ?? "test",
-    password: process.env.ADMIN_PASSWORD ?? "test",
-  };
-}
-
-/** Constant-time string equality, safe for differing lengths. */
-function safeEquals(a: string, b: string): boolean {
-  const bufferA = Buffer.from(a, "utf8");
-  const bufferB = Buffer.from(b, "utf8");
-  // Hash both first so the comparison length is always identical.
-  const hashA = createHmac("sha256", signingSecret()).update(bufferA).digest();
-  const hashB = createHmac("sha256", signingSecret()).update(bufferB).digest();
-  return timingSafeEqual(hashA, hashB);
-}
-
-export function verifyAdminCredentials(username: string, password: string): AdminSession | null {
-  const expected = expectedCredentials();
-  const userOk = safeEquals(username.trim(), expected.username);
-  const passOk = safeEquals(password, expected.password);
-  // Both checks always run, so timing doesn't reveal which half was wrong.
-  if (!userOk || !passOk) return null;
+export async function verifyAdminCredentials(
+  email: string,
+  password: string
+): Promise<VerifiedCredentials | null> {
+  const supabase = authClient();
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error || !data.session || !data.user) return null;
 
   const now = Date.now();
   return {
-    subject: `admin:${expected.username}`,
-    displayName: expected.username,
-    issuedAt: now,
-    expiresAt: now + SESSION_TTL_SECONDS * 1000,
-    provider: "dev-credentials",
+    accessToken: data.session.access_token,
+    session: {
+      subject: data.user.id,
+      displayName: data.user.email ?? data.user.id,
+      issuedAt: now,
+      expiresAt: now + SESSION_TTL_SECONDS * 1000,
+      provider: "supabase",
+    },
   };
 }
 
@@ -184,10 +92,13 @@ export function verifyAdminCredentials(username: string, password: string): Admi
 // Cookie plumbing
 // ---------------------------------------------------------------------------
 
-export function adminSessionCookie(session: AdminSession) {
+export function adminSessionCookie(accessToken: string) {
   return {
     name: COOKIE_NAME,
-    value: encodeSessionToken(session),
+    // The cookie holds the raw Supabase access token directly — there is
+    // nothing to encode/sign locally, which is exactly what removes the
+    // cross-instance failure mode.
+    value: accessToken,
     httpOnly: true,
     sameSite: "lax" as const,
     secure: process.env.NODE_ENV === "production",
@@ -209,36 +120,31 @@ export function clearedAdminSessionCookie() {
 }
 
 /**
- * ⚠️ TEMPORARY, EXPLICITLY REQUESTED: login is disabled for now.
- *
- * With this true, `getAdminSession()` never checks the cookie — every visitor
- * is treated as an authenticated admin. That makes the ENTIRE admin panel
- * (orders, customers, driver assignments, order cancellation) public to
- * anyone who finds the URL, with zero protection.
- *
- * To re-enable login: set this back to `false`. Nothing else needs to
- * change — the cookie/session machinery below is untouched, and the login
- * page still works, it's just no longer required.
+ * Reads and verifies the current session by asking Supabase to validate the
+ * access token. Returns null when not signed in or the token is invalid/expired.
  */
-const AUTH_TEMPORARILY_DISABLED = true;
-
-function bypassSession(): AdminSession {
-  const now = Date.now();
-  return {
-    subject: "admin:no-auth",
-    displayName: "Admin (fără autentificare)",
-    issuedAt: now,
-    expiresAt: now + SESSION_TTL_SECONDS * 1000,
-    provider: "dev-credentials",
-  };
-}
-
-/** Reads and verifies the current session. Returns null when not signed in. */
 export async function getAdminSession(): Promise<AdminSession | null> {
-  if (AUTH_TEMPORARILY_DISABLED) return bypassSession();
-
   const store = await cookies();
-  return decodeSessionToken(store.get(COOKIE_NAME)?.value);
+  const accessToken = store.get(COOKIE_NAME)?.value;
+  if (!accessToken) return null;
+
+  try {
+    const supabase = authClient();
+    const { data, error } = await supabase.auth.getUser(accessToken);
+    if (error || !data.user) return null;
+
+    return {
+      subject: data.user.id,
+      displayName: data.user.email ?? data.user.id,
+      issuedAt: 0,
+      expiresAt: 0,
+      provider: "supabase",
+    };
+  } catch {
+    // Missing Supabase client configuration, network error, etc. — treat as
+    // not signed in rather than crashing every page that checks the session.
+    return null;
+  }
 }
 
 export class UnauthorizedError extends Error {

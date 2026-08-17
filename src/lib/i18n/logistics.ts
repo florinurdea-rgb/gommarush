@@ -45,7 +45,7 @@ export type UiKey =
   | "appName"
   | "admin"
   | "adminLogin"
-  | "username"
+  | "email"
   | "password"
   | "signIn"
   | "signOut"
@@ -235,7 +235,7 @@ const ro: Dictionary = {
     appName: "GoRush Logistică",
     admin: "Admin",
     adminLogin: "Autentificare Admin",
-    username: "Utilizator",
+    email: "Email",
     password: "Parolă",
     signIn: "Intră în cont",
     signOut: "Ieși",
@@ -369,7 +369,7 @@ const ro: Dictionary = {
     FILE_TOO_LARGE: "Fișierul este prea mare",
     UPLOAD_FAILED: "Încărcarea documentului a eșuat",
     UNAUTHORIZED: "Sesiune expirată — autentifică-te din nou",
-    INVALID_CREDENTIALS: "Utilizator sau parolă greșite",
+    INVALID_CREDENTIALS: "Email sau parolă greșite",
     ADMIN_SESSION_SECRET_MISSING:
       "Configurare server incompletă (ADMIN_SESSION_SECRET lipsă) — contactează administratorul",
     VALIDATION_FAILED: "Date incomplete sau invalide",

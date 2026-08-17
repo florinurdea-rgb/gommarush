@@ -7,7 +7,7 @@ import { errorMessage, t } from "@/lib/i18n/logistics";
 
 export function LoginForm() {
   const router = useRouter();
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -21,7 +21,7 @@ export function LoginForm() {
       const response = await fetch("/api/admin/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ email, password }),
       });
       const payload = (await response.json()) as { ok: boolean; code?: string };
 
@@ -44,17 +44,18 @@ export function LoginForm() {
   return (
     <form onSubmit={submit} className="mt-6 space-y-4">
       <div>
-        <label htmlFor="username" className="mb-1 block text-sm font-semibold text-ink">
-          {t("username")}
+        <label htmlFor="email" className="mb-1 block text-sm font-semibold text-ink">
+          {t("email")}
         </label>
         <input
-          id="username"
-          name="username"
-          autoComplete="username"
+          id="email"
+          name="email"
+          type="email"
+          autoComplete="email"
           autoFocus
           required
-          value={username}
-          onChange={(event) => setUsername(event.target.value)}
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
           className="h-12 w-full rounded-xl border border-ink/15 px-3 text-base text-ink outline-none focus:border-accent"
         />
       </div>

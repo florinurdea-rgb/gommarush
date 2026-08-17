@@ -28,14 +28,10 @@ export default async function AdminLoginPage() {
 
           <LoginForm />
 
-          {/* Stated plainly rather than hidden: these are development
-              credentials and must not be mistaken for production security. */}
-          <div className="mt-6 rounded-lg bg-state-waiting-soft p-3 text-xs leading-relaxed text-state-waiting">
-            <strong className="font-bold">Autentificare de development.</strong> Faza 1
-            folosește credențiale partajate (implicit <code className="font-mono">test</code> /{" "}
-            <code className="font-mono">test</code>). Nu este securitate de producție —
-            va fi înlocuită cu Supabase Auth.
-          </div>
+          <p className="mt-6 text-xs leading-relaxed text-ink-soft">
+            Autentificare prin Supabase Auth. Contul se creează din Supabase
+            dashboard → Authentication → Users.
+          </p>
         </div>
       </main>
     </div>

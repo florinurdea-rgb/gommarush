@@ -24,7 +24,7 @@ const money = z.number().finite().min(0).max(1_000_000);
 
 export const adminLoginSchema = z
   .object({
-    username: z.string().trim().min(1).max(100),
+    email: z.string().trim().email().max(200),
     password: z.string().min(1).max(200),
   })
   .strict();
