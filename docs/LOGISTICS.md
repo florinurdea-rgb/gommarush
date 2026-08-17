@@ -260,17 +260,29 @@ needs an explicit future decision.
   so a future refactor cannot leak payment or credential fields onto a label.
 - Every input is validated server-side with Zod even where the client validates.
 
-### Phase 1 authentication is development-only
+### Admin authentication is Supabase Auth
 
-Shared credentials (`test` / `test`, overridable via `ADMIN_USERNAME` /
-`ADMIN_PASSWORD`). The UI states this plainly on both the login page and the
-admin header. It is **not** production security.
+`/api/admin/login` calls `supabase.auth.signInWithPassword()` against real
+Supabase Auth users (Authentication → Users in the dashboard, or
+`/admin/bootstrap` — a one-time helper that creates/resets an account
+through the Admin API directly, bypassing the dashboard's "Invite user"
+flow and its email-deliverability checks).
 
-Replacing it with Supabase Auth means reimplementing `getAdminSession()` and
-`requireAdminSession()` in `src/lib/auth/admin-session.ts` against
-`supabase.auth.getUser()` and returning the same `AdminSession` shape. **No
-page, route or component changes.** `drivers.auth_user_id` already exists for
-the driver side.
+The session itself is managed by `@supabase/ssr`
+(`src/lib/supabase/server.ts`, `middleware.ts`): the access/refresh token
+pair lives in the standard `sb-*-auth-token` cookies, and `middleware.ts`
+revalidates and refreshes them on every `/admin/*` request — this is what
+lets a session survive navigation and refresh past Supabase's ~1 hour
+access-token TTL, not just within it.
+
+Authentication (is this a real Supabase user?) and authorization (may they
+use the admin panel?) are separate: any confirmed Supabase user in the
+project can sign in, but `ADMIN_ALLOWED_EMAILS` (comma-separated, optional)
+restricts who is treated as an admin — see `src/lib/auth/admin-authorization.ts`.
+Unset, any confirmed user is an admin (the original Phase 1 single-tier
+default). `drivers.auth_user_id` already exists for eventually doing the
+same on the driver side, which still uses a simpler self-selected identity
+(no password) by Phase 1 design.
 
 ---
 

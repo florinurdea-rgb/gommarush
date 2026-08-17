@@ -23,10 +23,19 @@ export function LoginForm() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-      const payload = (await response.json()) as { ok: boolean; code?: string };
+      const payload = (await response.json()) as { ok: boolean; code?: string; details?: string[] };
 
       if (!payload.ok) {
-        setError(errorMessage(payload.code));
+        if (payload.code === "RATE_LIMITED" && payload.details?.[0]) {
+          const seconds = Number(payload.details[0]);
+          setError(
+            Number.isFinite(seconds)
+              ? `${errorMessage(payload.code)} (~${Math.ceil(seconds / 60)} min)`
+              : errorMessage(payload.code)
+          );
+        } else {
+          setError(errorMessage(payload.code));
+        }
         return;
       }
 
