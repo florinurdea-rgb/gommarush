@@ -60,11 +60,12 @@ export function AdminShell({
           </div>
         </div>
 
-        {/* Phase 1 uses shared development credentials. Saying so in the UI is
-            deliberate: it must never be mistaken for production security. */}
-        <div className="bg-state-waiting-soft px-4 py-1.5 text-center text-xs font-medium text-state-waiting sm:px-6">
-          Autentificare de development (test/test) — a nu se folosi ca securitate
-          de producție.
+        {/* AUTH_TEMPORARILY_DISABLED in admin-session.ts: login is currently
+            bypassed. Saying so loudly here is deliberate — this must never be
+            mistaken for a secured admin panel while it's off. */}
+        <div className="bg-state-danger-soft px-4 py-1.5 text-center text-xs font-bold text-state-danger sm:px-6">
+          Autentificare dezactivată temporar — acest panou este momentan
+          accesibil oricui are linkul.
         </div>
       </header>
 

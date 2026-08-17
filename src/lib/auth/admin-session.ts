@@ -208,8 +208,35 @@ export function clearedAdminSessionCookie() {
   };
 }
 
+/**
+ * ⚠️ TEMPORARY, EXPLICITLY REQUESTED: login is disabled for now.
+ *
+ * With this true, `getAdminSession()` never checks the cookie — every visitor
+ * is treated as an authenticated admin. That makes the ENTIRE admin panel
+ * (orders, customers, driver assignments, order cancellation) public to
+ * anyone who finds the URL, with zero protection.
+ *
+ * To re-enable login: set this back to `false`. Nothing else needs to
+ * change — the cookie/session machinery below is untouched, and the login
+ * page still works, it's just no longer required.
+ */
+const AUTH_TEMPORARILY_DISABLED = true;
+
+function bypassSession(): AdminSession {
+  const now = Date.now();
+  return {
+    subject: "admin:no-auth",
+    displayName: "Admin (fără autentificare)",
+    issuedAt: now,
+    expiresAt: now + SESSION_TTL_SECONDS * 1000,
+    provider: "dev-credentials",
+  };
+}
+
 /** Reads and verifies the current session. Returns null when not signed in. */
 export async function getAdminSession(): Promise<AdminSession | null> {
+  if (AUTH_TEMPORARILY_DISABLED) return bypassSession();
+
   const store = await cookies();
   return decodeSessionToken(store.get(COOKIE_NAME)?.value);
 }
