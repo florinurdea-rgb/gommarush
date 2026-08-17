@@ -1,8 +1,36 @@
-# GommaRush
+# GommaRush / GoRush
 
-Next.js + TypeScript site for GommaRush, a tyre supplier serving garages and
-automotive businesses around Verona. Deployed on Vercel, with Supabase as the
-database and Resend for transactional email.
+Next.js + TypeScript application for GommaRush, a tyre supplier serving garages
+and automotive businesses around Verona. Deployed on Vercel, with Supabase as
+the database and Resend for transactional email.
+
+Two things live here:
+
+1. **The public site** — landing page and the offer-request form (Italian).
+2. **GoRush Logistics (Phase 1)** — the internal warehouse and delivery system:
+   supplier order import, goods matching, temporary stands, label printing,
+   barcode storage confirmation and van loading (Romanian operational UI).
+   See **[docs/LOGISTICS.md](docs/LOGISTICS.md)** for the full guide, and
+   **[print-agent/README.md](print-agent/README.md)** for the Windows print agent.
+
+## Quick start for the logistics system
+
+```bash
+npm install
+cp .env.local.example .env.local     # add SUPABASE_SERVICE_ROLE_KEY — required
+npm run dev
+```
+
+Open <http://localhost:3000>, click **Admin**, sign in with `test` / `test`.
+
+| Command | Purpose |
+|---|---|
+| `npm run dev` | Run the app |
+| `npm test` | Unit tests |
+| `npm run typecheck` | TypeScript |
+| `npm run build` | Production build |
+| `npm run seed:dev -- --confirm` | Development seed data (drivers, vans, 3 demo orders) |
+| `npm run seed:dev -- --clean --confirm` | Remove the seed data |
 
 ## Stack
 
@@ -16,10 +44,21 @@ database and Resend for transactional email.
 
 ```
 app/
-  page.tsx                        Landing page ("/")
+  page.tsx                        Landing page ("/") + Admin button
   get-offer/page.tsx               Offer-request form ("/get-offer")
   request-confirmation/page.tsx    Post-submit confirmation page
   api/offer-requests/route.ts      POST /api/offer-requests
+
+  admin/login/                     Admin login (outside the guarded layout)
+  admin/(secure)/                  All authenticated admin pages
+  driver/                          Driver operational page
+  warehouse/                       Storage barcode scanning station
+  stand/[code]/                    Permanent stand QR resolver
+  orders/[id]/, u/[token]/         Public read-only views
+  api/admin|driver|warehouse/      Server operations
+
+print-agent/                       Windows print agent (separate package)
+docs/LOGISTICS.md                  Logistics system guide
 
 src/
   components/                      Shared UI (form fields, modal, buttons…)

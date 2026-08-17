@@ -11,11 +11,18 @@ const TRUST_POINTS = [
 export default function Landing() {
   return (
     <div className="flex min-h-screen flex-col bg-white">
-      <header className="mx-auto w-full max-w-content px-4 pt-5 sm:px-6">
+      <header className="mx-auto flex w-full max-w-content items-center justify-between gap-4 px-4 pt-5 sm:px-6">
         <Logo
           iconClassName="h-16 w-16 sm:h-20 sm:w-20 lg:h-24 lg:w-24"
           textClassName="text-3xl sm:text-4xl lg:text-5xl"
         />
+
+        {/* Entry point to the internal logistics system. The page itself stays
+            the public marketing site; everything behind this button is gated
+            server-side. */}
+        <LinkButton href="/admin" variant="secondary" className="flex-none">
+          Admin
+        </LinkButton>
       </header>
 
       <main className="relative flex flex-1 flex-col justify-center overflow-hidden">
