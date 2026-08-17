@@ -43,6 +43,18 @@ function signingSecret(): string {
   return ephemeralSecret;
 }
 
+/**
+ * True when we're in production with no stable signing secret configured (see
+ * the identical concern in src/lib/auth/admin-session.ts). The driver session
+ * route checks this before issuing any cookie, so a missing secret fails as an
+ * immediate error instead of a session that silently stops validating on the
+ * next request served by a different serverless instance.
+ */
+export function isDriverSigningSecretMissingInProduction(): boolean {
+  const configured = process.env.DRIVER_SESSION_SECRET ?? process.env.ADMIN_SESSION_SECRET;
+  return process.env.NODE_ENV === "production" && !(configured && configured.length >= 16);
+}
+
 function sign(payload: string): string {
   return createHmac("sha256", signingSecret()).update(payload).digest("base64url");
 }

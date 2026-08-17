@@ -4,6 +4,7 @@ import {
   clearedDriverSessionCookie,
   createDriverSession,
   driverSessionCookie,
+  isDriverSigningSecretMissingInProduction,
 } from "@/lib/auth/driver-session";
 import { getDriver, getVehicle } from "@/lib/server/reference";
 import { fail, handleRouteError, readJsonBody } from "@/lib/server/route-helpers";
@@ -19,6 +20,13 @@ export const runtime = "nodejs";
  */
 export async function POST(request: NextRequest) {
   try {
+    // Same concern as /api/admin/login: an unstable per-instance secret would
+    // make the session silently fail verification on the next request.
+    if (isDriverSigningSecretMissingInProduction()) {
+      logEvent("driver_session_blocked_missing_secret", {});
+      return fail(500, "ADMIN_SESSION_SECRET_MISSING");
+    }
+
     const body = await readJsonBody(request);
     if (body === null) return fail(400, "VALIDATION_FAILED");
 

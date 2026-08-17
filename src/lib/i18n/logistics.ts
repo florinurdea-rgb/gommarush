@@ -370,6 +370,8 @@ const ro: Dictionary = {
     UPLOAD_FAILED: "Încărcarea documentului a eșuat",
     UNAUTHORIZED: "Sesiune expirată — autentifică-te din nou",
     INVALID_CREDENTIALS: "Utilizator sau parolă greșite",
+    ADMIN_SESSION_SECRET_MISSING:
+      "Configurare server incompletă (ADMIN_SESSION_SECRET lipsă) — contactează administratorul",
     VALIDATION_FAILED: "Date incomplete sau invalide",
     SAVE_FAILED: "Salvarea a eșuat",
     NO_DRIVER_SESSION: "Alege mai întâi șoferul și mașina",

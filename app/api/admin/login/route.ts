@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminLoginSchema } from "@/lib/validation/logistics";
 import {
   adminSessionCookie,
+  isSigningSecretMissingInProduction,
   verifyAdminCredentials,
 } from "@/lib/auth/admin-session";
 import { getClientIp, isRateLimited } from "@/lib/rate-limit";
@@ -20,6 +21,14 @@ export const runtime = "nodejs";
  * without touching any page.
  */
 export async function POST(request: NextRequest) {
+  // Without a stable secret, a cookie signed on this serverless instance can
+  // fail to verify on the very next request if it lands on a different
+  // instance — the login appears to silently do nothing. Fail loudly instead.
+  if (isSigningSecretMissingInProduction()) {
+    logEvent("admin_login_blocked_missing_secret", {});
+    return fail(500, "ADMIN_SESSION_SECRET_MISSING");
+  }
+
   const ip = getClientIp(request.headers);
 
   // Reuses the existing limiter, so a shared dev password can't be brute-forced

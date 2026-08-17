@@ -52,11 +52,27 @@ export interface AdminAuthProvider {
 
 /**
  * The signing secret. In production ADMIN_SESSION_SECRET must be set — without
- * it we fall back to a per-process random key, which means every deploy and
- * every serverless instance invalidates sessions (annoying but never insecure).
- * We deliberately do NOT fall back to a hardcoded constant.
+ * it we fall back to a per-process random key. On a serverless platform (Vercel)
+ * "per-process" means per lambda instance: the login route and the very next
+ * page request can land on two different instances, each with its own random
+ * key, so a cookie signed by one fails verification on the other. That looks
+ * to the user like "I log in and nothing happens, it stays on the login page."
+ * We deliberately do NOT fall back to a hardcoded constant — see
+ * `isSigningSecretMissingInProduction()`, which the login route checks BEFORE
+ * issuing any cookie so this fails as a loud, immediate error instead.
  */
 let ephemeralSecret: string | null = null;
+
+/**
+ * True when we're in production with no stable signing secret configured.
+ * Call this at the top of any route that creates a session, before doing
+ * anything else — issuing a cookie that is doomed to fail verification on the
+ * next request is worse than refusing up front.
+ */
+export function isSigningSecretMissingInProduction(): boolean {
+  const configured = process.env.ADMIN_SESSION_SECRET;
+  return process.env.NODE_ENV === "production" && !(configured && configured.length >= 16);
+}
 
 function signingSecret(): string {
   const configured = process.env.ADMIN_SESSION_SECRET;
