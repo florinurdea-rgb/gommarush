@@ -9,8 +9,10 @@ import {
   DDT_STATUS_TONE as STATUS_TONE,
   buildCustomerResolution,
   canAutoConfirmDdtDocument as canAutoConfirm,
+  canForceConfirmDdtDocument as canForceConfirm,
 } from "@/lib/ddt-import/client-helpers";
 import type { ProcessedDocumentWithMatch } from "@/lib/ddt-import/client-helpers";
+import { DuplicateImportDialog } from "@/components/logistics/DuplicateImportDialog";
 
 /**
  * The multi-DDT import screen: upload -> processing summary -> one card per
@@ -56,6 +58,7 @@ export function DdtImportFlow() {
   const [confirming, setConfirming] = useState<Set<number>>(new Set());
   const [confirmed, setConfirmed] = useState<Map<number, { orderId: string; orderNumber: string }>>(new Map());
   const [confirmErrors, setConfirmErrors] = useState<Map<number, string>>(new Map());
+  const [duplicatePrompt, setDuplicatePrompt] = useState<number | null>(null);
 
   async function handleFileSelected(file: File) {
     setBusy(true);
@@ -117,11 +120,20 @@ export function DdtImportFlow() {
       };
 
       if (!payload.ok || !payload.orderId) {
+        if (payload.code === "ALREADY_IMPORTED") {
+          // A duplicate is a decision for a human, not a dead end — show the
+          // informational dialog (Cancel / Adaugă din nou) instead of a red
+          // error banner with no path forward.
+          setDuplicatePrompt(index);
+          return;
+        }
+        setDuplicatePrompt((current) => (current === index ? null : current));
         const detail = [payload.code ?? "SAVE_FAILED", ...(payload.details ?? [])].filter(Boolean).join(" — ");
         setConfirmErrors((current) => new Map(current).set(index, detail));
         return;
       }
 
+      setDuplicatePrompt((current) => (current === index ? null : current));
       setConfirmed((current) =>
         new Map(current).set(index, { orderId: payload.orderId!, orderNumber: payload.orderNumber! })
       );
@@ -236,12 +248,22 @@ export function DdtImportFlow() {
           key={index}
           doc={doc}
           canConfirm={canAutoConfirm(doc)}
+          canForceConfirm={canForceConfirm(doc)}
           confirming={confirming.has(index)}
           confirmed={confirmed.get(index) ?? null}
           error={confirmErrors.get(index) ?? null}
           onConfirm={() => void confirmDocument(index)}
+          onRequestForceConfirm={() => setDuplicatePrompt(index)}
         />
       ))}
+
+      {duplicatePrompt !== null && (
+        <DuplicateImportDialog
+          busy={confirming.has(duplicatePrompt)}
+          onCancel={() => setDuplicatePrompt(null)}
+          onConfirm={() => void confirmDocument(duplicatePrompt)}
+        />
+      )}
     </div>
   );
 }
@@ -260,17 +282,21 @@ function Stat({ label, value, tone }: { label: string; value: string | number; t
 function DocumentCard({
   doc,
   canConfirm,
+  canForceConfirm,
   confirming,
   confirmed,
   error,
   onConfirm,
+  onRequestForceConfirm,
 }: {
   doc: ProcessedDocumentWithMatch;
   canConfirm: boolean;
+  canForceConfirm: boolean;
   confirming: boolean;
   confirmed: { orderId: string; orderNumber: string } | null;
   error: string | null;
   onConfirm: () => void;
+  onRequestForceConfirm: () => void;
 }) {
   const { extracted } = doc;
 
@@ -328,12 +354,20 @@ function DocumentCard({
           >
             {confirming ? "Se salvează…" : "Confirmă comanda"}
           </button>
+        ) : canForceConfirm ? (
+          <>
+            <button
+              type="button"
+              disabled={confirming}
+              onClick={onRequestForceConfirm}
+              className="h-10 rounded-xl border border-ink/15 bg-white px-4 text-sm font-bold text-ink hover:bg-surface-soft disabled:opacity-50"
+            >
+              {confirming ? "Se salvează…" : "Adaugă din nou"}
+            </button>
+            <span className="text-xs text-ink-soft">Se pare că a mai fost introdusă în sistem aceeași comandă.</span>
+          </>
         ) : (
-          <span className="text-xs text-ink-soft">
-            {doc.status === "DUPLICATE" || doc.status === "POSSIBLE_DUPLICATE"
-              ? "Necesită decizie manuală înainte de import."
-              : "Completează manual din pagina de comandă nouă."}
-          </span>
+          <span className="text-xs text-ink-soft">Completează manual din pagina de comandă nouă.</span>
         )}
         {error && <span className="text-xs font-semibold text-state-danger">Eroare: {error}</span>}
       </div>

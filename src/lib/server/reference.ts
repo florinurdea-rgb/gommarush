@@ -16,30 +16,49 @@ export async function listDrivers(activeOnly = true): Promise<DriverRow[]> {
   return (data ?? []) as unknown as DriverRow[];
 }
 
+const VEHICLE_SELECT = "id, name, slug, registration, capacity_units, active, display_order, color_key";
+const VEHICLE_SELECT_NO_FLEET_COLS = "id, name, slug, registration, capacity_units, active";
+const VEHICLE_SELECT_MINIMAL = "id, name, slug, registration, active";
+
 export async function listVehicles(activeOnly = true): Promise<VehicleRow[]> {
   const supabase = createSupabaseAdminClient();
   let query = supabase
     .from("vehicles")
-    .select("id, name, slug, registration, capacity_units, active")
+    .select(VEHICLE_SELECT)
+    .order("display_order", { ascending: true, nullsFirst: false })
     .order("name");
   if (activeOnly) query = query.eq("active", true);
 
   const primary = await query;
 
   if (isMissingSchemaError(primary.error)) {
-    // capacity_units doesn't exist yet — the vehicle-board migration
-    // (supabase/migrations/20260818000000_vehicle_board.sql) hasn't been
-    // run. Degrade instead of crashing every page that lists vehicles: the
-    // board just can't show occupancy/return-trip figures until it's run.
-    logError("vehicles_capacity_units_column_missing", primary.error);
-    let fallbackQuery = supabase.from("vehicles").select("id, name, slug, registration, active").order("name");
+    // display_order/color_key don't exist yet — the fleet-management
+    // migration (supabase/migrations/20260823000000_fleet_management.sql)
+    // hasn't been run. Degrade instead of crashing every page that lists
+    // vehicles: the board just can't reorder lanes or show an accent color
+    // until it's run.
+    logError("vehicles_fleet_columns_missing", primary.error);
+    let fallbackQuery = supabase.from("vehicles").select(VEHICLE_SELECT_NO_FLEET_COLS).order("name");
     if (activeOnly) fallbackQuery = fallbackQuery.eq("active", true);
     const fallback = await fallbackQuery;
+
+    if (isMissingSchemaError(fallback.error)) {
+      // capacity_units doesn't exist either — an even older DB state
+      // (supabase/migrations/20260818000000_vehicle_board.sql not run).
+      logError("vehicles_capacity_units_column_missing", fallback.error);
+      let minimalQuery = supabase.from("vehicles").select(VEHICLE_SELECT_MINIMAL).order("name");
+      if (activeOnly) minimalQuery = minimalQuery.eq("active", true);
+      const minimal = await minimalQuery;
+      if (minimal.error) throw minimal.error;
+      return ((minimal.data ?? []) as unknown as Omit<VehicleRow, "capacity_units" | "display_order" | "color_key">[]).map(
+        (vehicle) => ({ ...vehicle, capacity_units: null, display_order: null, color_key: null })
+      );
+    }
+
     if (fallback.error) throw fallback.error;
-    return ((fallback.data ?? []) as unknown as Omit<VehicleRow, "capacity_units">[]).map((vehicle) => ({
-      ...vehicle,
-      capacity_units: null,
-    }));
+    return ((fallback.data ?? []) as unknown as Omit<VehicleRow, "display_order" | "color_key">[]).map(
+      (vehicle) => ({ ...vehicle, display_order: null, color_key: null })
+    );
   }
 
   if (primary.error) throw primary.error;

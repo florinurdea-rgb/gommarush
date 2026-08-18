@@ -259,6 +259,18 @@ export interface DriverRow {
   active: boolean;
 }
 
+export const VEHICLE_COLOR_KEYS = [
+  "blue",
+  "purple",
+  "teal",
+  "indigo",
+  "slate",
+  "cyan",
+  "rose",
+  "amber",
+] as const;
+export type VehicleColorKey = (typeof VEHICLE_COLOR_KEYS)[number];
+
 export interface VehicleRow {
   id: string;
   name: string;
@@ -267,6 +279,10 @@ export interface VehicleRow {
   /** Max physical units it can carry per run. Null = unknown/no limit tracked. */
   capacity_units: number | null;
   active: boolean;
+  /** Kanban lane / fleet-list order. Null sorts after every ordered vehicle. */
+  display_order: number | null;
+  /** Subtle header-accent color only — never a saturated column background. */
+  color_key: VehicleColorKey | null;
 }
 
 export interface OrderRow {

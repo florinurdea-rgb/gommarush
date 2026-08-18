@@ -6,9 +6,11 @@ import {
   DDT_STATUS_TONE,
   buildCustomerResolution,
   canAutoConfirmDdtDocument,
+  canForceConfirmDdtDocument,
 } from "@/lib/ddt-import/client-helpers";
 import type { ProcessedDocumentWithMatch } from "@/lib/ddt-import/client-helpers";
 import { uploadDocumentDirect } from "@/lib/client/document-upload";
+import { DuplicateImportDialog } from "@/components/logistics/DuplicateImportDialog";
 
 /**
  * The "Încarcă document" step of the "Comandă nouă" modal: upload -> a
@@ -61,6 +63,7 @@ export function UploadOrderPanel({
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null);
+  const [duplicatePrompt, setDuplicatePrompt] = useState<number | null>(null);
 
   async function handleFile(file: File) {
     setPhase("analyzing");
@@ -106,6 +109,20 @@ export function UploadOrderPanel({
     });
   }
 
+  /**
+   * A DUPLICATE/POSSIBLE_DUPLICATE document needs an explicit "yes, really"
+   * before it joins the batch — turning it on goes through the dialog
+   * instead of a plain checkbox toggle; turning it back off never does.
+   */
+  function toggleForceSelected(index: number, doc: ProcessedDocumentWithMatch) {
+    if (selected.has(index)) {
+      toggleSelected(index);
+      return;
+    }
+    if (!canForceConfirmDdtDocument(doc)) return;
+    setDuplicatePrompt(index);
+  }
+
   function toggleExpanded(index: number) {
     setExpanded((current) => {
       const next = new Set(current);
@@ -117,7 +134,10 @@ export function UploadOrderPanel({
 
   async function confirmSelected() {
     if (!result?.documents || !result.documentId) return;
-    const indexes = [...selected].filter((index) => canAutoConfirmDdtDocument(result.documents![index]));
+    const indexes = [...selected].filter(
+      (index) =>
+        canAutoConfirmDdtDocument(result.documents![index]) || canForceConfirmDdtDocument(result.documents![index])
+    );
     if (indexes.length === 0) return;
 
     setPhase("importing");
@@ -163,7 +183,8 @@ export function UploadOrderPanel({
 
   const documents = result?.documents ?? [];
   const selectedConfirmableCount = [...selected].filter(
-    (index) => documents[index] && canAutoConfirmDdtDocument(documents[index])
+    (index) =>
+      documents[index] && (canAutoConfirmDdtDocument(documents[index]) || canForceConfirmDdtDocument(documents[index]))
   ).length;
 
   return (
@@ -266,6 +287,7 @@ export function UploadOrderPanel({
           <div className="space-y-2">
             {documents.map((doc, index) => {
               const confirmable = canAutoConfirmDdtDocument(doc);
+              const forceConfirmable = canForceConfirmDdtDocument(doc);
               const isExpanded = expanded.has(index);
               const sizedItems = doc.physicalItems.filter((item) => item.raw.width && item.raw.rimDiameter);
               const sizesLabel =
@@ -281,7 +303,7 @@ export function UploadOrderPanel({
                 <div
                   key={index}
                   className={`rounded-xl border bg-white p-4 ${
-                    confirmable ? "border-ink/10" : "border-state-warning/40 bg-state-warning-soft/20"
+                    confirmable || forceConfirmable ? "border-ink/10" : "border-state-warning/40 bg-state-warning-soft/20"
                   }`}
                 >
                   <div className="flex items-start gap-3">
@@ -289,8 +311,8 @@ export function UploadOrderPanel({
                       type="checkbox"
                       className="mt-1 h-4 w-4"
                       checked={selected.has(index)}
-                      disabled={!confirmable || phase === "importing"}
-                      onChange={() => toggleSelected(index)}
+                      disabled={(!confirmable && !forceConfirmable) || phase === "importing"}
+                      onChange={() => (forceConfirmable && !confirmable ? toggleForceSelected(index, doc) : toggleSelected(index))}
                     />
                     <button type="button" onClick={() => toggleExpanded(index)} className="min-w-0 flex-1 text-left">
                       <div className="flex flex-wrap items-center gap-2">
@@ -319,12 +341,10 @@ export function UploadOrderPanel({
 
                   {sizesLabel && <div className="mt-2 pl-7 font-mono text-xs text-ink-soft">{sizesLabel}</div>}
 
-                  {!confirmable && (
+                  {!confirmable && !forceConfirmable && (
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-state-warning/30 pt-3 pl-7">
                       <span className="text-xs font-semibold text-state-warning">
-                        {doc.status === "DUPLICATE" || doc.status === "POSSIBLE_DUPLICATE"
-                          ? "Necesită decizie manuală înainte de import."
-                          : "Date lipsă — necesită completare manuală."}
+                        Date lipsă — necesită completare manuală.
                       </span>
                       {doc.status === "NEEDS_REVIEW" && (
                         <button
@@ -335,6 +355,14 @@ export function UploadOrderPanel({
                           Editează și finalizează →
                         </button>
                       )}
+                    </div>
+                  )}
+
+                  {!confirmable && forceConfirmable && (
+                    <div className="mt-3 border-t border-ink/10 pt-3 pl-7 text-xs text-ink-soft">
+                      {selected.has(index)
+                        ? "Va fi adăugată din nou la import."
+                        : "Se pare că a mai fost introdusă în sistem aceeași comandă — bifează pentru a o adăuga din nou."}
                     </div>
                   )}
 
@@ -397,6 +425,17 @@ export function UploadOrderPanel({
             </div>
           </div>
         </>
+      )}
+
+      {duplicatePrompt !== null && (
+        <DuplicateImportDialog
+          onCancel={() => setDuplicatePrompt(null)}
+          onConfirm={() => {
+            const index = duplicatePrompt;
+            setSelected((current) => new Set(current).add(index));
+            setDuplicatePrompt(null);
+          }}
+        />
       )}
     </div>
   );

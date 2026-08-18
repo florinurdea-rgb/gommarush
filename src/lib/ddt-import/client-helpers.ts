@@ -77,3 +77,16 @@ export function canAutoConfirmDdtDocument(doc: ProcessedDocumentWithMatch): bool
     (doc.status === "READY" || doc.status === "READY_MISSING_OPTIONAL") && buildCustomerResolution(doc) !== null
   );
 }
+
+/**
+ * A DUPLICATE/POSSIBLE_DUPLICATE flag is a signal for a human to double
+ * check, never an automatic block: the server-side confirm route doesn't
+ * gate on document status at all (only the database's own unique constraint
+ * on supplier+document-number can actually stop a genuine duplicate insert)
+ * — the checked/disabled state on these documents is a UI-only safety rail.
+ * This says whether that rail can be deliberately lifted, via the "Adaugă
+ * din nou" confirmation dialog, for a document that's otherwise resolvable.
+ */
+export function canForceConfirmDdtDocument(doc: ProcessedDocumentWithMatch): boolean {
+  return (doc.status === "DUPLICATE" || doc.status === "POSSIBLE_DUPLICATE") && buildCustomerResolution(doc) !== null;
+}
