@@ -1,12 +1,10 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/server-admin";
 import { logError, logEvent } from "@/lib/logger";
+import { isMissingSchemaError } from "@/lib/server/schema-errors";
 import type { DriverRow, SupplierRow, VehicleRow } from "@/lib/types/logistics";
 
 /** Lookups for drivers, vehicles and suppliers used across the admin screens. */
-
-/** Postgres SQLSTATE for "column does not exist". */
-const UNDEFINED_COLUMN = "42703";
 
 export async function listDrivers(activeOnly = true): Promise<DriverRow[]> {
   const supabase = createSupabaseAdminClient();
@@ -28,7 +26,7 @@ export async function listVehicles(activeOnly = true): Promise<VehicleRow[]> {
 
   const primary = await query;
 
-  if (primary.error?.code === UNDEFINED_COLUMN) {
+  if (isMissingSchemaError(primary.error)) {
     // capacity_units doesn't exist yet — the vehicle-board migration
     // (supabase/migrations/20260818000000_vehicle_board.sql) hasn't been
     // run. Degrade instead of crashing every page that lists vehicles: the
@@ -79,7 +77,7 @@ export async function getVehicle(vehicleId: string): Promise<VehicleRow | null> 
     .eq("id", vehicleId)
     .maybeSingle();
 
-  if (primary.error?.code === UNDEFINED_COLUMN) {
+  if (isMissingSchemaError(primary.error)) {
     logError("vehicles_capacity_units_column_missing", primary.error);
     const fallback = await supabase
       .from("vehicles")

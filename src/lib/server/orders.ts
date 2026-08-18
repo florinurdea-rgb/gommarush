@@ -2,6 +2,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/server-admin";
 import { calculateOrderProgress, resolveReactivationStatus } from "@/lib/logistics/order-progress";
 import { logError, logEvent } from "@/lib/logger";
+import { isMissingSchemaError } from "@/lib/server/schema-errors";
 import { ACTIVE_ORDER_STATUSES } from "@/lib/types/logistics";
 import type {
   InventoryUnitRow,
@@ -67,7 +68,7 @@ const ORDER_LIST_SELECT = `
  * supabase/migrations/20260818000000_vehicle_board.sql, hasn't been run
  * against this database). Without this, every dashboard load throws and the
  * whole /admin page crashes instead of just the vehicle board losing manual
- * ordering — see the 42703 handling in listActiveOrders/listOrdersOnHold.
+ * ordering — see the isMissingSchemaError() handling in listActiveOrders/listOrdersOnHold.
  */
 const ORDER_LIST_SELECT_LEGACY = `
   id, order_number, stand_code, status, planned_delivery_date, held_at,
@@ -79,9 +80,6 @@ const ORDER_LIST_SELECT_LEGACY = `
   suppliers ( name ),
   inventory_units ( status, unit_type )
 `;
-
-/** Postgres SQLSTATE for "column does not exist". */
-const UNDEFINED_COLUMN = "42703";
 
 interface RawOrderListRow {
   id: string;
@@ -145,7 +143,7 @@ export async function listActiveOrders(): Promise<OrderListRow[]> {
     .order("planned_delivery_date", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: true });
 
-  if (primary.error?.code === UNDEFINED_COLUMN) {
+  if (isMissingSchemaError(primary.error)) {
     logError("orders_delivery_sequence_column_missing", primary.error);
     const fallback = await supabase
       .from("orders")
@@ -170,7 +168,7 @@ export async function listOrdersOnHold(): Promise<OrderListRow[]> {
     .eq("status", "on_hold")
     .order("held_at", { ascending: false });
 
-  if (primary.error?.code === UNDEFINED_COLUMN) {
+  if (isMissingSchemaError(primary.error)) {
     logError("orders_delivery_sequence_column_missing", primary.error);
     const fallback = await supabase
       .from("orders")
@@ -586,8 +584,8 @@ export async function reorderVehicleColumn(vehicleId: string | null, orderedOrde
   // this database. Without this, every drag-and-drop move on the board
   // fails outright ("Mutarea nu a putut fi salvată") instead of at least
   // saving the vehicle assignment.
-  if (failed?.error?.code === UNDEFINED_COLUMN) {
-    logError("orders_delivery_sequence_column_missing_on_write", failed.error);
+  if (isMissingSchemaError(failed?.error)) {
+    logError("orders_delivery_sequence_column_missing_on_write", failed?.error);
     const fallbackResults = await Promise.all(
       orderedOrderIds.map((orderId) =>
         supabase.from("orders").update({ vehicle_id: vehicleId }).eq("id", orderId)

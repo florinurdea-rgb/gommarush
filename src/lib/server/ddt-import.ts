@@ -13,6 +13,7 @@ import { calculateTransportRevenue } from "@/lib/logistics/ddt-calculations";
 import type { OrderIdentity } from "@/lib/logistics/ddt-dedup";
 import type { CustomerMatchResult } from "@/lib/logistics/customer-matching";
 import { logError, logEvent } from "@/lib/logger";
+import { isMissingSchemaError } from "@/lib/server/schema-errors";
 import type { ItemType } from "@/lib/types/logistics";
 
 /**
@@ -71,7 +72,7 @@ async function getExistingOrderIdentities(supplierId: string): Promise<OrderIden
     .eq("supplier_id", supplierId)
     .not("normalized_document_number", "is", null);
 
-  if (error?.code === "42703") {
+  if (isMissingSchemaError(error)) {
     // normalized_document_number doesn't exist yet — the DDT-import migration
     // (20260819000000_ddt_import_system.sql) hasn't been run. Degrade to "no
     // known orders" rather than crashing the whole upload: every document
@@ -95,7 +96,7 @@ async function getRecentFingerprints(limit = 2000): Promise<{ orderId: string; f
     .order("created_at", { ascending: false })
     .limit(limit);
 
-  if (error?.code === "42703") {
+  if (isMissingSchemaError(error)) {
     logError("ddt_import_fingerprint_column_missing", error);
     return [];
   }
@@ -382,7 +383,7 @@ export async function confirmDdtDocument(input: ConfirmDdtDocumentInput): Promis
     })
     .eq("id", created.orderId);
 
-  if (updateError?.code === "42703") {
+  if (isMissingSchemaError(updateError)) {
     logError("ddt_import_columns_missing_on_confirm", updateError, { orderId: created.orderId });
   } else if (updateError) {
     logError("ddt_import_order_update_failed", updateError, { orderId: created.orderId });
