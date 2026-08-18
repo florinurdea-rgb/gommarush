@@ -201,6 +201,16 @@ export const reorderOrdersSchema = z
   })
   .strict();
 
+/** The "Hartă" route-stops geocoding request — one vehicle's stops, in delivery order. */
+export const routeMapSchema = z
+  .object({
+    stops: z
+      .array(z.object({ orderId: uuid, address: shortText.min(1) }))
+      .min(1)
+      .max(50),
+  })
+  .strict();
+
 export const updateOrderItemSchema = z
   .object({
     description: longText.nullish(),
