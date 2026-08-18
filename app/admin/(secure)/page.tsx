@@ -7,20 +7,20 @@ import { VehicleBoard } from "@/components/logistics/VehicleBoard";
 import type { VehicleColumnData } from "@/components/logistics/VehicleBoard";
 import { NewOrderLauncher } from "@/components/logistics/NewOrderLauncher";
 import { freeStands } from "@/lib/logistics/stand-allocation";
-import { t } from "@/lib/i18n/logistics";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Comenzi în curs" };
+export const metadata = { title: "Livrări" };
 
 /**
- * The Admin dashboard. Server-rendered on every request (`force-dynamic`) so
- * scans performed on the warehouse floor show up on a refresh without any
- * client-side polling — the simple invalidation strategy the brief asks for
- * rather than an over-engineered subscription.
+ * "Livrări" — the default operational screen. Server-rendered on every
+ * request (`force-dynamic`) so scans performed on the warehouse floor show
+ * up on a refresh without any client-side polling.
  *
- * Shows only the vehicle board, per the "vreau sa vad doar coloanele fara
- * restul si vreau sa fie clare vizual" brief — the stand board, print-job
- * queue and the flat orders table all still exist (stands via each order's
+ * Fetches every active order once, unfiltered by date — VehicleBoard owns
+ * the day-scoped view (date control, summary line, filters) entirely
+ * client-side, so switching days never re-fetches or reloads the board.
+ * Shows only the board itself: the stand board, print-job queue and the
+ * flat orders table all still exist elsewhere (stands via each order's
  * detail page, print jobs at /admin/print-jobs), just not competing for
  * attention here.
  */
@@ -39,14 +39,14 @@ export default async function AdminDashboardPage() {
       .map((stand) => ({ id: stand.orderId!, stand_code: stand.standCode, status: stand.status! }))
   );
 
-  // "Așteaptă asignare" first so it's the obvious place to drag FROM;
-  // vehicles after, in the same name order listVehicles() already returns,
-  // numbered for the van icon's badge.
+  // "Neasignate" first so it's the obvious place to drag FROM; vehicles
+  // after, in the same name order listVehicles() already returns, numbered
+  // for the van icon's badge.
   const vehicleColumns: VehicleColumnData[] = [
     {
       key: "unassigned",
       vehicleId: null,
-      name: "Așteaptă asignare",
+      name: "Neasignate",
       number: null,
       capacityUnits: null,
       orders: orders.filter((order) => !order.vehicle_id),
@@ -64,8 +64,7 @@ export default async function AdminDashboardPage() {
   return (
     <>
       <PageHeading
-        title={t("ordersInProgress")}
-        description={`${orders.length} comenzi active`}
+        title="Livrări"
         action={
           <NewOrderLauncher
             drivers={drivers.map((driver) => ({ id: driver.id, name: driver.name }))}

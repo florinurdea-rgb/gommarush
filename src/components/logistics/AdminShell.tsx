@@ -1,60 +1,28 @@
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
-import { t } from "@/lib/i18n/logistics";
 import { SignOutButton } from "@/components/logistics/SignOutButton";
 import { BackButton } from "@/components/logistics/BackButton";
+import { AdminNav } from "@/components/logistics/AdminNav";
 
 /**
- * Chrome for every admin screen: navigation, the dev-auth notice, and the
- * sign-out control. Desktop-first (this is an office tool), but the nav wraps
- * cleanly on a tablet.
+ * Chrome for every admin screen. Two nav levels, per the brief: the top bar
+ * carries only global/account elements, and the operational nav lives in
+ * its own bar directly below it (AdminNav) — never mixed together.
  */
-
-const NAV = [
-  { href: "/admin", labelKey: "ordersInProgress" as const },
-  { href: "/admin/hold", labelKey: "ordersOnHold" as const },
-  { href: "/admin/customers", labelKey: "customerList" as const },
-  { href: "/admin/print-jobs", labelKey: "printQueue" as const },
-  { href: "/admin/stands", labelKey: "standQrCodes" as const },
-];
-
 export function AdminShell({
   children,
   displayName,
-  active,
 }: {
   children: React.ReactNode;
   displayName: string;
-  active?: string;
 }) {
   return (
     <div className="min-h-screen bg-surface-soft">
       <header className="border-b border-ink/10 bg-white">
-        <div className="mx-auto flex w-full max-w-admin flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3 sm:px-6">
+        <div className="mx-auto flex w-full max-w-[1760px] items-center justify-between gap-4 px-4 py-3 sm:px-6">
           <Link href="/admin" className="flex-none">
             <Logo iconClassName="h-9 w-9" textClassName="text-xl" />
           </Link>
-
-          <nav className="flex flex-1 flex-wrap items-center gap-1">
-            {NAV.map((item) => {
-              const isActive = active === item.href;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  aria-current={isActive ? "page" : undefined}
-                  className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-                    isActive
-                      ? "bg-accent-light text-accent-dark"
-                      : "text-ink-soft hover:bg-surface-soft hover:text-ink"
-                  }`}
-                >
-                  {t(item.labelKey)}
-                </Link>
-              );
-            })}
-          </nav>
-
           <div className="flex items-center gap-3">
             <span className="hidden text-sm text-ink-soft sm:inline">{displayName}</span>
             <SignOutButton />
@@ -62,7 +30,9 @@ export function AdminShell({
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-admin px-4 py-6 sm:px-6 sm:py-8">{children}</main>
+      <AdminNav />
+
+      <main className="mx-auto w-full max-w-[1760px] px-4 py-6 sm:px-6 sm:py-8">{children}</main>
     </div>
   );
 }
