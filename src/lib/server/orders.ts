@@ -58,6 +58,28 @@ const ORDER_LIST_SELECT = `
   inventory_units ( status )
 `;
 
+/**
+ * Same as ORDER_LIST_SELECT, minus delivery_sequence — used as a fallback
+ * when that column doesn't exist yet (the vehicle-board migration,
+ * supabase/migrations/20260818000000_vehicle_board.sql, hasn't been run
+ * against this database). Without this, every dashboard load throws and the
+ * whole /admin page crashes instead of just the vehicle board losing manual
+ * ordering — see the 42703 handling in listActiveOrders/listOrdersOnHold.
+ */
+const ORDER_LIST_SELECT_LEGACY = `
+  id, order_number, stand_code, status, planned_delivery_date, held_at,
+  supplier_document_number, driver_id, vehicle_id,
+  customers ( name ),
+  customer_locations ( city ),
+  drivers ( name ),
+  vehicles ( name ),
+  suppliers ( name ),
+  inventory_units ( status )
+`;
+
+/** Postgres SQLSTATE for "column does not exist". */
+const UNDEFINED_COLUMN = "42703";
+
 interface RawOrderListRow {
   id: string;
   order_number: number;
@@ -90,7 +112,9 @@ function toListRow(raw: RawOrderListRow): OrderListRow {
     driver_name: raw.drivers?.name ?? null,
     vehicle_id: raw.vehicle_id,
     vehicle_name: raw.vehicles?.name ?? null,
-    delivery_sequence: raw.delivery_sequence,
+    // ?? null (not a plain pass-through): with ORDER_LIST_SELECT_LEGACY the
+    // key is absent entirely (undefined), not present-and-null.
+    delivery_sequence: raw.delivery_sequence ?? null,
     supplier_name: raw.suppliers?.name ?? null,
     supplier_document_number: raw.supplier_document_number,
     held_at: raw.held_at,
@@ -108,7 +132,7 @@ function toListRow(raw: RawOrderListRow): OrderListRow {
  */
 export async function listActiveOrders(): Promise<OrderListRow[]> {
   const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase
+  const primary = await supabase
     .from("orders")
     .select(ORDER_LIST_SELECT)
     .in("status", ACTIVE_ORDER_STATUSES as unknown as string[])
@@ -116,21 +140,44 @@ export async function listActiveOrders(): Promise<OrderListRow[]> {
     .order("planned_delivery_date", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: true });
 
-  if (error) throw error;
-  return ((data ?? []) as unknown as RawOrderListRow[]).map(toListRow);
+  if (primary.error?.code === UNDEFINED_COLUMN) {
+    logError("orders_delivery_sequence_column_missing", primary.error);
+    const fallback = await supabase
+      .from("orders")
+      .select(ORDER_LIST_SELECT_LEGACY)
+      .in("status", ACTIVE_ORDER_STATUSES as unknown as string[])
+      .order("planned_delivery_date", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: true });
+    if (fallback.error) throw fallback.error;
+    return ((fallback.data ?? []) as unknown as RawOrderListRow[]).map(toListRow);
+  }
+
+  if (primary.error) throw primary.error;
+  return ((primary.data ?? []) as unknown as RawOrderListRow[]).map(toListRow);
 }
 
 /** Orders parked in "În așteptare". */
 export async function listOrdersOnHold(): Promise<OrderListRow[]> {
   const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase
+  const primary = await supabase
     .from("orders")
     .select(ORDER_LIST_SELECT)
     .eq("status", "on_hold")
     .order("held_at", { ascending: false });
 
-  if (error) throw error;
-  return ((data ?? []) as unknown as RawOrderListRow[]).map(toListRow);
+  if (primary.error?.code === UNDEFINED_COLUMN) {
+    logError("orders_delivery_sequence_column_missing", primary.error);
+    const fallback = await supabase
+      .from("orders")
+      .select(ORDER_LIST_SELECT_LEGACY)
+      .eq("status", "on_hold")
+      .order("held_at", { ascending: false });
+    if (fallback.error) throw fallback.error;
+    return ((fallback.data ?? []) as unknown as RawOrderListRow[]).map(toListRow);
+  }
+
+  if (primary.error) throw primary.error;
+  return ((primary.data ?? []) as unknown as RawOrderListRow[]).map(toListRow);
 }
 
 export interface OrderDetail {

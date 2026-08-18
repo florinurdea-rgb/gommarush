@@ -1,9 +1,12 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/server-admin";
-import { logEvent } from "@/lib/logger";
+import { logError, logEvent } from "@/lib/logger";
 import type { DriverRow, SupplierRow, VehicleRow } from "@/lib/types/logistics";
 
 /** Lookups for drivers, vehicles and suppliers used across the admin screens. */
+
+/** Postgres SQLSTATE for "column does not exist". */
+const UNDEFINED_COLUMN = "42703";
 
 export async function listDrivers(activeOnly = true): Promise<DriverRow[]> {
   const supabase = createSupabaseAdminClient();
@@ -23,9 +26,26 @@ export async function listVehicles(activeOnly = true): Promise<VehicleRow[]> {
     .order("name");
   if (activeOnly) query = query.eq("active", true);
 
-  const { data, error } = await query;
-  if (error) throw error;
-  return (data ?? []) as unknown as VehicleRow[];
+  const primary = await query;
+
+  if (primary.error?.code === UNDEFINED_COLUMN) {
+    // capacity_units doesn't exist yet — the vehicle-board migration
+    // (supabase/migrations/20260818000000_vehicle_board.sql) hasn't been
+    // run. Degrade instead of crashing every page that lists vehicles: the
+    // board just can't show occupancy/return-trip figures until it's run.
+    logError("vehicles_capacity_units_column_missing", primary.error);
+    let fallbackQuery = supabase.from("vehicles").select("id, name, slug, registration, active").order("name");
+    if (activeOnly) fallbackQuery = fallbackQuery.eq("active", true);
+    const fallback = await fallbackQuery;
+    if (fallback.error) throw fallback.error;
+    return ((fallback.data ?? []) as unknown as Omit<VehicleRow, "capacity_units">[]).map((vehicle) => ({
+      ...vehicle,
+      capacity_units: null,
+    }));
+  }
+
+  if (primary.error) throw primary.error;
+  return (primary.data ?? []) as unknown as VehicleRow[];
 }
 
 export async function listSuppliers(): Promise<SupplierRow[]> {
@@ -53,13 +73,25 @@ export async function getDriver(driverId: string): Promise<DriverRow | null> {
 
 export async function getVehicle(vehicleId: string): Promise<VehicleRow | null> {
   const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase
+  const primary = await supabase
     .from("vehicles")
     .select("id, name, slug, registration, capacity_units, active")
     .eq("id", vehicleId)
     .maybeSingle();
-  if (error) throw error;
-  return (data ?? null) as unknown as VehicleRow | null;
+
+  if (primary.error?.code === UNDEFINED_COLUMN) {
+    logError("vehicles_capacity_units_column_missing", primary.error);
+    const fallback = await supabase
+      .from("vehicles")
+      .select("id, name, slug, registration, active")
+      .eq("id", vehicleId)
+      .maybeSingle();
+    if (fallback.error) throw fallback.error;
+    return fallback.data ? ({ ...fallback.data, capacity_units: null } as unknown as VehicleRow) : null;
+  }
+
+  if (primary.error) throw primary.error;
+  return (primary.data ?? null) as unknown as VehicleRow | null;
 }
 
 /**
