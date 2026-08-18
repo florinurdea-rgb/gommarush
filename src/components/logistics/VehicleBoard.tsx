@@ -17,6 +17,7 @@ import { suggestRouteAssignments, suggestRouteForOrder } from "@/lib/logistics/r
 import { operationalStatus, OPERATIONAL_BUCKETS, operationalBucketMeta } from "@/lib/logistics/operational-status";
 import type { OperationalBucket } from "@/lib/logistics/operational-status";
 import { VAN_BORDER_CLASS } from "@/lib/logistics/vehicle-colors";
+import { PickupIcon } from "@/components/logistics/SummaryIcons";
 import type { RoutableOrder, RoutableVehicle } from "@/lib/logistics/route-suggestion";
 import type { OrderListRow } from "@/lib/server/orders";
 import type { VehicleRow } from "@/lib/types/logistics";
@@ -543,6 +544,51 @@ export function VehicleBoard({
             <span key={bucket} className="text-xs font-semibold text-ink-soft">
               {meta.emoji} <strong className="text-ink">{bucketCounts.get(bucket) ?? 0}</strong> {meta.label}
             </span>
+          );
+        })}
+      </div>
+
+      {/* --------------------------------------------------- fleet overview */}
+      {/* A grid, not a horizontal-scroll row: it must wrap to more rows on a
+          narrow screen rather than ever needing its own scrollbar, per the
+          brief — unlike the Kanban below (which legitimately scrolls past
+          5 vans), this is just an at-a-glance load summary. */}
+      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+        {initialColumns.map((column) => {
+          const orders = columnsByKey[column.key] ?? [];
+          const unitCount = orders.reduce((sum, order) => sum + order.progress.total, 0);
+          const stats = computeVehicleLoad(orders.length, unitCount, column.capacityUnits);
+          const borderClass =
+            column.key === "unassigned"
+              ? "border-t-state-warning"
+              : VAN_BORDER_CLASS[(column.colorKey as keyof typeof VAN_BORDER_CLASS) ?? "default"] ?? VAN_BORDER_CLASS.default;
+
+          return (
+            <div
+              key={column.key}
+              className={`rounded-xl border-t-[3px] bg-white p-2.5 shadow-card ${borderClass}`}
+            >
+              <div className="flex items-center gap-1.5">
+                <PickupIcon className="h-4 w-4 flex-none text-ink-soft" />
+                <span className="truncate text-xs font-bold text-ink">{column.name}</span>
+              </div>
+              <div className="mt-1 text-[11px] text-ink-soft">
+                {stats.orderCount} {stats.orderCount === 1 ? "cursă" : "curse"}
+              </div>
+              {stats.occupancyPercent !== null ? (
+                <>
+                  <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-surface-soft">
+                    <div
+                      className={`h-full rounded-full ${stats.occupancyPercent > 100 ? "bg-state-danger" : "bg-accent"}`}
+                      style={{ width: `${Math.min(100, stats.occupancyPercent)}%` }}
+                    />
+                  </div>
+                  <div className="mt-0.5 text-[11px] font-bold text-ink">{stats.occupancyPercent}%</div>
+                </>
+              ) : (
+                <div className="mt-1 text-[11px] text-ink-soft">—</div>
+              )}
+            </div>
           );
         })}
       </div>

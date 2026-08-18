@@ -26,8 +26,13 @@ const BUCKET_BY_STATUS: Partial<Record<OrderStatus, OperationalBucket>> = {
   received: "receiving",
   sorting: "to_prepare",
   stored: "to_prepare",
-  ready_for_loading: "to_prepare",
-  partially_loaded: "to_prepare",
+  // 'ready_for_loading' is where markOrderPrepared() ("Pregătește comanda")
+  // lands an order — it has already been prepared/labeled, just waiting
+  // for a van, so it reads as "ready" (🟢) here rather than still "to
+  // prepare" (🟣). 'partially_loaded' means loading is already underway,
+  // which is further along still.
+  ready_for_loading: "ready",
+  partially_loaded: "ready",
   loaded: "ready",
   out_for_delivery: "ready",
   partially_delivered: "ready",

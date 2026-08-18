@@ -185,12 +185,18 @@ export async function listOrdersOnHold(): Promise<OrderListRow[]> {
 
 /**
  * "De pregătit" — orders whose tyres are physically at the warehouse
- * (received) but not yet labeled/loaded: sorting, stored, or already
- * marked ready but not fully loaded. This is the repurposed former
- * "hold" tab — actual on-hold orders (status = on_hold) now surface
- * through Livrări's "Așteaptă marfa" filter instead of a dedicated page.
+ * (received) but not yet prepared/labeled: sorting or stored only.
+ * markOrderPrepared() advances an order past this the moment "Pregătește
+ * comanda" is used (-> 'ready_for_loading'), so a prepared order drops out
+ * of this list immediately — it shows up as unassigned-and-ready on the
+ * Livrări board instead, waiting for a van, not stuck looking like it
+ * still needs preparing. 'partially_loaded' is excluded for the same
+ * reason: loading has already started, so re-prepping doesn't apply.
+ * This is the repurposed former "hold" tab — actual on-hold orders
+ * (status = on_hold) now surface through Livrări's "Așteaptă marfa"
+ * filter instead of a dedicated page.
  */
-const TO_PREPARE_STATUSES = ["sorting", "stored", "ready_for_loading", "partially_loaded"] as const;
+const TO_PREPARE_STATUSES = ["sorting", "stored"] as const;
 
 export async function listOrdersToPrepare(): Promise<OrderListRow[]> {
   const supabase = createSupabaseAdminClient();

@@ -12,13 +12,17 @@ describe("operationalStatus", () => {
     expect(operationalStatus("partially_received", false).bucket).toBe("receiving");
   });
 
-  it("buckets sorting/stored/ready_for_loading as to prepare", () => {
+  it("buckets sorting/stored as to prepare", () => {
     expect(operationalStatus("sorting", false).bucket).toBe("to_prepare");
     expect(operationalStatus("stored", false).bucket).toBe("to_prepare");
-    expect(operationalStatus("ready_for_loading", false).bucket).toBe("to_prepare");
   });
 
-  it("buckets loaded/out_for_delivery as ready", () => {
+  it("buckets ready_for_loading/partially_loaded/loaded/out_for_delivery as ready", () => {
+    // ready_for_loading is where "Pregătește comanda" lands an order — it's
+    // already prepared, just waiting for a van, so it reads as ready (🟢)
+    // rather than still needing prep (🟣).
+    expect(operationalStatus("ready_for_loading", false).bucket).toBe("ready");
+    expect(operationalStatus("partially_loaded", false).bucket).toBe("ready");
     expect(operationalStatus("loaded", false).bucket).toBe("ready");
     expect(operationalStatus("out_for_delivery", false).bucket).toBe("ready");
   });
