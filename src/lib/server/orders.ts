@@ -196,6 +196,7 @@ export interface OrderDetail {
     city: string;
     province: string | null;
     postal_code: string | null;
+    phone: string | null;
   } | null;
   driver: { id: string; name: string } | null;
   vehicle: { id: string; name: string } | null;
@@ -231,7 +232,7 @@ export async function getOrderDetail(orderId: string): Promise<OrderDetail | nul
       orderRow.customer_location_id
         ? supabase
             .from("customer_locations")
-            .select("id, location_name, address_line1, city, province, postal_code")
+            .select("id, location_name, address_line1, city, province, postal_code, phone")
             .eq("id", orderRow.customer_location_id)
             .maybeSingle()
         : Promise.resolve({ data: null, error: null }),
