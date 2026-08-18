@@ -391,22 +391,17 @@ export async function confirmDdtDocument(input: ConfirmDdtDocumentInput): Promis
     if (chargesError) logError("document_charges_insert_failed", chargesError, { orderId: created.orderId });
   }
 
-  // A DDT/invoice IS proof the tyres already physically arrived — unlike a
-  // brand-new manual order (nothing received yet), confirming one means
-  // the goods are already at the warehouse. createOrder() defaults a new
-  // order to 'expected' (and its units to 'expected'), which would put it
-  // in "Așteaptă marfa"; move it straight to "De pregătit" (stored) so it
-  // lands where it actually belongs, with received_at/stored_at set for
-  // real (both the order-progress display and the Sumar "Ridicări" count
-  // depend on received_at being set).
-  const receivedAt = new Date().toISOString();
-
+  // Confirming a scanned DDT is paperwork, not a physical event — the goods
+  // may not have arrived yet (the document is often scanned from the office
+  // ahead of the actual delivery). So this order starts exactly like a
+  // manual one: createOrder()'s default 'expected' status ("Așteaptă
+  // marfa"), units 'expected' too. It only advances to 'stored'/"De
+  // pregătit" through the real warehouse receiving flow (/warehouse),
+  // which is the actual "the tyres are physically here" signal —
+  // received_at/stored_at get set there, for real, not at confirm time.
   const { error: updateError } = await supabase
     .from("orders")
     .update({
-      status: "stored",
-      received_at: receivedAt,
-      stored_at: receivedAt,
       normalized_document_number: processed.normalizedDocumentNumber,
       tracking_number: extracted.document.trackingNumber,
       giro: extracted.document.giro,
@@ -424,35 +419,13 @@ export async function confirmDdtDocument(input: ConfirmDdtDocumentInput): Promis
     .eq("id", created.orderId);
 
   if (isMissingSchemaError(updateError)) {
+    // The DDT-specific columns above haven't reached this database yet —
+    // the order itself is already created successfully via createOrder(),
+    // this metadata just can't be attached until the migration runs.
     logError("ddt_import_columns_missing_on_confirm", updateError, { orderId: created.orderId });
-    // The DDT-specific columns above may be genuinely missing, but status/
-    // received_at/stored_at are base columns that have always existed —
-    // still worth trying to advance those on their own so the order isn't
-    // stuck at "Așteaptă marfa" just because a later migration hasn't run.
-    const { error: statusOnlyError } = await supabase
-      .from("orders")
-      .update({ status: "stored", received_at: receivedAt, stored_at: receivedAt })
-      .eq("id", created.orderId);
-    if (statusOnlyError) logError("ddt_confirm_status_fallback_failed", statusOnlyError, { orderId: created.orderId });
   } else if (updateError) {
     logError("ddt_import_order_update_failed", updateError, { orderId: created.orderId });
   }
-
-  const { error: unitsError } = await supabase
-    .from("inventory_units")
-    .update({ status: "stored", received_at: receivedAt, stored_at: receivedAt })
-    .eq("order_id", created.orderId)
-    .eq("status", "expected");
-  if (unitsError) logError("ddt_confirm_units_update_failed", unitsError, { orderId: created.orderId });
-
-  const { error: historyError } = await supabase.from("order_status_history").insert({
-    order_id: created.orderId,
-    old_status: "expected",
-    new_status: "stored",
-    changed_by_label: changedBy,
-    notes: "ddt_import_received",
-  });
-  if (historyError) logError("ddt_confirm_history_insert_failed", historyError, { orderId: created.orderId });
 
   logEvent("ddt_order_confirmed", {
     orderId: created.orderId,
