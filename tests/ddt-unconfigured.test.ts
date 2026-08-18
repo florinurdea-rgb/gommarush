@@ -2,19 +2,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-const originalApiKey = process.env.ANTHROPIC_API_KEY;
+const originalAnthropicKey = process.env.ANTHROPIC_API_KEY;
+const originalOpenaiKey = process.env.OPENAI_API_KEY;
 
 beforeEach(() => {
   delete process.env.ANTHROPIC_API_KEY;
+  delete process.env.OPENAI_API_KEY;
 });
 
 afterEach(() => {
-  if (originalApiKey === undefined) delete process.env.ANTHROPIC_API_KEY;
-  else process.env.ANTHROPIC_API_KEY = originalApiKey;
+  if (originalAnthropicKey === undefined) delete process.env.ANTHROPIC_API_KEY;
+  else process.env.ANTHROPIC_API_KEY = originalAnthropicKey;
+
+  if (originalOpenaiKey === undefined) delete process.env.OPENAI_API_KEY;
+  else process.env.OPENAI_API_KEY = originalOpenaiKey;
 });
 
 describe("extractDdtDocuments — unconfigured is disclosed, never a technical failure", () => {
-  it("returns status 'unconfigured' with the exact disclosure text when there's no readable text layer either", async () => {
+  it("returns status 'unconfigured' with the exact disclosure text when neither provider key is set and there's no readable text layer", async () => {
     const { extractDdtDocuments } = await import("@/lib/ddt-import/extractor");
 
     const result = await extractDdtDocuments({
@@ -29,8 +34,14 @@ describe("extractDdtDocuments — unconfigured is disclosed, never a technical f
     expect(result.notes.join(" ")).toContain("sistemul nu inventează valori");
   });
 
-  it("is configured as false when the API key is absent", async () => {
+  it("is configured as false when neither API key is present", async () => {
     const { isDdtExtractionConfigured } = await import("@/lib/ddt-import/extractor");
     expect(isDdtExtractionConfigured()).toBe(false);
+  });
+
+  it("is configured as true when only OPENAI_API_KEY is present", async () => {
+    process.env.OPENAI_API_KEY = "sk-test-key";
+    const { isDdtExtractionConfigured } = await import("@/lib/ddt-import/extractor");
+    expect(isDdtExtractionConfigured()).toBe(true);
   });
 });
