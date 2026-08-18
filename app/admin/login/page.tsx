@@ -7,6 +7,7 @@ import { t } from "@/lib/i18n/logistics";
 
 export const dynamic = "force-dynamic";
 
+// Keep Production deployments pinned to the current Supabase Auth login flow.
 export const metadata = { title: "Admin" };
 
 export default async function AdminLoginPage() {
