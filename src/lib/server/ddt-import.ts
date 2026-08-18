@@ -56,6 +56,10 @@ export interface DdtUploadResult {
     duplicate: number;
     totalTyres: number;
   };
+  /** True when AI extraction isn't configured — an expected, disclosed state, never an error. */
+  unconfigured: boolean;
+  notes: string[];
+  /** A genuine technical failure (timeout, HTTP error, malformed response) — distinct from "unconfigured". */
   error: string | null;
 }
 
@@ -112,7 +116,11 @@ export async function analyzeDdtUpload(input: {
 
   const extraction = await extractDdtDocuments(input);
 
-  if (extraction.status !== "analysed") {
+  // "unconfigured" is an expected, disclosed state (see
+  // src/lib/ddt-import/extractor.ts's fallback) — never surfaced as an
+  // error. The document is stored either way; only a genuine technical
+  // failure ("failed") gets treated as one.
+  if (extraction.status === "unconfigured") {
     return {
       documentId: stored.id,
       pageCount: extraction.pageCount,
@@ -126,6 +134,28 @@ export async function analyzeDdtUpload(input: {
         duplicate: 0,
         totalTyres: 0,
       },
+      unconfigured: true,
+      notes: extraction.notes,
+      error: null,
+    };
+  }
+
+  if (extraction.status === "failed") {
+    return {
+      documentId: stored.id,
+      pageCount: extraction.pageCount,
+      documents: [],
+      summary: {
+        documentsFound: 0,
+        ready: 0,
+        readyMissingOptional: 0,
+        needsReview: 0,
+        possibleDuplicate: 0,
+        duplicate: 0,
+        totalTyres: 0,
+      },
+      unconfigured: false,
+      notes: extraction.notes,
       error: extraction.error,
     };
   }
@@ -204,7 +234,15 @@ export async function analyzeDdtUpload(input: {
     duplicate: summary.duplicate,
   });
 
-  return { documentId: stored.id, pageCount: extraction.pageCount, documents: processed, summary, error: null };
+  return {
+    documentId: stored.id,
+    pageCount: extraction.pageCount,
+    documents: processed,
+    summary,
+    unconfigured: false,
+    notes: extraction.notes,
+    error: null,
+  };
 }
 
 export interface ConfirmDdtDocumentInput {

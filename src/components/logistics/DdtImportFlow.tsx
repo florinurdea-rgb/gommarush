@@ -37,6 +37,9 @@ interface AnalyzeResponse {
     duplicate: number;
     totalTyres: number;
   };
+  /** AI extraction isn't configured — an expected, disclosed state, never an error. */
+  unconfigured?: boolean;
+  notes?: string[];
 }
 
 const STATUS_LABEL: Record<DocumentStatus, string> = {
@@ -213,6 +216,30 @@ export function DdtImportFlow() {
         <p role="alert" className="rounded-lg bg-state-danger-soft px-4 py-3 text-sm font-semibold text-state-danger">
           {error}
         </p>
+      )}
+
+      {result?.unconfigured && (
+        <div className="rounded-xl border border-state-warning/30 bg-state-warning-soft p-5">
+          <h2 className="text-base font-bold text-state-warning">Analiză automată nu este configurată</h2>
+          <p className="mt-2 text-sm text-ink">
+            Documentul va fi stocat, iar textul va fi citit direct din fișier acolo unde este posibil.
+            Datele care nu pot fi citite trebuie completate manual — sistemul nu inventează valori.
+          </p>
+          <Link
+            href="/admin/orders/new"
+            className="mt-3 inline-block text-sm font-semibold text-accent hover:underline"
+          >
+            Completează comanda manual →
+          </Link>
+        </div>
+      )}
+
+      {result && !result.unconfigured && result.notes && result.notes.length > 0 && (
+        <ul className="space-y-1 text-xs text-ink-soft">
+          {result.notes.map((note) => (
+            <li key={note}>{note}</li>
+          ))}
+        </ul>
       )}
 
       {result?.summary && (

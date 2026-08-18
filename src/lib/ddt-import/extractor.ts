@@ -1,5 +1,6 @@
 import "server-only";
 import { logError, logEvent } from "@/lib/logger";
+import { extractViaTextLayer } from "@/lib/ddt-import/text-fallback";
 import type { ExtractedDocument, ExtractedLine, ExtractionResult } from "@/lib/ddt-import/types";
 
 /**
@@ -215,12 +216,36 @@ export async function extractDdtDocuments(input: {
 }): Promise<ExtractionResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) {
+    // No AI configured: fall back to the existing deterministic text-layer
+    // parser rather than just failing — "textul va fi citit direct din
+    // fișier acolo unde este posibil." Multi-document splitting still needs
+    // AI (there's no reliable way to find DDT boundaries from raw text
+    // alone), so a text-only pass always yields at most one document.
+    const fallback = await extractViaTextLayer(input);
+    const UNCONFIGURED_NOTES = [
+      "Analiza automată nu este configurată.",
+      "Documentul va fi stocat, iar textul va fi citit direct din fișier acolo unde este posibil. Datele care nu pot fi citite trebuie completate manual — sistemul nu inventează valori.",
+    ];
+
+    if (!fallback.foundData || !fallback.document) {
+      return {
+        status: "unconfigured",
+        documents: [],
+        pageCount: null,
+        error: "UNCONFIGURED",
+        notes: UNCONFIGURED_NOTES,
+      };
+    }
+
     return {
-      status: "unconfigured",
-      documents: [],
+      status: "analysed",
+      documents: [fallback.document],
       pageCount: null,
-      error: "UNCONFIGURED",
-      notes: ["ANTHROPIC_API_KEY nu este configurat."],
+      error: null,
+      notes: [
+        ...UNCONFIGURED_NOTES,
+        "Un singur document a putut fi citit din text — detectarea automată a mai multor DDT-uri într-un fișier necesită AI configurat.",
+      ],
     };
   }
 
