@@ -6,9 +6,10 @@ import { errorMessage, itemTypeLabel, t } from "@/lib/i18n/logistics";
 import { ITEM_TYPES, STAND_CODES } from "@/lib/types/logistics";
 import { totalUnitCount } from "@/lib/logistics/inventory-units";
 import { mergeIdenticalProductLines } from "@/lib/logistics/product-normalise";
+import { CustomerPickerField } from "@/components/logistics/CustomerPickerField";
 import type { AnalysisResult, ExtractedProductLine } from "@/lib/documents/analyzer";
 import type { CustomerMatchResult, LocationResolution } from "@/lib/logistics/customer-matching";
-import type { ItemType, StandCode } from "@/lib/types/logistics";
+import type { CustomerLocationRow, CustomerRow, ItemType, StandCode } from "@/lib/types/logistics";
 import type { OptionRef } from "@/components/logistics/NewOrderFlow";
 
 /**
@@ -98,7 +99,11 @@ export function OrderReviewForm({
   );
 
   // --- Customer ---------------------------------------------------------
-  const matchedCustomer = customerMatch?.customer ?? null;
+  // Manual entry has no document-derived customerMatch, so the "which
+  // customer" decision is a stateful pick from CustomerPickerField instead
+  // of something computed once from a prop — see handleSelectCustomer/
+  // handleSelectNewCustomer below.
+  const [matchedCustomer, setMatchedCustomer] = useState<CustomerRow | null>(customerMatch?.customer ?? null);
   const [useExistingCustomer, setUseExistingCustomer] = useState(Boolean(matchedCustomer));
   const [customerName, setCustomerName] = useState(
     analysis.customer.companyName ?? matchedCustomer?.name ?? ""
@@ -109,7 +114,9 @@ export function OrderReviewForm({
   );
 
   // --- Location ---------------------------------------------------------
-  const matchedLocation = customerMatch?.location ?? null;
+  const [matchedLocation, setMatchedLocation] = useState<CustomerLocationRow | null>(
+    customerMatch?.location ?? null
+  );
   const [resolution, setResolution] = useState<LocationResolution>(
     customerMatch?.allowedResolutions[0] ?? "add_as_new_location"
   );
@@ -125,6 +132,62 @@ export function OrderReviewForm({
     analysis.customer.postalCode ?? matchedLocation?.postal_code ?? ""
   );
   const [deliveryNotes, setDeliveryNotes] = useState("");
+  const [loadingCustomerLocations, setLoadingCustomerLocations] = useState(false);
+
+  /** Picked an existing customer from CustomerPickerField — prefills identity + their primary delivery location, if any. */
+  async function handleSelectCustomer(customer: CustomerRow) {
+    setMatchedCustomer(customer);
+    setUseExistingCustomer(true);
+    setCustomerName(customer.name);
+    setCustomerVat(customer.vat_number ?? "");
+
+    setLoadingCustomerLocations(true);
+    try {
+      const response = await fetch(`/api/admin/customers/${customer.id}`);
+      const payload = (await response.json()) as {
+        ok: boolean;
+        locations?: CustomerLocationRow[];
+      };
+      const primary =
+        (payload.ok &&
+          (payload.locations?.find((location) => location.is_primary) ?? payload.locations?.[0])) ||
+        null;
+      setMatchedLocation(primary);
+      if (primary) {
+        setResolution("use_existing");
+        setRecipient(primary.recipient_name ?? "");
+        setAddressLine1(primary.address_line1 ?? "");
+        setCity(primary.city ?? "");
+        setProvince(primary.province ?? "");
+        setPostalCode(primary.postal_code ?? "");
+        setDeliveryNotes(primary.delivery_notes ?? "");
+      } else {
+        setResolution("add_as_new_location");
+      }
+    } catch {
+      setMatchedLocation(null);
+      setResolution("add_as_new_location");
+    } finally {
+      setLoadingCustomerLocations(false);
+    }
+  }
+
+  /** "+ Client nou" — the whole point is a clean slate, not whatever was previously typed or picked. */
+  function handleSelectNewCustomer() {
+    setMatchedCustomer(null);
+    setMatchedLocation(null);
+    setUseExistingCustomer(false);
+    setCustomerName("");
+    setCustomerVat("");
+    setSupplierCustomerCode("");
+    setResolution("add_as_new_location");
+    setRecipient("");
+    setAddressLine1("");
+    setCity("");
+    setProvince("");
+    setPostalCode("");
+    setDeliveryNotes("");
+  }
 
   // --- Payment ----------------------------------------------------------
   const [requiresPayment, setRequiresPayment] = useState(
@@ -408,7 +471,8 @@ export function OrderReviewForm({
           </div>
         )}
 
-        {matchedCustomer && (
+        {/* Document-derived match: the toggle is "accept or reject what was auto-matched". */}
+        {customerMatch && matchedCustomer && (
           <div className="mb-4 flex flex-wrap gap-3">
             <label className="flex items-center gap-2 text-sm font-medium text-ink">
               <input type="radio" checked={useExistingCustomer}
@@ -426,9 +490,27 @@ export function OrderReviewForm({
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div>
             <label className={labelClass} htmlFor="customer-name">{t("companyName")}</label>
-            <input id="customer-name" className={inputClass} value={customerName}
-              disabled={useExistingCustomer}
-              onChange={(event) => setCustomerName(event.target.value)} />
+            {/* Manual entry (no document match): a searchable dropdown of
+                every customer, "+ Client nou" pinned at the top — the
+                whole point being to pick a real customer instead of
+                free-typing a name that might already exist under a
+                slightly different spelling. */}
+            {customerMatch ? (
+              <input id="customer-name" className={inputClass} value={customerName}
+                disabled={useExistingCustomer}
+                onChange={(event) => setCustomerName(event.target.value)} />
+            ) : (
+              <CustomerPickerField
+                value={customerName}
+                onChangeText={(text) => {
+                  setCustomerName(text);
+                  setUseExistingCustomer(false);
+                  setMatchedCustomer(null);
+                }}
+                onSelectCustomer={(customer) => void handleSelectCustomer(customer)}
+                onSelectNew={handleSelectNewCustomer}
+              />
+            )}
           </div>
           <div>
             <label className={labelClass} htmlFor="customer-vat">{t("vatNumber")}</label>
@@ -449,6 +531,10 @@ export function OrderReviewForm({
         title={t("deliveryLocation")}
         description="Adresa la care se livrează această comandă."
       >
+        {loadingCustomerLocations && (
+          <p className="mb-4 text-sm text-ink-soft">Se încarcă adresa clientului…</p>
+        )}
+
         {matchedLocation && (
           <div className="mb-4 rounded-lg border border-ink/10 bg-surface-soft p-3 text-sm">
             <div className="font-semibold text-ink">Locație existentă în baza de date</div>
@@ -462,9 +548,14 @@ export function OrderReviewForm({
 
         {/* Never silently overwrite master data — this is an explicit choice. */}
         <fieldset className="mb-4">
-          <legend className={labelClass}>Ce facem cu adresa din document?</legend>
+          <legend className={labelClass}>Ce facem cu adresa {customerMatch ? "din document" : "clientului"}?</legend>
           <div className="space-y-2">
-            {(customerMatch?.allowedResolutions ?? ["add_as_new_location"]).map((option) => (
+            {(
+              customerMatch?.allowedResolutions ??
+              (matchedLocation
+                ? (["use_existing", "update_existing_location", "add_as_new_location"] as LocationResolution[])
+                : (["add_as_new_location"] as LocationResolution[]))
+            ).map((option) => (
               <label key={option} className="flex items-start gap-2 text-sm text-ink">
                 <input
                   type="radio"
