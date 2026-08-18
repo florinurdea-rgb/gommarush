@@ -1,12 +1,14 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { locationResolutionSchema } from "@/lib/validation/logistics";
-import { confirmDdtDocument } from "@/lib/server/ddt-import";
+import { advanceDdtOrderToStored, confirmDdtDocument } from "@/lib/server/ddt-import";
 import type { ProcessedDocumentWithMatch } from "@/lib/server/ddt-import";
 import type { CustomerInput } from "@/lib/server/customers";
 import { createSupabaseAdminClient } from "@/lib/supabase/server-admin";
 import { normaliseDocumentNumber } from "@/lib/logistics/ddt-dedup";
 import { isMissingSchemaError } from "@/lib/server/schema-errors";
+import { getTransportRatePerTyre } from "@/lib/server/settings";
+import { calculateTransportRevenue } from "@/lib/logistics/ddt-calculations";
 import { describeError, fail, ok, readJsonBody, runAdminRoute, zodDetails } from "@/lib/server/route-helpers";
 import { logError, logEvent } from "@/lib/logger";
 
@@ -76,12 +78,25 @@ async function findExistingOrder(processed: ProcessedDocumentWithMatch): Promise
   );
 }
 
-function recoveredPayload(processed: ProcessedDocumentWithMatch, existing: ExistingOrder) {
+/**
+ * A recovered order (found by findExistingOrder instead of running
+ * confirmDdtDocument again) still needs its status advanced if an earlier
+ * attempt created it but died before reaching that step — otherwise every
+ * retry keeps returning the same order stuck at 'expected' forever, and it
+ * never actually shows up in "De pregătit". advanceDdtOrderToStored is a
+ * no-op if the order already moved past 'expected', so this is safe to call
+ * on every recovery, not just the first.
+ */
+async function recoverExistingOrder(processed: ProcessedDocumentWithMatch, existing: ExistingOrder, changedBy: string) {
+  const ratePerTyre = await getTransportRatePerTyre();
+  const transportRevenue = calculateTransportRevenue(processed.tyreCount, ratePerTyre);
+  await advanceDdtOrderToStored({ orderId: existing.id, processed, ratePerTyre, transportRevenue, changedBy });
+
   return {
     orderId: existing.id,
     orderNumber: String(existing.order_number),
     tyreCount: processed.tyreCount,
-    transportRevenue: 0,
+    transportRevenue,
     droppedLineCount: processed.physicalItems.filter((line) => line.raw.quantity === null).length,
     recoveredExisting: true,
   };
@@ -107,7 +122,7 @@ export async function POST(request: NextRequest) {
             orderId: existing.id,
             sourceDocumentId: parsed.data.sourceDocumentId,
           });
-          return ok(recoveredPayload(processed, existing), 200);
+          return ok(await recoverExistingOrder(processed, existing, session.subject), 200);
         }
       }
 
@@ -138,7 +153,7 @@ export async function POST(request: NextRequest) {
               orderId: existing.id,
               sourceDocumentId: parsed.data.sourceDocumentId,
             });
-            return ok(recoveredPayload(processed, existing), 200);
+            return ok(await recoverExistingOrder(processed, existing, session.subject), 200);
           }
         } catch (lookupError) {
           logError("ddt_confirm_duplicate_recovery_failed", lookupError, {
