@@ -35,6 +35,7 @@ export default async function NewOrderPage() {
       <PageHeading
         title={t("addOrder")}
         description="Încarcă documentul furnizorului, verifică datele extrase, apoi salvează comanda."
+        back
       />
       <NewOrderFlow
         drivers={drivers.map((driver) => ({ id: driver.id, name: driver.name }))}

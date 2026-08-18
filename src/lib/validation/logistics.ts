@@ -193,6 +193,14 @@ export const orderActionSchema = z
   })
   .strict();
 
+/** The vehicle board's drag-reorder: see reorderVehicleColumn in src/lib/server/orders.ts. */
+export const reorderOrdersSchema = z
+  .object({
+    vehicleId: uuid.nullable(),
+    orderedOrderIds: z.array(uuid).min(1).max(200),
+  })
+  .strict();
+
 export const updateOrderItemSchema = z
   .object({
     description: longText.nullish(),

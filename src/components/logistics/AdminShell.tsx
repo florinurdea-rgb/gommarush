@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { t } from "@/lib/i18n/logistics";
 import { SignOutButton } from "@/components/logistics/SignOutButton";
+import { BackButton } from "@/components/logistics/BackButton";
 
 /**
  * Chrome for every admin screen: navigation, the dev-auth notice, and the
@@ -70,14 +71,20 @@ export function PageHeading({
   title,
   description,
   action,
+  back,
 }: {
   title: string;
   description?: string;
   action?: React.ReactNode;
+  /** Shows "← Înapoi" above the title. Only for secondary/drill-down pages
+   *  (order detail, new order, customer detail, …) — never the primary nav
+   *  destinations, which have nowhere more "back" to go. */
+  back?: boolean;
 }) {
   return (
     <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
       <div>
+        {back && <BackButton />}
         <h1 className="text-2xl font-extrabold tracking-tight text-ink sm:text-3xl">{title}</h1>
         {description && <p className="mt-1 text-sm text-ink-soft">{description}</p>}
       </div>

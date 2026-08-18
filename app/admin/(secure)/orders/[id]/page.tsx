@@ -49,6 +49,7 @@ export default async function OrderDetailPage({
       <PageHeading
         title={formatOrderNumber(detail.order.order_number)}
         description={detail.customer?.name ?? "Client nespecificat"}
+        back
         action={
           <div className="flex items-center gap-3">
             <StandBadge standCode={detail.order.stand_code} size="lg" />

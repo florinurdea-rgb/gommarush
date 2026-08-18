@@ -19,7 +19,7 @@ export async function listVehicles(activeOnly = true): Promise<VehicleRow[]> {
   const supabase = createSupabaseAdminClient();
   let query = supabase
     .from("vehicles")
-    .select("id, name, slug, registration, active")
+    .select("id, name, slug, registration, capacity_units, active")
     .order("name");
   if (activeOnly) query = query.eq("active", true);
 
@@ -55,7 +55,7 @@ export async function getVehicle(vehicleId: string): Promise<VehicleRow | null> 
   const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("vehicles")
-    .select("id, name, slug, registration, active")
+    .select("id, name, slug, registration, capacity_units, active")
     .eq("id", vehicleId)
     .maybeSingle();
   if (error) throw error;

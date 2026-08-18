@@ -30,8 +30,11 @@ export interface OrderListRow {
   planned_delivery_date: string | null;
   customer_name: string | null;
   customer_city: string | null;
+  driver_id: string | null;
   driver_name: string | null;
+  vehicle_id: string | null;
   vehicle_name: string | null;
+  delivery_sequence: number | null;
   supplier_name: string | null;
   supplier_document_number: string | null;
   held_at: string | null;
@@ -46,7 +49,7 @@ export interface OrderListRow {
  */
 const ORDER_LIST_SELECT = `
   id, order_number, stand_code, status, planned_delivery_date, held_at,
-  supplier_document_number,
+  supplier_document_number, driver_id, vehicle_id, delivery_sequence,
   customers ( name ),
   customer_locations ( city ),
   drivers ( name ),
@@ -63,6 +66,9 @@ interface RawOrderListRow {
   planned_delivery_date: string | null;
   held_at: string | null;
   supplier_document_number: string | null;
+  driver_id: string | null;
+  vehicle_id: string | null;
+  delivery_sequence: number | null;
   customers: { name: string } | null;
   customer_locations: { city: string | null } | null;
   drivers: { name: string } | null;
@@ -80,8 +86,11 @@ function toListRow(raw: RawOrderListRow): OrderListRow {
     planned_delivery_date: raw.planned_delivery_date,
     customer_name: raw.customers?.name ?? null,
     customer_city: raw.customer_locations?.city ?? null,
+    driver_id: raw.driver_id,
     driver_name: raw.drivers?.name ?? null,
+    vehicle_id: raw.vehicle_id,
     vehicle_name: raw.vehicles?.name ?? null,
+    delivery_sequence: raw.delivery_sequence,
     supplier_name: raw.suppliers?.name ?? null,
     supplier_document_number: raw.supplier_document_number,
     held_at: raw.held_at,
@@ -89,16 +98,22 @@ function toListRow(raw: RawOrderListRow): OrderListRow {
   };
 }
 
-/** Active orders for the "Comenzi în curs" dashboard. Excludes hold/cancelled. */
+/**
+ * Active orders for the "Comenzi în curs" dashboard. Excludes hold/cancelled.
+ *
+ * Sort is "ordinea livrării": delivery_sequence first (the Admin's manual
+ * per-vehicle ordering, once set — see reorderVehicleColumn below), then
+ * planned_delivery_date, then creation order as the final tiebreaker for
+ * orders that have never been manually reordered.
+ */
 export async function listActiveOrders(): Promise<OrderListRow[]> {
   const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("orders")
     .select(ORDER_LIST_SELECT)
     .in("status", ACTIVE_ORDER_STATUSES as unknown as string[])
-    // Undated orders sort last rather than disappearing.
+    .order("delivery_sequence", { ascending: true, nullsFirst: false })
     .order("planned_delivery_date", { ascending: true, nullsFirst: false })
-    .order("stand_code", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: true });
 
   if (error) throw error;
@@ -479,6 +494,43 @@ export async function assignStand(
   const result = data as { ok: boolean; code?: string };
   logEvent("stand_assigned", { orderId, standCode: standCode ?? "none", ok: result.ok });
   return result;
+}
+
+/**
+ * The vehicle board's single write path: sets vehicle_id and a fresh
+ * 1..N delivery_sequence for every order in `orderedOrderIds`, in the
+ * position given.
+ *
+ * Handles both interactions the board supports with one call:
+ *   - Reordering within a column: vehicleId is that column's own vehicle,
+ *     orderedOrderIds is the column's new full order.
+ *   - Moving an order to a different column: vehicleId is the TARGET
+ *     column's vehicle, orderedOrderIds is the target column's new full
+ *     order (including the moved order). The source column's remaining
+ *     orders keep their old sequence numbers — that leaves gaps, but gaps
+ *     are harmless for an ORDER BY, and re-numbering a column no one
+ *     touched isn't needed for correctness.
+ *
+ * No RPC/locking needed here (unlike stand allocation): there is no
+ * collision to prevent — two orders can validly share a vehicle and even,
+ * transiently, a sequence number — so plain concurrent updates are enough.
+ */
+export async function reorderVehicleColumn(vehicleId: string | null, orderedOrderIds: string[]): Promise<void> {
+  const supabase = createSupabaseAdminClient();
+
+  const results = await Promise.all(
+    orderedOrderIds.map((orderId, index) =>
+      supabase
+        .from("orders")
+        .update({ vehicle_id: vehicleId, delivery_sequence: index + 1 })
+        .eq("id", orderId)
+    )
+  );
+
+  const failed = results.find((result) => result.error);
+  if (failed?.error) throw failed.error;
+
+  logEvent("orders_reordered", { vehicleId: vehicleId ?? "unassigned", count: orderedOrderIds.length });
 }
 
 // ---------------------------------------------------------------------------

@@ -2,9 +2,12 @@ import Link from "next/link";
 import { listActiveOrders } from "@/lib/server/orders";
 import { countPendingPrintJobs } from "@/lib/server/print-jobs";
 import { listStandOverview } from "@/lib/server/stands";
+import { listVehicles } from "@/lib/server/reference";
 import { PageHeading } from "@/components/logistics/AdminShell";
 import { OrdersTable } from "@/components/logistics/OrdersTable";
 import { StandBoard } from "@/components/logistics/StandBoard";
+import { VehicleBoard } from "@/components/logistics/VehicleBoard";
+import type { VehicleColumnData } from "@/components/logistics/VehicleBoard";
 import { LinkButton } from "@/components/LinkButton";
 import { t } from "@/lib/i18n/logistics";
 
@@ -18,13 +21,36 @@ export const metadata = { title: "Comenzi în curs" };
  * rather than an over-engineered subscription.
  */
 export default async function AdminDashboardPage() {
-  const [orders, stands, pendingPrintJobs] = await Promise.all([
+  const [orders, stands, pendingPrintJobs, vehicles] = await Promise.all([
     listActiveOrders(),
     listStandOverview(),
     countPendingPrintJobs(),
+    listVehicles(),
   ]);
 
   const unassigned = orders.filter((order) => !order.stand_code).length;
+
+  // "Neasignat" first so it's the obvious place to drag FROM; vehicles after,
+  // in the same name order listVehicles() already returns, numbered for the
+  // van icon's badge.
+  const vehicleColumns: VehicleColumnData[] = [
+    {
+      key: "unassigned",
+      vehicleId: null,
+      name: "Neasignat",
+      number: null,
+      capacityUnits: null,
+      orders: orders.filter((order) => !order.vehicle_id),
+    },
+    ...vehicles.map((vehicle, index) => ({
+      key: vehicle.id,
+      vehicleId: vehicle.id,
+      name: vehicle.name,
+      number: index + 1,
+      capacityUnits: vehicle.capacity_units,
+      orders: orders.filter((order) => order.vehicle_id === vehicle.id),
+    })),
+  ];
 
   return (
     <>
@@ -37,6 +63,8 @@ export default async function AdminDashboardPage() {
           </LinkButton>
         }
       />
+
+      <VehicleBoard columns={vehicleColumns} />
 
       <StandBoard stands={stands} />
 

@@ -257,6 +257,8 @@ export interface VehicleRow {
   name: string;
   slug: string | null;
   registration: string | null;
+  /** Max physical units it can carry per run. Null = unknown/no limit tracked. */
+  capacity_units: number | null;
   active: boolean;
 }
 
@@ -299,6 +301,8 @@ export interface OrderRow {
   stand_code: StandCode | null;
   driver_id: string | null;
   vehicle_id: string | null;
+  /** Admin's manual delivery ordering within a vehicle's column. Null until the first drag-reorder. */
+  delivery_sequence: number | null;
   assigned_zone_id: string | null;
   status: OrderStatus;
 
