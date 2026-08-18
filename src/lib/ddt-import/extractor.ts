@@ -48,6 +48,7 @@ async function textFallback(
       notes: [
         "Analiza automată nu este configurată.",
         "Documentul a fost stocat, dar nu conține un strat text suficient pentru extracție automată.",
+        "Completează datele manual — sistemul nu inventează valori.",
       ],
     };
   }
