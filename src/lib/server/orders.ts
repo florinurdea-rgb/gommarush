@@ -183,6 +183,40 @@ export async function listOrdersOnHold(): Promise<OrderListRow[]> {
   return ((primary.data ?? []) as unknown as RawOrderListRow[]).map(toListRow);
 }
 
+/**
+ * "De pregătit" — orders whose tyres are physically at the warehouse
+ * (received) but not yet labeled/loaded: sorting, stored, or already
+ * marked ready but not fully loaded. This is the repurposed former
+ * "hold" tab — actual on-hold orders (status = on_hold) now surface
+ * through Livrări's "Așteaptă marfa" filter instead of a dedicated page.
+ */
+const TO_PREPARE_STATUSES = ["sorting", "stored", "ready_for_loading", "partially_loaded"] as const;
+
+export async function listOrdersToPrepare(): Promise<OrderListRow[]> {
+  const supabase = createSupabaseAdminClient();
+  const primary = await supabase
+    .from("orders")
+    .select(ORDER_LIST_SELECT)
+    .in("status", TO_PREPARE_STATUSES as unknown as string[])
+    .order("planned_delivery_date", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: true });
+
+  if (isMissingSchemaError(primary.error)) {
+    logError("orders_delivery_sequence_column_missing", primary.error);
+    const fallback = await supabase
+      .from("orders")
+      .select(ORDER_LIST_SELECT_LEGACY)
+      .in("status", TO_PREPARE_STATUSES as unknown as string[])
+      .order("planned_delivery_date", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: true });
+    if (fallback.error) throw fallback.error;
+    return ((fallback.data ?? []) as unknown as RawOrderListRow[]).map(toListRow);
+  }
+
+  if (primary.error) throw primary.error;
+  return ((primary.data ?? []) as unknown as RawOrderListRow[]).map(toListRow);
+}
+
 export interface OrderDetail {
   order: OrderRow;
   items: OrderItemRow[];
@@ -500,6 +534,11 @@ export async function holdOrder(
   changedBy: string
 ): Promise<StatusChangeResult> {
   return setStatus(orderId, "on_hold", { reason, changedBy });
+}
+
+/** "Pregătește comanda" — the order's tyres are labeled (or the admin chose to skip printing) and ready to load. */
+export async function markOrderPrepared(orderId: string, changedBy: string): Promise<StatusChangeResult> {
+  return setStatus(orderId, "ready_for_loading", { reason: "prepared", changedBy });
 }
 
 /**

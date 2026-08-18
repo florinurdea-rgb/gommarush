@@ -82,7 +82,13 @@ export const ORDER_STATUSES = [
 ] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
-/** Statuses that keep an order on the active dashboard ("Comenzi în curs"). */
+/**
+ * Statuses that keep an order on the active dashboard ("Livrări").
+ * Includes `on_hold` — there is no longer a dedicated "on hold" page (that
+ * tab was repurposed into "De pregătit"), so a held order stays visible
+ * here instead of disappearing; it surfaces under the "Așteaptă marfa"
+ * operational-status bucket (src/lib/logistics/operational-status.ts).
+ */
 export const ACTIVE_ORDER_STATUSES: readonly OrderStatus[] = [
   "confirmed",
   "expected",
@@ -95,6 +101,7 @@ export const ACTIVE_ORDER_STATUSES: readonly OrderStatus[] = [
   "loaded",
   "out_for_delivery",
   "partially_delivered",
+  "on_hold",
 ];
 
 /**
@@ -455,4 +462,14 @@ export interface LabelData {
   unit_index?: number;
   unit_total?: number;
   item_type?: string;
+  /**
+   * Deliberate, explicit exception to the "nothing sensitive on a label"
+   * rule below — the user was told this data travels to a workshop PC and
+   * gets logged, and chose to include it anyway for the preparation/
+   * labeling flow (src/components/logistics/PrepareOrderModal.tsx). Not an
+   * oversight: assertLabelDataIsSafe() in label.ts intentionally does NOT
+   * forbid these two exact key names.
+   */
+  supplier?: string;
+  delivery_address?: string;
 }

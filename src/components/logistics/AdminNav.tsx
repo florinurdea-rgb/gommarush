@@ -22,7 +22,7 @@ const PRIMARY_NAV: NavItem[] = [
 ];
 
 const SECONDARY_NAV: NavItem[] = [
-  { href: "/admin/hold", label: "În așteptare" },
+  { href: "/admin/prepare", label: "De pregătit" },
   { href: "/admin/customers", label: "Clienți" },
   { href: "/admin/print-jobs", label: "Coadă printare" },
   { href: "/admin/stands", label: "Coduri QR" },

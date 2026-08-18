@@ -6,8 +6,16 @@
 //
 // Security rule enforced by `assertLabelDataIsSafe`: label_data travels to a
 // workshop PC, gets written to agent logs, and may be re-rendered later. It
-// must therefore carry nothing sensitive — no payment amounts, no addresses,
-// no keys.
+// must therefore carry nothing sensitive — no payment amounts, no phone/
+// email, no keys.
+//
+// Deliberate exception: the preparation/labeling flow
+// (PrepareOrderModal.tsx) puts the delivery address on the label under the
+// distinct key `delivery_address` (LabelData.delivery_address) — the user
+// was told this exact tradeoff (workshop-PC exposure, agent logs) and chose
+// it explicitly for that flow. The raw DB column names below stay forbidden
+// so a future refactor can't reintroduce them by accident; only the
+// purpose-built `delivery_address`/`supplier` keys are allowed through.
 
 import { formatTyreSize } from "@/lib/logistics/product-normalise";
 import type { LabelData, OrderItemRow, StandCode } from "@/lib/types/logistics";
