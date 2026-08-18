@@ -28,6 +28,7 @@ const PREPARE_SEEN_KEY = "admin_prepare_seen_count";
 const SECONDARY_NAV: NavItem[] = [
   { href: PREPARE_HREF, label: "De pregătit" },
   { href: "/admin/customers", label: "Clienți" },
+  { href: "/admin/suppliers", label: "Furnizori" },
   { href: "/admin/print-jobs", label: "Coadă printare" },
   { href: "/admin/stands", label: "Coduri QR" },
 ];

@@ -1,0 +1,23 @@
+import { notFound } from "next/navigation";
+import { getSupplier } from "@/lib/server/suppliers";
+import { PageHeading } from "@/components/logistics/AdminShell";
+import { SupplierEditor } from "@/components/logistics/SupplierEditor";
+
+export const dynamic = "force-dynamic";
+
+export default async function SupplierDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const supplier = await getSupplier(id);
+  if (!supplier) notFound();
+
+  return (
+    <>
+      <PageHeading title={supplier.name} description="Profilul furnizorului." back />
+      <SupplierEditor supplier={supplier} />
+    </>
+  );
+}

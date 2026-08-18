@@ -276,6 +276,19 @@ export const customerSchema = z
   })
   .strict();
 
+export const supplierSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200),
+    legal_name: shortText.nullish(),
+    vat_number: z.string().trim().max(30).nullish(),
+    fiscal_code: z.string().trim().max(30).nullish(),
+    website: z.string().trim().max(200).nullish(),
+    email: z.string().trim().max(200).nullish(),
+    phone: z.string().trim().max(50).nullish(),
+    notes: longText.nullish(),
+  })
+  .strict();
+
 export const customerLocationSchema = addressSchema
   .extend({ is_primary: z.boolean().optional() })
   .strict();
