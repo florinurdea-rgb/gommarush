@@ -85,6 +85,82 @@ export async function storeOrderDocument(input: {
   return { id, storagePath, sourceType };
 }
 
+export interface UploadSlot {
+  bucket: string;
+  storagePath: string;
+  token: string;
+}
+
+/**
+ * Issues a one-time signed upload slot so the browser can send the file
+ * bytes straight to Supabase Storage — bypassing our own serverless
+ * function's request body entirely. Vercel caps a Serverless Function's
+ * request body at a few MB; a scanned multi-page DDT routinely exceeds
+ * that, so routing raw bytes through our own API route (the old
+ * multipart-upload flow) silently failed every such upload — the platform
+ * rejects the oversized request before our code runs, the browser gets a
+ * non-JSON response, and the client shows a generic "Eroare de rețea".
+ */
+export async function createUploadSlot(fileName: string): Promise<UploadSlot> {
+  const supabase = createSupabaseAdminClient();
+  const storagePath = storagePathFor(fileName);
+
+  const { data, error } = await supabase.storage.from(BUCKET).createSignedUploadUrl(storagePath);
+  if (error || !data) {
+    logError("document_upload_slot_failed", error, { fileName });
+    throw error ?? new Error("createSignedUploadUrl returned no data");
+  }
+
+  return { bucket: BUCKET, storagePath, token: data.token };
+}
+
+/** Records a document the browser already uploaded directly via createUploadSlot(). */
+export async function recordUploadedDocument(input: {
+  storagePath: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  uploadedBy: string;
+}): Promise<StoredDocument> {
+  const supabase = createSupabaseAdminClient();
+  const sourceType = sourceTypeFor(input.mimeType, input.fileName);
+
+  const { data, error } = await supabase
+    .from("order_documents")
+    .insert({
+      source_type: sourceType,
+      storage_bucket: BUCKET,
+      storage_path: input.storagePath,
+      original_filename: input.fileName.slice(0, 255),
+      mime_type: input.mimeType,
+      file_size: input.fileSize,
+      extraction_status: "pending",
+      uploaded_by_label: input.uploadedBy,
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    logError("document_record_failed", error, { storagePath: input.storagePath });
+    throw error;
+  }
+
+  const id = (data as { id: string }).id;
+  logEvent("document_stored", { documentId: id, sourceType, bytes: input.fileSize });
+  return { id, storagePath: input.storagePath, sourceType };
+}
+
+/** Downloads a stored document's bytes for server-side processing (AI extraction, text fallback). */
+export async function downloadDocumentBytes(storagePath: string): Promise<Buffer> {
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase.storage.from(BUCKET).download(storagePath);
+  if (error || !data) {
+    logError("document_download_failed", error, { storagePath });
+    throw error ?? new Error("Storage download returned no data");
+  }
+  return Buffer.from(await data.arrayBuffer());
+}
+
 /**
  * Runs the analysis pipeline and records the outcome on the document row.
  *

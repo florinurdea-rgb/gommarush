@@ -7,6 +7,7 @@ import { OrderStatusBadge } from "@/components/logistics/StatusBadge";
 import { OrderDetailModal } from "@/components/logistics/OrderDetailModal";
 import { VehicleCardActionsMenu } from "@/components/logistics/VehicleCardActionsMenu";
 import { RouteStopsModal } from "@/components/logistics/RouteStopsModal";
+import { TyreIcon } from "@/components/logistics/TyreIcon";
 import { useToast } from "@/components/ui/Toast";
 import { formatOrderNumber } from "@/lib/logistics/order-number";
 import { computeVehicleLoad, moveOrderBetweenColumns } from "@/lib/logistics/vehicle-board";
@@ -367,10 +368,15 @@ export function VehicleBoard({ columns: initialColumns }: { columns: VehicleColu
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-xs font-semibold text-ink-soft">
-                        {formatOrderNumber(order.order_number)}
-                      </span>
-                      <div className="flex items-center gap-1">
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <span className="flex h-4 min-w-4 flex-none items-center justify-center rounded-full bg-ink/10 px-1 text-[10px] font-bold tabular-nums text-ink-soft">
+                          {index + 1}
+                        </span>
+                        <span className="truncate font-mono text-xs font-semibold text-ink-soft">
+                          {formatOrderNumber(order.order_number)}
+                        </span>
+                      </div>
+                      <div className="flex flex-none items-center gap-1">
                         <OrderStatusBadge status={order.status} size="sm" />
                         <VehicleCardActionsMenu
                           orderId={order.id}
@@ -390,7 +396,13 @@ export function VehicleBoard({ columns: initialColumns }: { columns: VehicleColu
                     {order.customer_address && (
                       <div className="mt-1 truncate text-[11px] text-ink-soft">{order.customer_address}</div>
                     )}
-                    <div className="mt-0.5 text-xs text-ink-soft">{formatDate(order.planned_delivery_date)}</div>
+                    <div className="mt-1.5 flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-1 text-xs font-semibold text-ink">
+                        <TyreIcon className="h-3.5 w-3.5 flex-none text-ink-soft" />
+                        {order.tyre_count}
+                      </span>
+                      <span className="text-xs text-ink-soft">{formatDate(order.planned_delivery_date)}</span>
+                    </div>
                   </div>
                 ))}
               </div>

@@ -8,6 +8,7 @@ import {
   canAutoConfirmDdtDocument,
 } from "@/lib/ddt-import/client-helpers";
 import type { ProcessedDocumentWithMatch } from "@/lib/ddt-import/client-helpers";
+import { uploadDocumentDirect } from "@/lib/client/document-upload";
 
 /**
  * The "Încarcă document" step of the "Comandă nouă" modal: upload -> a
@@ -58,9 +59,12 @@ export function UploadOrderPanel({ onBack, onDone }: { onBack: () => void; onDon
     setResult(null);
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const response = await fetch("/api/admin/ddt-import/analyze", { method: "POST", body: formData });
+      const uploaded = await uploadDocumentDirect(file);
+      const response = await fetch("/api/admin/ddt-import/analyze", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(uploaded),
+      });
       const payload = (await response.json()) as AnalyzeResponse;
 
       if (!payload.ok) {

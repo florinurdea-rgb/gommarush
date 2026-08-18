@@ -40,6 +40,8 @@ export interface OrderListRow {
   supplier_document_number: string | null;
   held_at: string | null;
   progress: OrderProgress;
+  /** SUM of physical tyre units on this order — never trusted from AI, always counted from inventory_units. */
+  tyre_count: number;
 }
 
 /**
@@ -56,7 +58,7 @@ const ORDER_LIST_SELECT = `
   drivers ( name ),
   vehicles ( name ),
   suppliers ( name ),
-  inventory_units ( status )
+  inventory_units ( status, unit_type )
 `;
 
 /**
@@ -75,7 +77,7 @@ const ORDER_LIST_SELECT_LEGACY = `
   drivers ( name ),
   vehicles ( name ),
   suppliers ( name ),
-  inventory_units ( status )
+  inventory_units ( status, unit_type )
 `;
 
 /** Postgres SQLSTATE for "column does not exist". */
@@ -97,7 +99,7 @@ interface RawOrderListRow {
   drivers: { name: string } | null;
   vehicles: { name: string } | null;
   suppliers: { name: string } | null;
-  inventory_units: { status: InventoryUnitRow["status"] }[] | null;
+  inventory_units: { status: InventoryUnitRow["status"]; unit_type: string | null }[] | null;
 }
 
 function toListRow(raw: RawOrderListRow): OrderListRow {
@@ -121,6 +123,7 @@ function toListRow(raw: RawOrderListRow): OrderListRow {
     supplier_document_number: raw.supplier_document_number,
     held_at: raw.held_at,
     progress: calculateOrderProgress(raw.inventory_units ?? []),
+    tyre_count: (raw.inventory_units ?? []).filter((unit) => unit.unit_type === "tyre").length,
   };
 }
 

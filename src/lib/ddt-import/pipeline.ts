@@ -71,6 +71,81 @@ function formatSizeLabel(line: ExtractedLine): string | null {
   return `${line.width}/${line.aspectRatio} R${line.rimDiameter}`;
 }
 
+function physicalLineMergeKey(line: ExtractedLine, lineType: ClassifiedLineType): string {
+  const norm = (value: string | null) => (value ? value.trim().toLowerCase() : null);
+  return JSON.stringify([
+    lineType,
+    norm(line.brand),
+    norm(line.model),
+    line.width,
+    line.aspectRatio,
+    line.rimDiameter,
+    norm(line.loadIndex),
+    norm(line.speedRating),
+    line.extraLoad,
+    line.runFlat,
+    line.commercial,
+    line.mudSnow,
+    line.threePmsf,
+    norm(line.season),
+    norm(line.supplierArticleCode),
+    norm(line.manufacturerCode),
+    norm(line.ean),
+    line.unitPrice,
+    line.vatPercent,
+  ]);
+}
+
+/**
+ * Combines physical lines that are identical in every structured field
+ * except quantity and free text into one, quantities summed — the same
+ * tyre listed twice on the source document (once per row) should read as
+ * "2×" of one kind, not two separate "1×" rows. A line with no readable
+ * quantity is left alone: never guessed, never merged away (spec's "don't
+ * guess 1" rule — see ddt-lines.ts). This runs before tyreCount/
+ * physicalItemCount are computed, but those are already derived from
+ * quantities summed across ALL matching lines regardless of how the
+ * source document split them, so merging here changes what the review
+ * screen and order_items show, not the aggregate totals.
+ */
+function mergeIdenticalPhysicalLines(lines: ClassifiedLine[]): ClassifiedLine[] {
+  const result: ClassifiedLine[] = [];
+  const indexByKey = new Map<string, number>();
+
+  for (const line of lines) {
+    if (line.raw.quantity === null) {
+      result.push(line);
+      continue;
+    }
+
+    const key = physicalLineMergeKey(line.raw, line.lineType);
+    const existingIndex = indexByKey.get(key);
+    if (existingIndex === undefined) {
+      indexByKey.set(key, result.length);
+      result.push(line);
+    } else {
+      const existing = result[existingIndex];
+      result[existingIndex] = {
+        lineType: existing.lineType,
+        raw: {
+          ...existing.raw,
+          quantity: (existing.raw.quantity ?? 0) + (line.raw.quantity ?? 0),
+          rawDescription:
+            existing.raw.rawDescription === line.raw.rawDescription
+              ? existing.raw.rawDescription
+              : `${existing.raw.rawDescription} | ${line.raw.rawDescription}`,
+          lineTotal:
+            existing.raw.lineTotal !== null && line.raw.lineTotal !== null
+              ? existing.raw.lineTotal + line.raw.lineTotal
+              : (existing.raw.lineTotal ?? line.raw.lineTotal),
+        },
+      };
+    }
+  }
+
+  return result;
+}
+
 export function processExtractedDocument(input: {
   extracted: ExtractedDocument;
   supplierId: string | null;
@@ -84,7 +159,7 @@ export function processExtractedDocument(input: {
     lineType: classifyLine({ rawDescription: line.rawDescription, itemTypeHint: line.itemTypeHint }),
   }));
 
-  const physicalItems = classified.filter((line) => isPhysicalLine(line.lineType));
+  const physicalItems = mergeIdenticalPhysicalLines(classified.filter((line) => isPhysicalLine(line.lineType)));
   const charges = classified.filter((line) => CHARGE_LINE_TYPES.has(line.lineType));
 
   const { countableLines, unreadableQuantityLines } = processLines(

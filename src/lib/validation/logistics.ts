@@ -193,6 +193,24 @@ export const orderActionSchema = z
   })
   .strict();
 
+/** Step 1 of a direct-to-storage upload: ask for a one-time signed upload slot. */
+export const documentUploadSlotSchema = z
+  .object({
+    fileName: shortText.min(1),
+    mimeType: shortText.min(1),
+  })
+  .strict();
+
+/** Step 2: the browser already uploaded the bytes to storagePath — analyse what's there. */
+export const analyzeUploadedDocumentSchema = z
+  .object({
+    storagePath: shortText.min(1),
+    fileName: shortText.min(1),
+    mimeType: shortText.min(1),
+    fileSize: z.number().int().positive(),
+  })
+  .strict();
+
 /** The vehicle board's drag-reorder: see reorderVehicleColumn in src/lib/server/orders.ts. */
 export const reorderOrdersSchema = z
   .object({

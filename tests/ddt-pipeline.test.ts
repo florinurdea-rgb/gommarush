@@ -171,6 +171,74 @@ describe("processExtractedDocument — critical fields missing (spec §21)", () 
   });
 });
 
+describe("processExtractedDocument — identical lines merge into one, quantities summed", () => {
+  it("combines two rows for the same tyre into a single physical item with quantity 2", () => {
+    const result = processExtractedDocument({
+      extracted: document({
+        lines: [line({ quantity: 1 }), line({ quantity: 1 })],
+      }),
+      supplierId: "supplier-1",
+      existingOrders: [],
+      existingFingerprints: [],
+    });
+
+    expect(result.physicalItems).toHaveLength(1);
+    expect(result.physicalItems[0].raw.quantity).toBe(2);
+    expect(result.tyreCount).toBe(2);
+  });
+
+  it("keeps two tyres of a different size/brand as separate lines", () => {
+    const result = processExtractedDocument({
+      extracted: document({
+        lines: [line({ quantity: 2 }), line({ quantity: 2, brand: "Pirelli", model: "P Zero" })],
+      }),
+      supplierId: "supplier-1",
+      existingOrders: [],
+      existingFingerprints: [],
+    });
+
+    expect(result.physicalItems).toHaveLength(2);
+    expect(result.tyreCount).toBe(4);
+  });
+
+  it("never merges a line with an unreadable quantity into another — don't guess", () => {
+    const result = processExtractedDocument({
+      extracted: document({
+        lines: [line({ quantity: 2 }), line({ quantity: null })],
+      }),
+      supplierId: "supplier-1",
+      existingOrders: [],
+      existingFingerprints: [],
+    });
+
+    // The unreadable line stays as its own physical item (excluded from
+    // tyreCount, and it's what forces NEEDS_REVIEW) — never folded into
+    // the readable one's quantity.
+    expect(result.physicalItems).toHaveLength(2);
+    expect(result.tyreCount).toBe(2);
+    expect(result.status).toBe("NEEDS_REVIEW");
+  });
+
+  it("preserves both source descriptions when they differ, joined rather than dropped", () => {
+    const result = processExtractedDocument({
+      extracted: document({
+        lines: [
+          line({ quantity: 1, rawDescription: "225/55 R18 94V Michelin Primacy 4 (lotto A)" }),
+          line({ quantity: 1, rawDescription: "225/55 R18 94V Michelin Primacy 4 (lotto B)" }),
+        ],
+      }),
+      supplierId: "supplier-1",
+      existingOrders: [],
+      existingFingerprints: [],
+    });
+
+    expect(result.physicalItems).toHaveLength(1);
+    expect(result.physicalItems[0].raw.rawDescription).toBe(
+      "225/55 R18 94V Michelin Primacy 4 (lotto A) | 225/55 R18 94V Michelin Primacy 4 (lotto B)"
+    );
+  });
+});
+
 describe("processExtractedDocument — duplicate detection (spec §15-16)", () => {
   it("is DUPLICATE when supplier + normalized DDT number exactly matches an existing order", () => {
     const result = processExtractedDocument({

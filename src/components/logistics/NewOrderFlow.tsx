@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { OrderReviewForm } from "@/components/logistics/OrderReviewForm";
+import { uploadDocumentDirect } from "@/lib/client/document-upload";
 import { errorMessage, t } from "@/lib/i18n/logistics";
 import type { AnalysisResult } from "@/lib/documents/analyzer";
 import type { CustomerMatchResult } from "@/lib/logistics/customer-matching";
@@ -64,12 +65,12 @@ export function NewOrderFlow({
     setError(null);
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
+      const uploaded = await uploadDocumentDirect(file);
 
       const response = await fetch("/api/admin/documents", {
         method: "POST",
-        body: formData,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(uploaded),
       });
       const payload = (await response.json()) as {
         ok: boolean;

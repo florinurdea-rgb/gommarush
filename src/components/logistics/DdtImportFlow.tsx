@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { formatOrderNumber } from "@/lib/logistics/order-number";
+import { uploadDocumentDirect } from "@/lib/client/document-upload";
 import {
   DDT_STATUS_LABEL as STATUS_LABEL,
   DDT_STATUS_TONE as STATUS_TONE,
@@ -64,9 +65,12 @@ export function DdtImportFlow() {
     setConfirmErrors(new Map());
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const response = await fetch("/api/admin/ddt-import/analyze", { method: "POST", body: formData });
+      const uploaded = await uploadDocumentDirect(file);
+      const response = await fetch("/api/admin/ddt-import/analyze", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(uploaded),
+      });
       const payload = (await response.json()) as AnalyzeResponse;
 
       if (!payload.ok) {

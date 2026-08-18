@@ -5,6 +5,7 @@ import { Button } from "@/components/Button";
 import { errorMessage, itemTypeLabel, t } from "@/lib/i18n/logistics";
 import { ITEM_TYPES, STAND_CODES } from "@/lib/types/logistics";
 import { totalUnitCount } from "@/lib/logistics/inventory-units";
+import { mergeIdenticalProductLines } from "@/lib/logistics/product-normalise";
 import type { AnalysisResult, ExtractedProductLine } from "@/lib/documents/analyzer";
 import type { CustomerMatchResult, LocationResolution } from "@/lib/logistics/customer-matching";
 import type { ItemType, StandCode } from "@/lib/types/logistics";
@@ -145,7 +146,7 @@ export function OrderReviewForm({
 
   // --- Products ---------------------------------------------------------
   const [lines, setLines] = useState<EditableLine[]>(() =>
-    analysis.products.map((product, index) => ({
+    mergeIdenticalProductLines(analysis.products).map((product, index) => ({
       ...product,
       key: `line-${index}`,
       itemTypeValue: toItemType(product.itemType),

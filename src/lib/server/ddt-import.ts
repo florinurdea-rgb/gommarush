@@ -1,6 +1,6 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/server-admin";
-import { storeOrderDocument } from "@/lib/server/documents";
+import { downloadDocumentBytes, recordUploadedDocument } from "@/lib/server/documents";
 import { findOrCreateSupplier } from "@/lib/server/reference";
 import { matchCustomerFromDocument, resolveCustomerForOrder } from "@/lib/server/customers";
 import type { ResolveCustomerInput } from "@/lib/server/customers";
@@ -107,14 +107,16 @@ async function getRecentFingerprints(limit = 2000): Promise<{ orderId: string; f
 }
 
 export async function analyzeDdtUpload(input: {
-  bytes: Buffer;
+  storagePath: string;
   fileName: string;
   mimeType: string;
+  fileSize: number;
   uploadedBy: string;
 }): Promise<DdtUploadResult> {
-  const stored = await storeOrderDocument(input);
+  const stored = await recordUploadedDocument(input);
+  const bytes = await downloadDocumentBytes(input.storagePath);
 
-  const extraction = await extractDdtDocuments(input);
+  const extraction = await extractDdtDocuments({ bytes, fileName: input.fileName, mimeType: input.mimeType });
 
   // "unconfigured" is an expected, disclosed state (see
   // src/lib/ddt-import/extractor.ts's fallback) — never surfaced as an

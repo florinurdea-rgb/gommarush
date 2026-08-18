@@ -335,6 +335,82 @@ export function normaliseProduct(rawDescription: string): NormalisedProduct {
   };
 }
 
+export interface MergeableProductLine {
+  itemType?: string | null;
+  brand?: string | null;
+  model?: string | null;
+  width?: number | null;
+  aspectRatio?: number | null;
+  rimDiameter?: number | null;
+  loadIndex?: string | null;
+  speedRating?: string | null;
+  extraLoad?: boolean | null;
+  runFlat?: boolean | null;
+  supplierSku?: string | null;
+  unitPrice?: number | null;
+  taxRate?: number | null;
+  quantity?: number | null;
+  rawDescription: string;
+}
+
+function mergeKey(line: MergeableProductLine): string {
+  const norm = (value: string | null | undefined) => (value ? value.trim().toLowerCase() : null);
+  return JSON.stringify([
+    norm(line.itemType),
+    norm(line.brand),
+    norm(line.model),
+    line.width ?? null,
+    line.aspectRatio ?? null,
+    line.rimDiameter ?? null,
+    norm(line.loadIndex),
+    norm(line.speedRating),
+    line.extraLoad ?? null,
+    line.runFlat ?? null,
+    norm(line.supplierSku),
+    line.unitPrice ?? null,
+    line.taxRate ?? null,
+  ]);
+}
+
+/**
+ * Combines lines that are identical in every structured field except
+ * quantity and free text into one, with quantities summed — so two tyres
+ * of the same kind listed on separate rows of a source document show as
+ * "2×" of one kind instead of two separate "1×" rows ("ai 2x de un fel,
+ * nu a 1 + 1"). A line with no readable quantity is left alone: never
+ * guessed, never merged away — see the DDT spec's "don't guess 1" rule.
+ */
+export function mergeIdenticalProductLines<T extends MergeableProductLine>(lines: T[]): T[] {
+  const result: T[] = [];
+  const indexByKey = new Map<string, number>();
+
+  for (const line of lines) {
+    if (line.quantity == null) {
+      result.push(line);
+      continue;
+    }
+
+    const key = mergeKey(line);
+    const existingIndex = indexByKey.get(key);
+    if (existingIndex === undefined) {
+      indexByKey.set(key, result.length);
+      result.push(line);
+    } else {
+      const existing = result[existingIndex];
+      result[existingIndex] = {
+        ...existing,
+        quantity: (existing.quantity ?? 0) + (line.quantity ?? 0),
+        rawDescription:
+          existing.rawDescription === line.rawDescription
+            ? existing.rawDescription
+            : `${existing.rawDescription} | ${line.rawDescription}`,
+      };
+    }
+  }
+
+  return result;
+}
+
 /**
  * Compares a scanned supplier label against an expected order line. Returns
  * 0–1; the caller decides what counts as confident (see supplier-label-match).

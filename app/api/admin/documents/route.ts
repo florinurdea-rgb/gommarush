@@ -1,57 +1,53 @@
 import { NextRequest } from "next/server";
-import { analyzeStoredDocument, storeOrderDocument } from "@/lib/server/documents";
+import { analyzeStoredDocument, downloadDocumentBytes, recordUploadedDocument } from "@/lib/server/documents";
 import { matchCustomerFromDocument } from "@/lib/server/customers";
 import { isAnalysisConfigured } from "@/lib/documents";
 import { isSupportedUpload, MAX_UPLOAD_BYTES } from "@/lib/documents/analyzer";
-import { fail, ok, runAdminRoute } from "@/lib/server/route-helpers";
+import { analyzeUploadedDocumentSchema } from "@/lib/validation/logistics";
+import { fail, ok, readJsonBody, runAdminRoute, zodDetails } from "@/lib/server/route-helpers";
 
 export const runtime = "nodejs";
-// Document analysis (upload + a vision model round-trip) comfortably exceeds
-// the default serverless limit on a multi-page invoice.
+// Document analysis (a vision model round-trip) comfortably exceeds the
+// default serverless limit on a multi-page invoice.
 export const maxDuration = 120;
 
 /**
- * POST /api/admin/documents — step 1 of the import pipeline.
+ * POST /api/admin/documents — step 2 of the single-document import.
  *
- *   upload -> STORE ORIGINAL -> extract -> identify supplier -> extract customer
- *   -> match against customer database -> extract products -> normalise
- *   -> validate -> review screen
+ * The browser already uploaded the file straight to Supabase Storage (see
+ * /api/admin/documents/upload-url and src/lib/client/document-upload.ts) —
+ * this route only receives the small JSON pointer to it:
  *
- * The original is stored BEFORE analysis, so a failing analyser can never lose
- * the upload. No order is created here: the Admin reviews and confirms first.
+ *   record the upload -> download bytes -> extract -> identify supplier
+ *   -> extract customer -> match against customer database -> extract
+ *   products -> normalise -> validate -> review screen
+ *
+ * The original is already stored before this runs, so a failing analyser
+ * can never lose the upload. No order is created here: the Admin reviews
+ * and confirms first.
  */
 export async function POST(request: NextRequest) {
   return runAdminRoute(async (session) => {
-    const contentType = request.headers.get("content-type") ?? "";
-    if (!contentType.toLowerCase().includes("multipart/form-data")) {
-      return fail(415, "UNSUPPORTED_MEDIA_TYPE");
-    }
+    const body = await readJsonBody(request);
+    if (body === null) return fail(400, "VALIDATION_FAILED");
 
-    let formData: FormData;
-    try {
-      formData = await request.formData();
-    } catch {
-      return fail(400, "VALIDATION_FAILED");
-    }
+    const parsed = analyzeUploadedDocumentSchema.safeParse(body);
+    if (!parsed.success) return fail(400, "VALIDATION_FAILED", zodDetails(parsed.error));
 
-    const file = formData.get("file");
-    if (!(file instanceof File)) return fail(400, "VALIDATION_FAILED");
-    if (file.size === 0) return fail(400, "VALIDATION_FAILED");
-    if (file.size > MAX_UPLOAD_BYTES) return fail(413, "FILE_TOO_LARGE");
-
-    const fileName = file.name || "document";
-    const mimeType = file.type || "application/octet-stream";
+    const { storagePath, fileName, mimeType, fileSize } = parsed.data;
+    if (fileSize > MAX_UPLOAD_BYTES) return fail(413, "FILE_TOO_LARGE");
     if (!isSupportedUpload(mimeType, fileName)) return fail(415, "UNSUPPORTED_FILE_TYPE");
 
-    const bytes = Buffer.from(await file.arrayBuffer());
-
-    // 1. Store the original. Never discarded after extraction.
-    const stored = await storeOrderDocument({
-      bytes,
+    // 1. Record the already-uploaded original. Never discarded after extraction.
+    const stored = await recordUploadedDocument({
+      storagePath,
       fileName,
       mimeType,
+      fileSize,
       uploadedBy: session.subject,
     });
+
+    const bytes = await downloadDocumentBytes(storagePath);
 
     // 2. Analyse — or honestly report that automatic analysis isn't available.
     const analysis = await analyzeStoredDocument({

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   detectItemType,
   formatTyreSize,
+  mergeIdenticalProductLines,
   normaliseProduct,
   parseTyreSize,
 } from "@/lib/logistics/product-normalise";
@@ -98,5 +99,54 @@ describe("formatTyreSize", () => {
 
   it("returns null when the size is incomplete", () => {
     expect(formatTyreSize(225, null, 18)).toBeNull();
+  });
+});
+
+describe("mergeIdenticalProductLines", () => {
+  const tyre = (overrides: Partial<Parameters<typeof mergeIdenticalProductLines>[0][number]> = {}) => ({
+    itemType: "tyre",
+    brand: "Michelin",
+    model: "Primacy 4",
+    width: 225,
+    aspectRatio: 55,
+    rimDiameter: 18,
+    loadIndex: "94",
+    speedRating: "V",
+    extraLoad: null,
+    runFlat: null,
+    supplierSku: null,
+    unitPrice: 80,
+    taxRate: 22,
+    quantity: 1,
+    rawDescription: "225/55 R18 94V Michelin Primacy 4",
+    ...overrides,
+  });
+
+  it("sums quantity for two identical lines instead of listing them separately", () => {
+    const merged = mergeIdenticalProductLines([tyre(), tyre()]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].quantity).toBe(2);
+  });
+
+  it("keeps lines with a different brand, size or price apart", () => {
+    expect(mergeIdenticalProductLines([tyre(), tyre({ brand: "Pirelli" })])).toHaveLength(2);
+    expect(mergeIdenticalProductLines([tyre(), tyre({ width: 205 })])).toHaveLength(2);
+    expect(mergeIdenticalProductLines([tyre(), tyre({ unitPrice: 75 })])).toHaveLength(2);
+  });
+
+  it("never merges a line with no readable quantity — don't guess", () => {
+    const merged = mergeIdenticalProductLines([tyre(), tyre({ quantity: null })]);
+    expect(merged).toHaveLength(2);
+  });
+
+  it("joins the source descriptions when they differ, instead of dropping one", () => {
+    const merged = mergeIdenticalProductLines([
+      tyre({ rawDescription: "225/55 R18 94V Michelin Primacy 4 lotto A" }),
+      tyre({ rawDescription: "225/55 R18 94V Michelin Primacy 4 lotto B" }),
+    ]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].rawDescription).toBe(
+      "225/55 R18 94V Michelin Primacy 4 lotto A | 225/55 R18 94V Michelin Primacy 4 lotto B"
+    );
   });
 });
