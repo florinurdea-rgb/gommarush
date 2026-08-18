@@ -6,7 +6,12 @@ import { fail, ok, readJsonBody, runAdminRoute, zodDetails } from "@/lib/server/
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Fleet management sheet reads every vehicle (including deactivated ones) so past removals stay visible there. */
+/**
+ * Lists every vehicle, active or deactivated — the fleet management sheet
+ * itself is server-fed with the active list only (only active vans are
+ * manageable there; a removed van's history lives in Sumar instead), so
+ * this GET is for any future consumer that needs the full roster.
+ */
 export async function GET() {
   return runAdminRoute(async () => {
     return ok({ vehicles: await listVehicles(false) });
