@@ -1,0 +1,199 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { StandBadge } from "@/components/logistics/StandBadge";
+import { OrderStatusBadge, UnitStatusBadge } from "@/components/logistics/StatusBadge";
+import { ProgressBar } from "@/components/logistics/ProgressBar";
+import { formatOrderNumber } from "@/lib/logistics/order-number";
+import { itemTypeLabel, t } from "@/lib/i18n/logistics";
+import type { OrderDetail } from "@/lib/server/orders";
+
+/**
+ * The dashboard card's "quick look": fetches the same data as the full
+ * order page, shown in an overlay so a click on a card never leaves the
+ * board. Deliberately read-only — editing (driver/vehicle/status/etc.)
+ * stays on the full page, reached via the footer link, so the modal can
+ * stay simple instead of re-implementing every edit control twice.
+ */
+export function OrderDetailModal({ orderId, onClose }: { orderId: string; onClose: () => void }) {
+  const [detail, setDetail] = useState<OrderDetail | null>(null);
+  const [error, setError] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(false);
+    setDetail(null);
+
+    fetch(`/api/admin/orders/${orderId}/detail`)
+      .then((response) => response.json())
+      .then((payload: { ok: boolean; detail?: OrderDetail }) => {
+        if (cancelled) return;
+        if (!payload.ok || !payload.detail) {
+          setError(true);
+          return;
+        }
+        setDetail(payload.detail);
+      })
+      .catch(() => {
+        if (!cancelled) setError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [orderId]);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  return (
+    <div
+      role="presentation"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={detail ? formatOrderNumber(detail.order.order_number) : "Detalii comandă"}
+        onClick={(event) => event.stopPropagation()}
+        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-modal sm:p-7"
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Închide"
+          className="float-right -mr-1 -mt-1 flex h-8 w-8 items-center justify-center rounded-full text-ink-soft hover:bg-surface-soft hover:text-ink"
+        >
+          <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" aria-hidden="true">
+            <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          </svg>
+        </button>
+
+        {loading && <div className="py-16 text-center text-sm text-ink-soft">Se încarcă…</div>}
+
+        {!loading && error && (
+          <div className="py-16 text-center text-sm text-state-danger">
+            Comanda nu a putut fi încărcată.
+          </div>
+        )}
+
+        {!loading && detail && (
+          <>
+            <div className="flex items-start gap-3">
+              <StandBadge standCode={detail.order.stand_code} size="md" />
+              <div className="min-w-0 flex-1">
+                <div className="font-mono text-xs font-semibold text-ink-soft">
+                  {formatOrderNumber(detail.order.order_number)}
+                </div>
+                <h2 className="truncate text-xl font-extrabold tracking-tight text-ink">
+                  {detail.customer?.name ?? "Client nespecificat"}
+                </h2>
+                <div className="mt-1">
+                  <OrderStatusBadge status={detail.order.status} size="sm" />
+                </div>
+              </div>
+            </div>
+
+            <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+              <div>
+                <dt className="text-xs text-ink-soft">{t("plannedDate")}</dt>
+                <dd className="font-medium text-ink">{detail.order.planned_delivery_date ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-ink-soft">{t("driverVehicle")}</dt>
+                <dd className="font-medium text-ink">
+                  {detail.driver?.name ?? "—"}
+                  {detail.vehicle?.name ? ` · ${detail.vehicle.name}` : ""}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-ink-soft">{t("supplier")}</dt>
+                <dd className="font-medium text-ink">{detail.supplier?.name ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-ink-soft">{t("documentReference")}</dt>
+                <dd className="font-mono text-ink">{detail.order.supplier_document_number ?? "—"}</dd>
+              </div>
+            </dl>
+
+            {(detail.order.delivery_address_line1 || detail.location) && (
+              <div className="mt-4 rounded-xl bg-surface-soft p-3 text-sm text-ink">
+                {detail.order.delivery_address_line1 ?? detail.location?.address_line1}
+                <div className="text-ink-soft">
+                  {detail.order.delivery_postal_code ?? detail.location?.postal_code ?? ""}{" "}
+                  {detail.order.delivery_city ?? detail.location?.city ?? ""}
+                </div>
+              </div>
+            )}
+
+            {detail.order.cash_on_delivery && (
+              <div className="mt-3 rounded-xl bg-state-warning-soft px-3 py-2 text-sm font-semibold text-state-warning">
+                {t("amountToCollect")}: {detail.order.amount_to_collect ?? "—"} {detail.order.currency}
+              </div>
+            )}
+
+            <div className="mt-5 grid grid-cols-2 gap-4">
+              <div>
+                <div className="text-xs text-ink-soft">{t("stored")}</div>
+                <ProgressBar progress={detail.progress} metric="stored" />
+              </div>
+              <div>
+                <div className="text-xs text-ink-soft">{t("loaded")}</div>
+                <ProgressBar progress={detail.progress} metric="loaded" />
+              </div>
+            </div>
+
+            <div className="mt-5">
+              <h3 className="text-xs font-bold uppercase tracking-wide text-ink-soft">{t("products")}</h3>
+              <ul className="mt-2 space-y-2">
+                {detail.items.map((item) => (
+                  <li key={item.id} className="flex items-center justify-between gap-2 text-sm">
+                    <span className="min-w-0 truncate text-ink">
+                      {item.description ?? item.raw_description ?? itemTypeLabel(item.item_type)}
+                    </span>
+                    <span className="flex-none font-mono text-xs text-ink-soft">×{item.quantity}</span>
+                  </li>
+                ))}
+              </ul>
+              {detail.units.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {detail.units.map((unit) => (
+                    <UnitStatusBadge key={unit.id} status={unit.status} size="sm" />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 flex items-center justify-between border-t border-ink/10 pt-4">
+              <Link
+                href={`/admin/orders/${detail.order.id}`}
+                className="text-sm font-semibold text-accent hover:underline"
+              >
+                Deschide pagina completă →
+              </Link>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-xl bg-surface-soft px-4 py-2 text-sm font-semibold text-ink hover:bg-ink/10"
+              >
+                Închide
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -1,11 +1,10 @@
 "use client";
 
-import Link from "next/link";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
 import { VehicleIcon } from "@/components/logistics/VehicleIcon";
-import { StandBadge } from "@/components/logistics/StandBadge";
 import { OrderStatusBadge } from "@/components/logistics/StatusBadge";
+import { OrderDetailModal } from "@/components/logistics/OrderDetailModal";
 import { formatOrderNumber } from "@/lib/logistics/order-number";
 import { computeVehicleLoad, moveOrderBetweenColumns } from "@/lib/logistics/vehicle-board";
 import type { OrderListRow } from "@/lib/server/orders";
@@ -13,7 +12,8 @@ import type { OrderListRow } from "@/lib/server/orders";
 /**
  * The dashboard's vehicle board: orders grouped under the vehicle they're
  * assigned to, draggable between vehicles and reorderable within one —
- * "ordinea livrării" (delivery order) for that van.
+ * "ordinea livrării" (delivery order) for that van. A card click opens a
+ * quick-look modal instead of navigating away from the board.
  *
  * Native HTML5 drag-and-drop, deliberately not a library: this is a
  * desktop-first admin tool (see AdminShell), the interaction is a plain
@@ -51,9 +51,11 @@ export function VehicleBoard({ columns: initialColumns }: { columns: VehicleColu
   const [drag, setDrag] = useState<{ orderId: string; fromKey: string } | null>(null);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [openOrderId, setOpenOrderId] = useState<string | null>(null);
+  // Suppresses the click that would otherwise open the modal right after a
+  // real drag-and-drop — see the click handler below.
+  const justDraggedRef = useRef(false);
 
-  // Column metadata (name/icon/capacity) doesn't change from a drag — only
-  // order membership does — so it's read straight from props each render.
   const columnMeta = useMemo(
     () => new Map(initialColumns.map((column) => [column.key, column])),
     [initialColumns]
@@ -100,7 +102,7 @@ export function VehicleBoard({ columns: initialColumns }: { columns: VehicleColu
   }
 
   return (
-    <section aria-label="Mașini" className="mb-6">
+    <section aria-label="Mașini" className="mb-8">
       {error && (
         <p role="alert" className="mb-3 rounded-lg bg-state-danger-soft px-3 py-2 text-sm font-semibold text-state-danger">
           {error}
@@ -117,9 +119,7 @@ export function VehicleBoard({ columns: initialColumns }: { columns: VehicleColu
           return (
             <div
               key={column.key}
-              className={`w-72 flex-none rounded-2xl border bg-white shadow-card transition-colors ${
-                isOver ? "border-accent bg-accent-light/40" : "border-ink/10"
-              }`}
+              className={`w-64 flex-none rounded-2xl transition-colors ${isOver ? "bg-accent-light/50" : "bg-surface-soft"}`}
               onDragOver={(event) => {
                 event.preventDefault();
                 setDragOverKey(column.key);
@@ -130,26 +130,22 @@ export function VehicleBoard({ columns: initialColumns }: { columns: VehicleColu
                 handleDrop(column.key, orders.length);
               }}
             >
-              <div className="border-b border-ink/10 p-3">
-                <div className="flex items-center gap-3">
-                  {column.number !== null ? (
-                    <VehicleIcon number={column.number} className="h-11 w-20 flex-none" />
-                  ) : (
-                    <span className="flex h-11 w-11 flex-none items-center justify-center rounded-xl border-2 border-dashed border-state-warning/50 bg-state-warning-soft text-lg font-black text-state-warning">
-                      ?
-                    </span>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-bold text-ink">{column.name}</div>
-                    <div className="text-xs text-ink-soft">
-                      {stats.orderCount} {stats.orderCount === 1 ? "comandă" : "comenzi"} · {stats.unitCount} buc
-                      {stats.occupancyPercent !== null && ` · ${stats.occupancyPercent}%`}
-                    </div>
-                  </div>
+              <div className="flex flex-col items-center px-3 pb-3 pt-4 text-center">
+                {column.number !== null ? (
+                  <VehicleIcon number={column.number} />
+                ) : (
+                  <span className="mb-1 flex h-11 w-11 items-center justify-center rounded-2xl bg-state-neutral-soft text-lg font-bold text-state-neutral">
+                    —
+                  </span>
+                )}
+                <div className="mt-1.5 text-sm font-bold text-ink">{column.name}</div>
+                <div className="mt-0.5 text-xs text-ink-soft">
+                  {stats.orderCount} {stats.orderCount === 1 ? "comandă" : "comenzi"}
+                  {stats.occupancyPercent !== null && ` · ${stats.occupancyPercent}%`}
                 </div>
 
                 {stats.occupancyPercent !== null && (
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-soft">
+                  <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-ink/10">
                     <div
                       className={`h-full rounded-full ${stats.occupancyPercent > 100 ? "bg-state-danger" : "bg-accent"}`}
                       style={{ width: `${Math.min(100, stats.occupancyPercent)}%` }}
@@ -158,15 +154,15 @@ export function VehicleBoard({ columns: initialColumns }: { columns: VehicleColu
                 )}
 
                 {stats.returnTrips > 0 && (
-                  <div className="mt-2 rounded-md bg-state-warning-soft px-2 py-1 text-xs font-bold text-state-warning">
+                  <div className="mt-1.5 text-xs font-semibold text-state-warning">
                     ⟲ {stats.returnTrips} {stats.returnTrips === 1 ? "revenire" : "reveniri"} la hală
                   </div>
                 )}
               </div>
 
-              <div className="min-h-24 space-y-2 p-3">
+              <div className="min-h-20 space-y-2 px-3 pb-3">
                 {orders.length === 0 && (
-                  <p className="py-4 text-center text-xs text-ink-soft">Nicio comandă</p>
+                  <p className="py-6 text-center text-xs text-ink-soft">Nicio comandă</p>
                 )}
 
                 {orders.map((order, index) => (
@@ -175,11 +171,15 @@ export function VehicleBoard({ columns: initialColumns }: { columns: VehicleColu
                     draggable
                     onDragStart={(event) => {
                       setDrag({ orderId: order.id, fromKey: column.key });
+                      justDraggedRef.current = true;
                       event.dataTransfer.effectAllowed = "move";
                     }}
                     onDragEnd={() => {
                       setDrag(null);
                       setDragOverKey(null);
+                      window.setTimeout(() => {
+                        justDraggedRef.current = false;
+                      }, 0);
                     }}
                     onDragOver={(event) => {
                       event.preventDefault();
@@ -191,29 +191,24 @@ export function VehicleBoard({ columns: initialColumns }: { columns: VehicleColu
                       event.stopPropagation();
                       handleDrop(column.key, index);
                     }}
-                    className={`cursor-grab rounded-lg border border-ink/10 bg-white p-2.5 active:cursor-grabbing ${
-                      drag?.orderId === order.id ? "opacity-40" : "hover:border-accent/40"
+                    onClick={() => {
+                      if (justDraggedRef.current) return;
+                      setOpenOrderId(order.id);
+                    }}
+                    className={`cursor-pointer rounded-2xl bg-white p-3 shadow-sm ring-1 ring-ink/5 transition hover:shadow-card active:cursor-grabbing ${
+                      drag?.orderId === order.id ? "opacity-40" : ""
                     }`}
                   >
-                    <div className="flex items-start gap-2">
-                      <StandBadge standCode={order.stand_code} size="sm" />
-                      <div className="min-w-0 flex-1">
-                        <Link
-                          href={`/admin/orders/${order.id}`}
-                          draggable={false}
-                          className="font-mono text-xs font-bold text-accent hover:underline"
-                        >
-                          {formatOrderNumber(order.order_number)}
-                        </Link>
-                        <div className="truncate text-sm font-semibold text-ink">
-                          {order.customer_name ?? "—"}
-                        </div>
-                        <div className="mt-0.5 flex items-center gap-2">
-                          <OrderStatusBadge status={order.status} size="sm" />
-                          <span className="text-xs text-ink-soft">{formatDate(order.planned_delivery_date)}</span>
-                        </div>
-                      </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-xs font-semibold text-ink-soft">
+                        {formatOrderNumber(order.order_number)}
+                      </span>
+                      <OrderStatusBadge status={order.status} size="sm" />
                     </div>
+                    <div className="mt-1.5 truncate text-sm font-bold text-ink">
+                      {order.customer_name ?? "—"}
+                    </div>
+                    <div className="mt-0.5 text-xs text-ink-soft">{formatDate(order.planned_delivery_date)}</div>
                   </div>
                 ))}
               </div>
@@ -221,6 +216,8 @@ export function VehicleBoard({ columns: initialColumns }: { columns: VehicleColu
           );
         })}
       </div>
+
+      {openOrderId && <OrderDetailModal orderId={openOrderId} onClose={() => setOpenOrderId(null)} />}
     </section>
   );
 }
