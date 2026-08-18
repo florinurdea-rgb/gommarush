@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { reorderOrdersSchema } from "@/lib/validation/logistics";
 import { reorderVehicleColumn } from "@/lib/server/orders";
 import { fail, ok, readJsonBody, runAdminRoute, zodDetails } from "@/lib/server/route-helpers";
+import { logError } from "@/lib/logger";
 
 export const runtime = "nodejs";
 
@@ -19,7 +20,21 @@ export async function POST(request: NextRequest) {
     const parsed = reorderOrdersSchema.safeParse(body);
     if (!parsed.success) return fail(400, "VALIDATION_FAILED", zodDetails(parsed.error));
 
-    await reorderVehicleColumn(parsed.data.vehicleId, parsed.data.orderedOrderIds);
+    try {
+      await reorderVehicleColumn(parsed.data.vehicleId, parsed.data.orderedOrderIds);
+    } catch (error) {
+      // Surface the actual Postgres error instead of a blanket "UNKNOWN" —
+      // this write has already failed the "Mutarea nu a putut fi salvată"
+      // way once before (missing delivery_sequence column) and the generic
+      // 500 gave no way to tell that apart from a genuinely new failure.
+      logError("orders_reorder_failed", error);
+      const pgError = error as { code?: string; message?: string } | null;
+      return fail(500, "REORDER_FAILED", [
+        pgError?.code ? `Postgres ${pgError.code}` : "eroare necunoscută",
+        pgError?.message ?? "",
+      ].filter(Boolean));
+    }
+
     return ok({});
   });
 }

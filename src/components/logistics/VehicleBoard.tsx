@@ -82,8 +82,12 @@ export function VehicleBoard({ columns: initialColumns }: { columns: VehicleColu
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ vehicleId, orderedOrderIds }),
         });
-        const payload = (await response.json()) as { ok: boolean };
-        if (!payload.ok) setError("Mutarea nu a putut fi salvată. Se reîncarcă lista.");
+        const payload = (await response.json()) as { ok: boolean; code?: string; details?: string[] };
+        if (!payload.ok) {
+          const detail = [payload.code, ...(payload.details ?? [])].filter(Boolean).join(" — ");
+          setError(`Mutarea nu a putut fi salvată${detail ? ` (${detail})` : ""}. Se reîncarcă lista.`);
+          showToast("Mutarea nu a putut fi salvată.", "error");
+        }
       } catch {
         setError("Eroare de rețea. Se reîncarcă lista.");
       } finally {
