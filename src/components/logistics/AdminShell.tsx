@@ -12,9 +12,11 @@ import { AdminNav } from "@/components/logistics/AdminNav";
 export function AdminShell({
   children,
   displayName,
+  prepareCount,
 }: {
   children: React.ReactNode;
   displayName: string;
+  prepareCount: number;
 }) {
   return (
     <div className="min-h-screen bg-surface-soft">
@@ -30,7 +32,7 @@ export function AdminShell({
         </div>
       </header>
 
-      <AdminNav />
+      <AdminNav prepareCount={prepareCount} />
 
       <main className="mx-auto w-full max-w-[1760px] px-4 py-6 sm:px-6 sm:py-8">{children}</main>
     </div>

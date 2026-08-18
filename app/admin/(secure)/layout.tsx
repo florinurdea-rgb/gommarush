@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { getAdminSession } from "@/lib/auth/admin-session";
 import { AdminShell } from "@/components/logistics/AdminShell";
 import { ToastProvider } from "@/components/ui/Toast";
+import { countOrdersToPrepare } from "@/lib/server/orders";
+import { logError } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -21,9 +23,16 @@ export default async function SecureAdminLayout({ children }: { children: React.
   const session = await getAdminSession();
   if (!session) redirect("/admin/login");
 
+  const prepareCount = await countOrdersToPrepare().catch((error) => {
+    logError("admin_layout_prepare_count_failed", error);
+    return 0;
+  });
+
   return (
     <ToastProvider>
-      <AdminShell displayName={session.displayName}>{children}</AdminShell>
+      <AdminShell displayName={session.displayName} prepareCount={prepareCount}>
+        {children}
+      </AdminShell>
     </ToastProvider>
   );
 }

@@ -217,6 +217,17 @@ export async function listOrdersToPrepare(): Promise<OrderListRow[]> {
   return ((primary.data ?? []) as unknown as RawOrderListRow[]).map(toListRow);
 }
 
+/** Cheap count for the "De pregătit" nav badge — avoids pulling full rows just to size a circle. */
+export async function countOrdersToPrepare(): Promise<number> {
+  const supabase = createSupabaseAdminClient();
+  const { count, error } = await supabase
+    .from("orders")
+    .select("id", { count: "exact", head: true })
+    .in("status", TO_PREPARE_STATUSES as unknown as string[]);
+  if (error) throw error;
+  return count ?? 0;
+}
+
 export interface OrderDetail {
   order: OrderRow;
   items: OrderItemRow[];
