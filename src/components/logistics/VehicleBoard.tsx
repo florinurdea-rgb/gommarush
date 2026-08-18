@@ -7,6 +7,7 @@ import { OrderDetailModal } from "@/components/logistics/OrderDetailModal";
 import { VehicleCardActionsMenu } from "@/components/logistics/VehicleCardActionsMenu";
 import { VehicleLaneMenu } from "@/components/logistics/VehicleLaneMenu";
 import { FleetManagementModal } from "@/components/logistics/FleetManagementModal";
+import { DemoSeedButton } from "@/components/logistics/DemoSeedButton";
 import { RouteStopsModal } from "@/components/logistics/RouteStopsModal";
 import { TyreIcon } from "@/components/logistics/TyreIcon";
 import { useToast } from "@/components/ui/Toast";
@@ -640,17 +641,20 @@ export function VehicleBoard({
           </select>
         )}
 
-        <button
-          type="button"
-          onClick={() => setFleetModalOpen(true)}
-          className="ml-auto flex h-9 items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-3 text-xs font-semibold text-ink hover:bg-surface-soft"
-        >
-          <svg aria-hidden="true" viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6">
-            <path d="M3 6h14M3 10h14M3 14h8" strokeLinecap="round" />
-            <circle cx="15" cy="14" r="1.6" />
-          </svg>
-          Gestionează mașinile
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          <DemoSeedButton />
+          <button
+            type="button"
+            onClick={() => setFleetModalOpen(true)}
+            className="flex h-9 items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-3 text-xs font-semibold text-ink hover:bg-surface-soft"
+          >
+            <svg aria-hidden="true" viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6">
+              <path d="M3 6h14M3 10h14M3 14h8" strokeLinecap="round" />
+              <circle cx="15" cy="14" r="1.6" />
+            </svg>
+            Gestionează mașinile
+          </button>
+        </div>
       </div>
 
       {/* ----------------------------------------------------------- board */}
