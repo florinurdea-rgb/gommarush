@@ -124,15 +124,22 @@ export async function createVehicle(input: { name: string; registration?: string
   const { count } = await supabase.from("vehicles").select("id", { count: "exact", head: true });
   const colorKey = VEHICLE_COLOR_KEYS[(count ?? 0) % VEHICLE_COLOR_KEYS.length];
 
-  const { data: maxOrderRow } = await supabase
+  // display_order defaults to "after everything" even before this query runs
+  // (nulls sort last in listVehicles' ordering) — this is just for a nicer
+  // initial position, so a failure here degrades to null rather than
+  // blocking the insert.
+  let nextOrder: number | null = null;
+  const maxOrderResult = await supabase
     .from("vehicles")
     .select("display_order")
     .order("display_order", { ascending: false, nullsFirst: false })
     .limit(1)
     .maybeSingle();
-  const nextOrder = ((maxOrderRow as { display_order: number | null } | null)?.display_order ?? 0) + 1;
+  if (!isMissingSchemaError(maxOrderResult.error) && !maxOrderResult.error) {
+    nextOrder = ((maxOrderResult.data as { display_order: number | null } | null)?.display_order ?? 0) + 1;
+  }
 
-  const { data, error } = await supabase
+  const primary = await supabase
     .from("vehicles")
     .insert({
       name,
@@ -144,9 +151,26 @@ export async function createVehicle(input: { name: string; registration?: string
     .select(VEHICLE_SELECT)
     .single();
 
-  if (error) throw error;
-  logEvent("vehicle_created", { vehicleId: (data as { id: string }).id, name });
-  return data as unknown as VehicleRow;
+  if (isMissingSchemaError(primary.error)) {
+    // The fleet-management migration (display_order/color_key columns)
+    // hasn't reached this database yet — still let the van get created,
+    // just without a lane order or accent color until it has.
+    logError("vehicles_fleet_columns_missing_on_insert", primary.error);
+    const fallback = await supabase
+      .from("vehicles")
+      .insert({ name, registration: input.registration?.trim() || null, active: true })
+      .select(VEHICLE_SELECT_NO_FLEET_COLS)
+      .single();
+    if (fallback.error) throw fallback.error;
+    const vehicle = { ...(fallback.data as object), display_order: null, color_key: null } as unknown as VehicleRow;
+    logEvent("vehicle_created", { vehicleId: vehicle.id, name });
+    return vehicle;
+  }
+
+  if (primary.error) throw primary.error;
+  const vehicle = primary.data as unknown as VehicleRow;
+  logEvent("vehicle_created", { vehicleId: vehicle.id, name });
+  return vehicle;
 }
 
 export async function renameVehicle(vehicleId: string, name: string): Promise<void> {
@@ -163,6 +187,13 @@ export async function reorderVehicles(orderedVehicleIds: string[]): Promise<void
     orderedVehicleIds.map((id, index) => supabase.from("vehicles").update({ display_order: index + 1 }).eq("id", id))
   );
   const failed = results.find((result) => result.error);
+  if (isMissingSchemaError(failed?.error)) {
+    // The fleet-management migration hasn't reached this database yet —
+    // reordering just can't persist until it has, but that's no reason to
+    // fail the request with a scary error for an otherwise-optional action.
+    logError("vehicles_display_order_column_missing_on_write", failed?.error);
+    return;
+  }
   if (failed?.error) throw failed.error;
   logEvent("vehicles_reordered", { count: orderedVehicleIds.length });
 }

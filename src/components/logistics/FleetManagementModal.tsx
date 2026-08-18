@@ -138,7 +138,7 @@ export function FleetManagementModal({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ name, registration: addRegistration.trim() || null }),
       });
-      const payload = (await response.json()) as { ok: boolean };
+      const payload = (await response.json()) as { ok: boolean; code?: string; details?: string[] };
       if (payload.ok) {
         showToast(`${name} adăugată.`, "success");
         setAddName("");
@@ -146,7 +146,8 @@ export function FleetManagementModal({
         setAddingOpen(false);
         refresh();
       } else {
-        showToast("Adăugarea nu a putut fi salvată.", "error");
+        const detail = [payload.code, ...(payload.details ?? [])].filter(Boolean).join(" — ");
+        showToast(`Adăugarea nu a putut fi salvată.${detail ? ` (${detail})` : ""}`, "error");
       }
     } catch {
       showToast("Eroare de rețea.", "error");
