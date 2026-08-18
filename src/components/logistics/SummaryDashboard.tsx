@@ -3,18 +3,59 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DeliveriesModal } from "@/components/logistics/DeliveriesModal";
-import { VAN_DOT_CLASS } from "@/lib/logistics/vehicle-colors";
+import { VAN_BORDER_CLASS, VAN_DOT_CLASS } from "@/lib/logistics/vehicle-colors";
+import { TyreIcon } from "@/components/logistics/TyreIcon";
+import { OrdersIcon, PickupIcon, ProfitIcon, TrophyIcon, BuildingIcon, ClockIcon } from "@/components/logistics/SummaryIcons";
 import type { OperationalSummary } from "@/lib/server/summary";
+
+/**
+ * "Sumar" is the visual/analytics dashboard (Livrări is the dense
+ * operational one) — every tile here deliberately carries a color and an
+ * icon rather than staying plain black-on-white, per the brief: this page
+ * is meant to read like an infographic at a glance, not a spreadsheet.
+ * Colors are drawn from the existing design-system tokens (state-*, accent)
+ * plus the fleet's own van-color palette — nothing new invented here.
+ */
 
 function formatEuro(value: number): string {
   return `€${value.toLocaleString("ro-RO")}`;
 }
 
-function KpiCard({ value, label }: { value: string | number; label: string }) {
+type Tone = "blue" | "amber" | "green" | "purple";
+
+const TONE_ICON_BG: Record<Tone, string> = {
+  blue: "bg-accent-light text-accent-dark",
+  amber: "bg-state-waiting-soft text-state-waiting",
+  green: "bg-state-success-soft text-state-success",
+  purple: "bg-purple-100 text-purple-700",
+};
+
+const TONE_BLOB: Record<Tone, string> = {
+  blue: "bg-accent",
+  amber: "bg-state-waiting",
+  green: "bg-state-success",
+  purple: "bg-purple-600",
+};
+
+function KpiCard({
+  value,
+  label,
+  icon,
+  tone,
+}: {
+  value: string | number;
+  label: string;
+  icon: React.ReactNode;
+  tone: Tone;
+}) {
   return (
-    <div className="rounded-xl border border-ink/10 bg-white p-4">
-      <div className="text-3xl font-black tabular-nums text-ink">{value}</div>
-      <div className="mt-0.5 text-sm text-ink-soft">{label}</div>
+    <div className="relative overflow-hidden rounded-2xl border border-ink/10 bg-white p-4 shadow-card">
+      <div className={`absolute -right-5 -top-5 h-24 w-24 rounded-full opacity-[0.08] ${TONE_BLOB[tone]}`} aria-hidden="true" />
+      <div className={`relative flex h-10 w-10 items-center justify-center rounded-xl ${TONE_ICON_BG[tone]}`}>
+        {icon}
+      </div>
+      <div className="relative mt-3 text-3xl font-black tabular-nums text-ink">{value}</div>
+      <div className="relative mt-0.5 text-sm text-ink-soft">{label}</div>
     </div>
   );
 }
@@ -63,6 +104,7 @@ export function SummaryDashboard({
           profit: summary.profit,
           deliveries: summary.deliveries,
           label: "Total",
+          colorKey: null as string | null,
         }
       : (() => {
           const row = vehicleRowById.get(activeVehicle);
@@ -72,16 +114,19 @@ export function SummaryDashboard({
             profit: row?.profit ?? 0,
             deliveries: summary.deliveries.filter((d) => d.vehicleId === activeVehicle),
             label: row?.vehicleName ?? "—",
+            colorKey: row?.colorKey ?? null,
           };
         })();
 
   const insights = useMemo(() => {
-    const list: { title: string; detail: string }[] = [];
+    const list: { title: string; detail: string; icon: React.ReactNode; tone: Tone }[] = [];
     const topVehicle = summary.vehicles[0];
     if (topVehicle && topVehicle.tyres > 0) {
       list.push({
         title: `${topVehicle.vehicleName} a livrat cele mai multe anvelope`,
         detail: `${topVehicle.tyres} anvelope în perioada selectată.`,
+        icon: <TrophyIcon className="h-5 w-5" />,
+        tone: "purple",
       });
     }
     const topSupplier = summary.supplierPickups[0];
@@ -89,25 +134,31 @@ export function SummaryDashboard({
       list.push({
         title: `${topSupplier.supplierName} a avut cele mai multe ridicări`,
         detail: `${topSupplier.pickups} ridicări · ${topSupplier.tyres} anvelope.`,
+        icon: <BuildingIcon className="h-5 w-5" />,
+        tone: "blue",
       });
     }
     if (summary.waitingGoodsCount > 0) {
       list.push({
         title: `${summary.waitingGoodsCount} comenzi sunt încă în așteptare`,
         detail: "Comenzi active care așteaptă marfa de la furnizor, la data curentă.",
+        icon: <ClockIcon className="h-5 w-5" />,
+        tone: "amber",
       });
     }
     return list.slice(0, 4);
   }, [summary]);
 
+  const maxPickups = Math.max(1, ...summary.supplierPickups.map((row) => row.pickups));
+
   return (
     <>
       {/* --------------------------------------------------------- KPIs */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <KpiCard value={summary.orderCount} label="Comenzi" />
-        <KpiCard value={summary.pickupCount} label="Ridicări supplier" />
-        <KpiCard value={summary.deliveredTyreCount} label="Anvelope livrate" />
-        <KpiCard value={formatEuro(summary.profit)} label="Profit transport" />
+        <KpiCard value={summary.orderCount} label="Comenzi" icon={<OrdersIcon />} tone="blue" />
+        <KpiCard value={summary.pickupCount} label="Ridicări supplier" icon={<PickupIcon />} tone="amber" />
+        <KpiCard value={summary.deliveredTyreCount} label="Anvelope livrate" icon={<TyreIcon className="h-5 w-5" />} tone="green" />
+        <KpiCard value={formatEuro(summary.profit)} label="Profit transport" icon={<ProfitIcon />} tone="purple" />
       </div>
 
       {/* ---------------------------------------------------- Insights */}
@@ -116,9 +167,17 @@ export function SummaryDashboard({
           <h2 className="text-sm font-bold uppercase tracking-wide text-ink-soft">Activitate</h2>
           <div className="mt-2 grid gap-3 sm:grid-cols-3">
             {insights.map((insight) => (
-              <div key={insight.title} className="rounded-xl border border-ink/10 bg-white p-4">
-                <div className="text-sm font-bold text-ink">{insight.title}</div>
-                <div className="mt-1 text-xs text-ink-soft">{insight.detail}</div>
+              <div
+                key={insight.title}
+                className="flex items-start gap-3 rounded-xl border border-ink/10 bg-white p-4 shadow-card"
+              >
+                <div className={`flex h-9 w-9 flex-none items-center justify-center rounded-lg ${TONE_ICON_BG[insight.tone]}`}>
+                  {insight.icon}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-bold text-ink">{insight.title}</div>
+                  <div className="mt-0.5 text-xs text-ink-soft">{insight.detail}</div>
+                </div>
               </div>
             ))}
           </div>
@@ -133,16 +192,21 @@ export function SummaryDashboard({
             Nu există ridicări în perioada selectată.
           </p>
         ) : (
-          <div className="mt-2 space-y-2">
+          <div className="mt-2 space-y-2 rounded-xl border border-ink/10 bg-white p-4 shadow-card">
             {summary.supplierPickups.map((row) => (
-              <div
-                key={row.supplierId}
-                className="flex items-center justify-between rounded-xl border border-ink/10 bg-white px-4 py-3"
-              >
-                <span className="font-semibold text-ink">{row.supplierName}</span>
-                <span className="text-sm text-ink-soft">
-                  {row.pickups} {row.pickups === 1 ? "ridicare" : "ridicări"} · {row.tyres} anvelope
-                </span>
+              <div key={row.supplierId}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate text-sm font-semibold text-ink">{row.supplierName}</span>
+                  <span className="flex-none text-xs font-semibold text-ink-soft">
+                    {row.pickups} {row.pickups === 1 ? "ridicare" : "ridicări"} · {row.tyres} anvelope
+                  </span>
+                </div>
+                <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-surface-soft">
+                  <div
+                    className="h-full rounded-full bg-accent"
+                    style={{ width: `${Math.max(4, Math.round((row.pickups / maxPickups) * 100))}%` }}
+                  />
+                </div>
               </div>
             ))}
           </div>
@@ -166,11 +230,20 @@ export function SummaryDashboard({
             Nu există livrări pentru perioada selectată.
           </p>
         ) : (
-          <p className="mt-2 rounded-xl border border-ink/10 bg-white p-4 text-sm text-ink">
-            <strong>{summary.deliveredTyreCount}</strong> anvelope livrate ·{" "}
-            <strong>{summary.deliveries.length}</strong> comenzi · <strong>{formatEuro(summary.profit)}</strong>{" "}
-            profit
-          </p>
+          <div className="mt-2 grid grid-cols-3 gap-3">
+            <div className="rounded-xl border border-ink/10 bg-white p-3 text-center shadow-card">
+              <div className="text-xl font-black tabular-nums text-state-success">{summary.deliveredTyreCount}</div>
+              <div className="text-xs text-ink-soft">anvelope</div>
+            </div>
+            <div className="rounded-xl border border-ink/10 bg-white p-3 text-center shadow-card">
+              <div className="text-xl font-black tabular-nums text-accent">{summary.deliveries.length}</div>
+              <div className="text-xs text-ink-soft">comenzi</div>
+            </div>
+            <div className="rounded-xl border border-ink/10 bg-white p-3 text-center shadow-card">
+              <div className="text-xl font-black tabular-nums text-purple-600">{formatEuro(summary.profit)}</div>
+              <div className="text-xs text-ink-soft">profit</div>
+            </div>
+          </div>
         )}
       </section>
 
@@ -210,11 +283,25 @@ export function SummaryDashboard({
             ))}
           </div>
 
-          <div className="mt-3 rounded-xl border border-ink/10 bg-white p-4">
+          <div
+            className={`mt-3 overflow-hidden rounded-xl border border-ink/10 bg-white p-4 shadow-card border-t-[3px] ${
+              VAN_BORDER_CLASS[(scoped.colorKey as keyof typeof VAN_BORDER_CLASS) ?? "default"] ?? VAN_BORDER_CLASS.default
+            }`}
+          >
             <div className="text-sm font-bold text-ink">{scoped.label}</div>
-            <div className="mt-1 text-sm text-ink-soft">
-              {scoped.orders} {scoped.orders === 1 ? "comandă" : "comenzi"} · {scoped.tyres} anvelope ·{" "}
-              {formatEuro(scoped.profit)} profit
+            <div className="mt-2 grid grid-cols-3 gap-3">
+              <div className="text-center">
+                <div className="text-lg font-black tabular-nums text-accent">{scoped.orders}</div>
+                <div className="text-[11px] text-ink-soft">{scoped.orders === 1 ? "comandă" : "comenzi"}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-black tabular-nums text-state-success">{scoped.tyres}</div>
+                <div className="text-[11px] text-ink-soft">anvelope</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-black tabular-nums text-purple-600">{formatEuro(scoped.profit)}</div>
+                <div className="text-[11px] text-ink-soft">profit</div>
+              </div>
             </div>
           </div>
         </section>
