@@ -33,3 +33,41 @@ export async function setTransportRatePerTyre(rate: number): Promise<void> {
     .upsert({ key: "transport_rate_per_tyre", value: rate, updated_at: new Date().toISOString() });
   if (error) throw error;
 }
+
+export interface DepotLocation {
+  lat: number;
+  lng: number;
+}
+
+/**
+ * The warehouse's own coordinates — every vehicle's route starts here, so
+ * the "Hartă" view marks it as the departure point rather than starting
+ * the map cold at the first delivery stop. Defaulted in code (not just in
+ * the DB) so the map still shows a departure point before the seeding
+ * migration has run.
+ */
+const DEFAULT_DEPOT_LOCATION: DepotLocation = { lat: 45.508255, lng: 11.511971 };
+
+export async function getDepotLocation(): Promise<DepotLocation> {
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("app_settings")
+    .select("value")
+    .eq("key", "depot_location")
+    .maybeSingle();
+
+  if (error || !data) return DEFAULT_DEPOT_LOCATION;
+
+  const value = (data as { value: unknown }).value as { lat?: unknown; lng?: unknown } | null;
+  const lat = Number(value?.lat);
+  const lng = Number(value?.lng);
+  return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : DEFAULT_DEPOT_LOCATION;
+}
+
+export async function setDepotLocation(location: DepotLocation): Promise<void> {
+  const supabase = createSupabaseAdminClient();
+  const { error } = await supabase
+    .from("app_settings")
+    .upsert({ key: "depot_location", value: location, updated_at: new Date().toISOString() });
+  if (error) throw error;
+}

@@ -1,6 +1,7 @@
 import { listActiveOrders } from "@/lib/server/orders";
 import { listDrivers, listVehicles } from "@/lib/server/reference";
 import { listStandOverview } from "@/lib/server/stands";
+import { getDepotLocation } from "@/lib/server/settings";
 import { PageHeading } from "@/components/logistics/AdminShell";
 import { VehicleBoard } from "@/components/logistics/VehicleBoard";
 import type { VehicleColumnData } from "@/components/logistics/VehicleBoard";
@@ -24,11 +25,12 @@ export const metadata = { title: "Comenzi în curs" };
  * attention here.
  */
 export default async function AdminDashboardPage() {
-  const [orders, stands, vehicles, drivers] = await Promise.all([
+  const [orders, stands, vehicles, drivers, depotLocation] = await Promise.all([
     listActiveOrders(),
     listStandOverview(),
     listVehicles(),
     listDrivers(),
+    getDepotLocation(),
   ]);
 
   const available = freeStands(
@@ -73,7 +75,7 @@ export default async function AdminDashboardPage() {
         }
       />
 
-      <VehicleBoard columns={vehicleColumns} />
+      <VehicleBoard columns={vehicleColumns} depotLocation={depotLocation} />
     </>
   );
 }

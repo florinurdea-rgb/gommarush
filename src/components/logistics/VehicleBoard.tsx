@@ -53,7 +53,13 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function VehicleBoard({ columns: initialColumns }: { columns: VehicleColumnData[] }) {
+export function VehicleBoard({
+  columns: initialColumns,
+  depotLocation,
+}: {
+  columns: VehicleColumnData[];
+  depotLocation: { lat: number; lng: number } | null;
+}) {
   const router = useRouter();
   const { showToast } = useToast();
   const [columnsByKey, setColumnsByKey] = useState<Record<string, OrderListRow[]>>(() =>
@@ -421,6 +427,7 @@ export function VehicleBoard({ columns: initialColumns }: { columns: VehicleColu
         <RouteStopsModal
           vehicleName={mapColumn.name}
           orders={columnsByKey[mapColumn.key] ?? []}
+          depotLocation={depotLocation}
           onClose={() => setMapColumnKey(null)}
         />
       )}
