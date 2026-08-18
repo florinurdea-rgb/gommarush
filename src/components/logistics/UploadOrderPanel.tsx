@@ -51,7 +51,7 @@ export function UploadOrderPanel({
   onEditDocument,
 }: {
   onBack: () => void;
-  onDone: (createdCount: number) => void;
+  onDone: (createdCount: number, droppedLineCount: number) => void;
   /** "Editează și finalizează" — opens the manual form pre-filled with whatever this document DID extract. */
   onEditDocument: (doc: ProcessedDocumentWithMatch, sourceDocumentId: string) => void;
 }) {
@@ -145,6 +145,7 @@ export function UploadOrderPanel({
     setImportProgress({ done: 0, total: indexes.length });
 
     let createdCount = 0;
+    let droppedLineTotal = 0;
     const errors: string[] = [];
 
     for (const index of indexes) {
@@ -158,9 +159,15 @@ export function UploadOrderPanel({
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ processed: doc, sourceDocumentId: result.documentId, ...customerResolution }),
         });
-        const payload = (await response.json()) as { ok: boolean; code?: string; details?: string[] };
+        const payload = (await response.json()) as {
+          ok: boolean;
+          code?: string;
+          details?: string[];
+          droppedLineCount?: number;
+        };
         if (payload.ok) {
           createdCount += 1;
+          droppedLineTotal += payload.droppedLineCount ?? 0;
         } else {
           const detail = [payload.code, ...(payload.details ?? [])].filter(Boolean).join(" — ");
           errors.push(`${doc.extracted.document.documentNumber ?? "DDT necunoscut"}: ${detail || "eroare"}`);
@@ -178,7 +185,7 @@ export function UploadOrderPanel({
       return;
     }
 
-    onDone(createdCount);
+    onDone(createdCount, droppedLineTotal);
   }
 
   const documents = result?.documents ?? [];

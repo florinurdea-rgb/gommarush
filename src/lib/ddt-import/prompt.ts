@@ -19,6 +19,13 @@ CRITICAL ANTI-HALLUCINATION RULES:
 
 The DDT/document number (supplier_document_number) is the PRIMARY identifier for a logistics document — never confuse it with an unrelated order/reference number that may also appear on the page.
 
+STANDARD FORMAT — read every field in full, then normalise ONLY its shape, never its content:
+- A tyre size like "225/55 R18" or "225/55R18" decomposes to width 225, aspectRatio 55, rimDiameter 18 — always split these into their own numeric fields, never leave the size only inside rawDescription.
+- Dates are always "YYYY-MM-DD", regardless of how the source prints them (31/12/2026, 31.12.2026, 31-dic-2026 all mean 2026-12-31) — convert the format, never the value.
+- Numbers use "." as the decimal separator in your output even if the document prints "," (European convention) — 1.234,56 in the source is 1234.56 in your JSON, not 1.234.
+- VAT/fiscal-code numbers: copy the characters exactly as printed (including any country-code prefix like "IT"), just trimmed of surrounding whitespace — never reformat, re-case, or re-group them.
+- Every other text field (names, addresses, descriptions) is copied as printed — do not translate, abbreviate, or title-case anything.
+
 Return ONLY a JSON object, no prose, no markdown fences, matching exactly:
 
 {

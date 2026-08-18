@@ -72,9 +72,21 @@ export function buildCustomerResolution(doc: ProcessedDocumentWithMatch): Custom
   return null;
 }
 
+/**
+ * A missing/uncertain field is informational, never a reason to refuse the
+ * import outright — the admin sees exactly what's uncertain (doc.reasons)
+ * and can fix it afterward from the order itself. The only thing that
+ * actually blocks a direct confirm is `doc.blocked` (no supplier/customer
+ * identity to resolve, or nothing importable — see pipeline.ts) plus, for
+ * DUPLICATE/POSSIBLE_DUPLICATE, an explicit "Adaugă din nou" choice via
+ * canForceConfirmDdtDocument instead of a silent auto-import.
+ */
 export function canAutoConfirmDdtDocument(doc: ProcessedDocumentWithMatch): boolean {
   return (
-    (doc.status === "READY" || doc.status === "READY_MISSING_OPTIONAL") && buildCustomerResolution(doc) !== null
+    doc.status !== "DUPLICATE" &&
+    doc.status !== "POSSIBLE_DUPLICATE" &&
+    !doc.blocked &&
+    buildCustomerResolution(doc) !== null
   );
 }
 
@@ -88,5 +100,9 @@ export function canAutoConfirmDdtDocument(doc: ProcessedDocumentWithMatch): bool
  * din nou" confirmation dialog, for a document that's otherwise resolvable.
  */
 export function canForceConfirmDdtDocument(doc: ProcessedDocumentWithMatch): boolean {
-  return (doc.status === "DUPLICATE" || doc.status === "POSSIBLE_DUPLICATE") && buildCustomerResolution(doc) !== null;
+  return (
+    (doc.status === "DUPLICATE" || doc.status === "POSSIBLE_DUPLICATE") &&
+    !doc.blocked &&
+    buildCustomerResolution(doc) !== null
+  );
 }

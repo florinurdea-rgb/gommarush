@@ -52,7 +52,10 @@ CRITICAL RULES:
 - Include EVERY line, including fees: PFU / contributo ambientale / eco-tax => itemType "fee"; trasporto / spedizione / transport => itemType "fee"; montaggio / servizio => itemType "service".
 - A tyre size like 225/55 R18 means width 225, aspectRatio 55, rimDiameter 18.
 - "cashOnDelivery" is true only when the document actually says contrassegno / cash on delivery / ramburs.
-- "confidence" is 0-1 per product line. Be honest: low confidence is useful, false confidence is not.`;
+- "confidence" is 0-1 per product line. Be honest: low confidence is useful, false confidence is not.
+- Dates are always "YYYY-MM-DD" regardless of the source's own format (31/12/2026, 31.12.2026, 31-dic-2026 all mean 2026-12-31) — convert the format, never the value.
+- Numbers use "." as the decimal separator in your output even if the document prints "," (1.234,56 in the source is 1234.56 in your JSON, never 1.234).
+- Every text field (names, addresses, descriptions, VAT/fiscal codes) is copied exactly as printed, just trimmed — never translate, reformat, re-case, or re-group it.`;
 
 function parseModelJson(text: string): unknown {
   const trimmed = text.trim();

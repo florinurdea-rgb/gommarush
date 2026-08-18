@@ -288,6 +288,8 @@ export interface ConfirmDdtDocumentResult {
   orderNumber: string;
   tyreCount: number;
   transportRevenue: number;
+  /** Physical lines whose quantity couldn't be read — never guessed, so never saved; the admin adds them manually from the order page. */
+  droppedLineCount: number;
 }
 
 /**
@@ -317,13 +319,21 @@ export async function confirmDdtDocument(input: ConfirmDdtDocumentInput): Promis
     },
   });
 
+  // A line with no readable quantity is dropped, never guessed (never
+  // "?? 0", never "?? 1") — see pipeline.ts's importableItemCount, which is
+  // exactly this same filter, computed ahead of time so the UI already
+  // knows whether anything importable exists before the admin even clicks
+  // confirm.
+  const droppedLineCount = processed.physicalItems.filter((line) => line.raw.quantity === null).length;
+
   const items = processed.physicalItems
+    .filter((line) => line.raw.quantity !== null)
     .map((line) => {
       const itemType = LINE_TYPE_TO_ITEM_TYPE[line.lineType];
       if (!itemType) return null;
       return {
         item_type: itemType,
-        quantity: line.raw.quantity ?? 0,
+        quantity: line.raw.quantity as number,
         supplier_sku: line.raw.supplierArticleCode,
         raw_description: line.raw.rawDescription,
         description: line.raw.rawDescription,
@@ -343,6 +353,13 @@ export async function confirmDdtDocument(input: ConfirmDdtDocumentInput): Promis
       };
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);
+
+  if (items.length === 0) {
+    // Mirrors pipeline.ts's `blocked` check — the UI already refuses to
+    // offer a direct confirm for this case, this is the server-side
+    // backstop against nothing-to-save actually reaching createOrder().
+    throw new Error("NOTHING_IMPORTABLE: no physical line has a readable quantity");
+  }
 
   const created = await createOrder(
     {
@@ -431,6 +448,7 @@ export async function confirmDdtDocument(input: ConfirmDdtDocumentInput): Promis
     orderId: created.orderId,
     tyreCount: processed.tyreCount,
     transportRevenue,
+    droppedLineCount,
   });
 
   return {
@@ -438,5 +456,6 @@ export async function confirmDdtDocument(input: ConfirmDdtDocumentInput): Promis
     orderNumber: created.orderNumber,
     tyreCount: processed.tyreCount,
     transportRevenue,
+    droppedLineCount,
   };
 }

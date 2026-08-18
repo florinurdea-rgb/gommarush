@@ -69,6 +69,12 @@ export async function POST(request: NextRequest) {
         return fail(409, "ALREADY_IMPORTED", ["Acest document a fost deja importat ca o altă comandă."]);
       }
 
+      // Mirrors pipeline.ts's `blocked` — the UI already refuses a direct
+      // confirm here, this is only reachable via a stale client state.
+      if (pgError?.message?.includes("NOTHING_IMPORTABLE")) {
+        return fail(400, "NOTHING_IMPORTABLE", ["Nicio linie cu cantitate citibilă — completează manual."]);
+      }
+
       logError("ddt_confirm_failed", error, { sourceDocumentId: parsed.data.sourceDocumentId });
       return fail(500, "SAVE_FAILED", describeError(error));
     }

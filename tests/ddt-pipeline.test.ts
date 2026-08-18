@@ -123,7 +123,7 @@ describe("processExtractedDocument — PFU never becomes a product (spec §9)", 
 });
 
 describe("processExtractedDocument — critical fields missing (spec §21)", () => {
-  it("requires review when the supplier is unidentified", () => {
+  it("requires review AND blocks import when the supplier is unidentified", () => {
     const result = processExtractedDocument({
       extracted: document({ supplier: { name: null, vatNumber: null } }),
       supplierId: null,
@@ -131,10 +131,11 @@ describe("processExtractedDocument — critical fields missing (spec §21)", () 
       existingFingerprints: [],
     });
     expect(result.status).toBe("NEEDS_REVIEW");
+    expect(result.blocked).toBe(true);
     expect(result.reasons.some((r) => r.includes("Furnizor"))).toBe(true);
   });
 
-  it("requires review when there is no physical item at all", () => {
+  it("requires review AND blocks import when there is no physical item at all", () => {
     const result = processExtractedDocument({
       extracted: document({ lines: [line({ rawDescription: "PFU", itemTypeHint: null, quantity: 4 })] }),
       supplierId: "supplier-1",
@@ -142,10 +143,11 @@ describe("processExtractedDocument — critical fields missing (spec §21)", () 
       existingFingerprints: [],
     });
     expect(result.status).toBe("NEEDS_REVIEW");
+    expect(result.blocked).toBe(true);
     expect(result.physicalItems).toHaveLength(0);
   });
 
-  it("requires review when a tyre line has an unreadable quantity — never guesses 1", () => {
+  it("requires review AND blocks import when the only line has an unreadable quantity — never guesses 1", () => {
     const result = processExtractedDocument({
       extracted: document({ lines: [line({ quantity: null })] }),
       supplierId: "supplier-1",
@@ -153,11 +155,12 @@ describe("processExtractedDocument — critical fields missing (spec §21)", () 
       existingFingerprints: [],
     });
     expect(result.status).toBe("NEEDS_REVIEW");
+    expect(result.blocked).toBe(true);
     expect(result.tyreCount).toBe(0);
     expect(result.unreadableQuantityLines).toBe(1);
   });
 
-  it("requires review when tyre count vs. colli can't be reconciled", () => {
+  it("requires review when tyre count vs. colli can't be reconciled — never blocks import", () => {
     const result = processExtractedDocument({
       extracted: document({
         document: { ...document().document, colli: 99 },
@@ -168,6 +171,44 @@ describe("processExtractedDocument — critical fields missing (spec §21)", () 
     });
     expect(result.status).toBe("NEEDS_REVIEW");
     expect(result.tyreCountValidation).toBe("TYRE_COUNT_REVIEW_REQUIRED");
+    // Uncertain, not missing — a human can double check afterward, this
+    // never has to block the import outright (spec: "just tell me").
+    expect(result.blocked).toBe(false);
+  });
+
+  it("requires review but never blocks import when only SOME lines have an unreadable quantity", () => {
+    const result = processExtractedDocument({
+      extracted: document({
+        lines: [line({ quantity: 2 }), line({ quantity: null, rawDescription: "unreadable line" })],
+      }),
+      supplierId: "supplier-1",
+      existingOrders: [],
+      existingFingerprints: [],
+    });
+    expect(result.status).toBe("NEEDS_REVIEW");
+    expect(result.blocked).toBe(false);
+    expect(result.reasons.some((r) => r.includes("cantitate necitibilă"))).toBe(true);
+  });
+
+  it("requires review but never blocks import when only the DDT number is unreadable", () => {
+    const result = processExtractedDocument({
+      extracted: document({ document: { ...document().document, documentNumber: null } }),
+      supplierId: "supplier-1",
+      existingOrders: [],
+      existingFingerprints: [],
+    });
+    expect(result.status).toBe("NEEDS_REVIEW");
+    expect(result.blocked).toBe(false);
+  });
+
+  it("is never blocked when everything reads cleanly", () => {
+    const result = processExtractedDocument({
+      extracted: document(),
+      supplierId: "supplier-1",
+      existingOrders: [],
+      existingFingerprints: [],
+    });
+    expect(result.blocked).toBe(false);
   });
 });
 

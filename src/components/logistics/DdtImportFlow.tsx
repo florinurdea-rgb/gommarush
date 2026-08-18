@@ -56,7 +56,9 @@ export function DdtImportFlow() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalyzeResponse | null>(null);
   const [confirming, setConfirming] = useState<Set<number>>(new Set());
-  const [confirmed, setConfirmed] = useState<Map<number, { orderId: string; orderNumber: string }>>(new Map());
+  const [confirmed, setConfirmed] = useState<
+    Map<number, { orderId: string; orderNumber: string; droppedLineCount: number }>
+  >(new Map());
   const [confirmErrors, setConfirmErrors] = useState<Map<number, string>>(new Map());
   const [duplicatePrompt, setDuplicatePrompt] = useState<number | null>(null);
 
@@ -117,6 +119,7 @@ export function DdtImportFlow() {
         details?: string[];
         orderId?: string;
         orderNumber?: string;
+        droppedLineCount?: number;
       };
 
       if (!payload.ok || !payload.orderId) {
@@ -135,7 +138,11 @@ export function DdtImportFlow() {
 
       setDuplicatePrompt((current) => (current === index ? null : current));
       setConfirmed((current) =>
-        new Map(current).set(index, { orderId: payload.orderId!, orderNumber: payload.orderNumber! })
+        new Map(current).set(index, {
+          orderId: payload.orderId!,
+          orderNumber: payload.orderNumber!,
+          droppedLineCount: payload.droppedLineCount ?? 0,
+        })
       );
     } catch {
       setConfirmErrors((current) => new Map(current).set(index, "NETWORK_ERROR"));
@@ -293,7 +300,7 @@ function DocumentCard({
   canConfirm: boolean;
   canForceConfirm: boolean;
   confirming: boolean;
-  confirmed: { orderId: string; orderNumber: string } | null;
+  confirmed: { orderId: string; orderNumber: string; droppedLineCount: number } | null;
   error: string | null;
   onConfirm: () => void;
   onRequestForceConfirm: () => void;
@@ -339,12 +346,21 @@ function DocumentCard({
 
       <div className="mt-3 flex items-center gap-3">
         {confirmed ? (
-          <Link
-            href={`/admin/orders/${confirmed.orderId}`}
-            className="text-sm font-bold text-state-success hover:underline"
-          >
-            ✓ Comandă creată — {formatOrderNumber(confirmed.orderNumber)} →
-          </Link>
+          <div>
+            <Link
+              href={`/admin/orders/${confirmed.orderId}`}
+              className="text-sm font-bold text-state-success hover:underline"
+            >
+              ✓ Comandă creată — {formatOrderNumber(confirmed.orderNumber)} →
+            </Link>
+            {confirmed.droppedLineCount > 0 && (
+              <div className="mt-1 text-xs font-semibold text-state-warning">
+                {confirmed.droppedLineCount === 1
+                  ? "1 linie nu a putut fi adăugată (cantitate necitibilă) — adaug-o manual din pagina comenzii."
+                  : `${confirmed.droppedLineCount} linii nu au putut fi adăugate (cantitate necitibilă) — adaugă-le manual din pagina comenzii.`}
+              </div>
+            )}
+          </div>
         ) : canConfirm ? (
           <button
             type="button"

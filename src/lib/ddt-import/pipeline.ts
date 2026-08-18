@@ -51,6 +51,15 @@ export interface ClassifiedLine {
 
 export interface ProcessedDocument {
   extracted: ExtractedDocument;
+  /**
+   * True only when the order genuinely cannot be auto-created (no
+   * supplier/customer identity to resolve, or nothing importable) — the
+   * one thing that still blocks confirming. Independent of `status`:
+   * NEEDS_REVIEW can be true while this is false (something's merely
+   * uncertain, not missing outright), in which case the document is still
+   * confirmable — see canAutoConfirmDdtDocument in client-helpers.ts.
+   */
+  blocked: boolean;
   physicalItems: ClassifiedLine[];
   charges: ClassifiedLine[];
   tyreCount: number;
@@ -207,21 +216,39 @@ export function processExtractedDocument(input: {
 
   const fingerprintMatch = input.existingFingerprints.find((entry) => entry.fingerprint === fingerprint) ?? null;
 
-  // Critical fields (spec §21): if any of these is ambiguous, this is never auto-created.
-  const criticalIssues: string[] = [];
-  if (!extracted.supplier.name) criticalIssues.push("Furnizor neidentificat");
-  if (!extracted.document.documentNumber) criticalIssues.push("Număr DDT neidentificat");
-  if (!extracted.customer.companyName) criticalIssues.push("Client neidentificat");
-  if (physicalItems.length === 0) criticalIssues.push("Niciun produs fizic identificat");
+  // How many physical lines can actually become an order_item: a line with
+  // an unreadable quantity is never guessed (never "?? 1", never "?? 0" —
+  // see confirmDdtDocument, which drops these rather than defaulting to
+  // zero), so it can't be saved. This is what "is there anything real to
+  // import here" actually means — not just "were any physical lines found".
+  const importableItemCount = physicalItems.filter((item) => item.raw.quantity !== null).length;
+
+  // Blocking: the order genuinely CANNOT be auto-created without a human
+  // typing something in — no supplier means nothing to set orders.supplier_id
+  // (NOT NULL) to, no customer name means nothing to match or create a
+  // customer record with, and zero importable items means there would be
+  // nothing to save at all. Everything else is informational only (spec:
+  // "don't block the user, just tell them") — the document still imports,
+  // with whatever's uncertain flagged for a look afterward.
+  const blockingIssues: string[] = [];
+  if (!extracted.supplier.name) blockingIssues.push("Furnizor neidentificat");
+  if (!extracted.customer.companyName) blockingIssues.push("Client neidentificat");
+  if (importableItemCount === 0) blockingIssues.push("Niciun produs cu cantitate citibilă");
+
+  const reviewIssues: string[] = [];
+  if (!extracted.document.documentNumber) reviewIssues.push("Număr DDT neidentificat");
   if (unreadableQuantityLines.length > 0) {
-    criticalIssues.push(`${unreadableQuantityLines.length} linii cu cantitate necitibilă`);
+    reviewIssues.push(
+      `${unreadableQuantityLines.length} linii cu cantitate necitibilă — nu vor fi adăugate, completează manual din pagina comenzii`
+    );
   }
   if (tyreCountValidation === "TYRE_COUNT_REVIEW_REQUIRED") {
-    criticalIssues.push("Numărul de anvelope nu poate fi confirmat față de Nr. Colli");
+    reviewIssues.push("Numărul de anvelope nu poate fi confirmat față de Nr. Colli");
   }
 
   let status: DocumentStatus;
   const reasons: string[] = [];
+  const blocked = blockingIssues.length > 0;
 
   if (exactDuplicate) {
     status = "DUPLICATE";
@@ -229,9 +256,12 @@ export function processExtractedDocument(input: {
   } else if (fingerprintMatch) {
     status = "POSSIBLE_DUPLICATE";
     reasons.push("Document foarte asemănător cu o comandă existentă — verifică înainte de import");
-  } else if (criticalIssues.length > 0) {
+  } else if (blocked) {
     status = "NEEDS_REVIEW";
-    reasons.push(...criticalIssues);
+    reasons.push(...blockingIssues, ...reviewIssues);
+  } else if (reviewIssues.length > 0) {
+    status = "NEEDS_REVIEW";
+    reasons.push(...reviewIssues);
   } else {
     const missingOptional: string[] = [];
     if (!extracted.customer.phone) missingOptional.push("telefon");
@@ -246,6 +276,7 @@ export function processExtractedDocument(input: {
 
   return {
     extracted,
+    blocked,
     physicalItems,
     charges,
     tyreCount,

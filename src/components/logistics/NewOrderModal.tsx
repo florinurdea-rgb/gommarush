@@ -93,14 +93,17 @@ export function NewOrderModal({
           <div className={step === "upload" ? "" : "hidden"}>
             <UploadOrderPanel
               onBack={() => setStep("choice")}
-              onDone={(createdCount) => {
+              onDone={(createdCount, droppedLineCount) => {
                 onClose();
-                showToast(
+                const base =
                   createdCount === 1
                     ? "1 comandă adăugată în Așteaptă asignare."
-                    : `${createdCount} comenzi adăugate în Așteaptă asignare.`,
-                  "success"
-                );
+                    : `${createdCount} comenzi adăugate în Așteaptă asignare.`;
+                const dropped =
+                  droppedLineCount > 0
+                    ? ` ${droppedLineCount} ${droppedLineCount === 1 ? "linie nu a putut fi adăugată" : "linii nu au putut fi adăugate"} (cantitate necitibilă) — completează manual.`
+                    : "";
+                showToast(base + dropped, "success");
                 router.refresh();
               }}
               onEditDocument={(doc, sourceDocumentId) => {
