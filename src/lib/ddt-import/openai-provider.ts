@@ -5,18 +5,15 @@ import { coerceExtractionEnvelope } from "@/lib/ddt-import/coerce";
 import type { ExtractionResult } from "@/lib/ddt-import/types";
 
 /**
- * Uses OpenAI's Responses API, which — like Anthropic's `document` content
- * block — accepts a PDF directly (`input_file` with a base64 data URI), so
- * this doesn't need to rasterize pages into images itself. `text.format:
- * json_object` guarantees syntactically valid JSON; the exact shape still
- * comes from the shared prompt (src/lib/ddt-import/prompt.ts) and is
- * validated afterward by coerceExtractionEnvelope — same trust boundary as
- * the Anthropic provider, same downstream pipeline either way.
+ * OpenAI Responses API extraction for PDFs/images.
+ *
+ * Keep the request comfortably below the Vercel function timeout so the
+ * caller still has time to surface a useful error/fallback. `input_file`
+ * receives raw base64 file data; image inputs continue to use a data URL.
  */
-
 const API_URL = "https://api.openai.com/v1/responses";
 const DEFAULT_MODEL = "gpt-4.1";
-const REQUEST_TIMEOUT_MS = 170_000;
+const REQUEST_TIMEOUT_MS = 60_000;
 
 interface OpenAIResponsePayload {
   output_text?: string;
@@ -52,10 +49,9 @@ export async function extractViaOpenAI(
 
   const model = process.env.OPENAI_MODEL?.trim() || DEFAULT_MODEL;
   const base64 = input.bytes.toString("base64");
-  const dataUri = `data:${isPdf ? "application/pdf" : input.mimeType};base64,${base64}`;
   const fileContent = isPdf
-    ? { type: "input_file", filename: input.fileName, file_data: dataUri }
-    : { type: "input_image", image_url: dataUri };
+    ? { type: "input_file", filename: input.fileName, file_data: base64 }
+    : { type: "input_image", image_url: `data:${input.mimeType};base64,${base64}` };
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -86,13 +82,14 @@ export async function extractViaOpenAI(
       const detail = await response.text();
       logError("ddt_extraction_openai_http_error", new Error(`HTTP ${response.status}`), {
         status: response.status,
+        model,
       });
       return {
         status: "failed",
         documents: [],
         pageCount: null,
-        error: `HTTP_${response.status}: ${detail.slice(0, 200)}`,
-        notes: ["Analiza automată a eșuat."],
+        error: `OPENAI_HTTP_${response.status}: ${detail.slice(0, 800)}`,
+        notes: ["Analiza OpenAI a eșuat."],
       };
     }
 
@@ -104,24 +101,33 @@ export async function extractViaOpenAI(
         status: "failed",
         documents: [],
         pageCount: null,
-        error: "EMPTY_RESPONSE",
-        notes: ["Analiza automată nu a returnat date."],
+        error: "OPENAI_EMPTY_RESPONSE",
+        notes: ["OpenAI nu a returnat date."],
       };
     }
 
     const { documents, pageCount } = coerceExtractionEnvelope(text);
-    logEvent("ddt_extraction_completed", { provider: "openai", documentCount: documents.length });
+    if (documents.length === 0) {
+      return {
+        status: "failed",
+        documents: [],
+        pageCount,
+        error: "OPENAI_NO_DOCUMENTS",
+        notes: ["OpenAI a răspuns, dar nu a fost detectat niciun document utilizabil."],
+      };
+    }
 
+    logEvent("ddt_extraction_completed", { provider: "openai", model, documentCount: documents.length });
     return { status: "analysed", documents, pageCount, error: null, notes: [] };
   } catch (error) {
     const aborted = error instanceof Error && error.name === "AbortError";
-    logError("ddt_extraction_openai_failed", error, { aborted });
+    logError("ddt_extraction_openai_failed", error, { aborted, model });
     return {
       status: "failed",
       documents: [],
       pageCount: null,
-      error: error instanceof Error ? error.message : "UNKNOWN",
-      notes: [aborted ? "Analiza a durat prea mult." : "Analiza automată a eșuat."],
+      error: aborted ? "OPENAI_TIMEOUT" : `OPENAI_ERROR: ${error instanceof Error ? error.message : "UNKNOWN"}`,
+      notes: [aborted ? "Analiza OpenAI a depășit timpul disponibil." : "Analiza OpenAI a eșuat."],
     };
   } finally {
     clearTimeout(timeout);
