@@ -219,6 +219,21 @@ export const reorderOrdersSchema = z
   })
   .strict();
 
+const vehicleName = z.string().trim().min(1).max(60);
+
+export const createVehicleSchema = z
+  .object({
+    name: vehicleName,
+    registration: z.string().trim().max(30).nullish(),
+  })
+  .strict();
+
+export const renameVehicleSchema = z.object({ name: vehicleName }).strict();
+
+export const reorderVehiclesSchema = z
+  .object({ orderedVehicleIds: z.array(uuid).min(1).max(50) })
+  .strict();
+
 /** The "Hartă" route-stops geocoding request — one vehicle's stops, in delivery order. */
 export const routeMapSchema = z
   .object({

@@ -2,6 +2,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/server-admin";
 import { logError, logEvent } from "@/lib/logger";
 import { isMissingSchemaError } from "@/lib/server/schema-errors";
+import { VEHICLE_COLOR_KEYS } from "@/lib/types/logistics";
 import type { DriverRow, SupplierRow, VehicleRow } from "@/lib/types/logistics";
 
 /** Lookups for drivers, vehicles and suppliers used across the admin screens. */
@@ -109,6 +110,96 @@ export async function getVehicle(vehicleId: string): Promise<VehicleRow | null> 
 
   if (primary.error) throw primary.error;
   return (primary.data ?? null) as unknown as VehicleRow | null;
+}
+
+// ---------------------------------------------------------------------------
+// Fleet management — add/rename/reorder/remove vans (redesign brief §12-24).
+// ---------------------------------------------------------------------------
+
+/** Adds a van at the end of the display order, assigning a color deterministically from how many vehicles ever existed. */
+export async function createVehicle(input: { name: string; registration?: string | null }): Promise<VehicleRow> {
+  const supabase = createSupabaseAdminClient();
+  const name = input.name.trim();
+
+  const { count } = await supabase.from("vehicles").select("id", { count: "exact", head: true });
+  const colorKey = VEHICLE_COLOR_KEYS[(count ?? 0) % VEHICLE_COLOR_KEYS.length];
+
+  const { data: maxOrderRow } = await supabase
+    .from("vehicles")
+    .select("display_order")
+    .order("display_order", { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle();
+  const nextOrder = ((maxOrderRow as { display_order: number | null } | null)?.display_order ?? 0) + 1;
+
+  const { data, error } = await supabase
+    .from("vehicles")
+    .insert({
+      name,
+      registration: input.registration?.trim() || null,
+      active: true,
+      display_order: nextOrder,
+      color_key: colorKey,
+    })
+    .select(VEHICLE_SELECT)
+    .single();
+
+  if (error) throw error;
+  logEvent("vehicle_created", { vehicleId: (data as { id: string }).id, name });
+  return data as unknown as VehicleRow;
+}
+
+export async function renameVehicle(vehicleId: string, name: string): Promise<void> {
+  const supabase = createSupabaseAdminClient();
+  const { error } = await supabase.from("vehicles").update({ name: name.trim() }).eq("id", vehicleId);
+  if (error) throw error;
+  logEvent("vehicle_renamed", { vehicleId });
+}
+
+/** Bulk-persists the Kanban lane order after a drag-reorder in the fleet management sheet. */
+export async function reorderVehicles(orderedVehicleIds: string[]): Promise<void> {
+  const supabase = createSupabaseAdminClient();
+  const results = await Promise.all(
+    orderedVehicleIds.map((id, index) => supabase.from("vehicles").update({ display_order: index + 1 }).eq("id", id))
+  );
+  const failed = results.find((result) => result.error);
+  if (failed?.error) throw failed.error;
+  logEvent("vehicles_reordered", { count: orderedVehicleIds.length });
+}
+
+/**
+ * Safe van removal (redesign brief §17-22): reassigns every active order
+ * still pointing at this vehicle to "Neasignate" (vehicle_id/delivery_sequence
+ * cleared, operational status untouched) and soft-deactivates the vehicle —
+ * see gorush_remove_vehicle in 20260823000000_fleet_management.sql for why
+ * this is one atomic RPC rather than two separate application-side updates,
+ * and why removal is active=false rather than a hard delete (historical
+ * Sumar reporting must keep showing a removed van's past deliveries).
+ */
+/**
+ * Returns a result object rather than throwing on a business-rule failure
+ * (vehicle not found / already removed) — this project's route handlers
+ * have already hit real bugs from `instanceof Error` failing across module
+ * boundaries in this bundling setup (see describeError() in
+ * route-helpers.ts), so callers that need to branch on the outcome get a
+ * plain, duck-type-free result instead of having to inspect a thrown value.
+ */
+export async function removeVehicle(
+  vehicleId: string,
+  operator?: string | null
+): Promise<{ ok: boolean; code: string; reassignedOrders: number }> {
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase.rpc("gorush_remove_vehicle", {
+    p_vehicle_id: vehicleId,
+    p_operator: operator ?? null,
+  });
+  if (error) throw error;
+
+  const result = data as { ok: boolean; code: string; reassigned_orders?: number };
+  if (result.ok) {
+    logEvent("vehicle_removed", { vehicleId, reassignedOrders: result.reassigned_orders ?? 0 });
+  }
+  return { ok: result.ok, code: result.code, reassignedOrders: result.reassigned_orders ?? 0 };
 }
 
 /**

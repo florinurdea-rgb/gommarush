@@ -3,27 +3,34 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { VehicleIcon } from "@/components/logistics/VehicleIcon";
 import { OrderDetailModal } from "@/components/logistics/OrderDetailModal";
 import { VehicleCardActionsMenu } from "@/components/logistics/VehicleCardActionsMenu";
+import { VehicleLaneMenu } from "@/components/logistics/VehicleLaneMenu";
+import { FleetManagementModal } from "@/components/logistics/FleetManagementModal";
 import { RouteStopsModal } from "@/components/logistics/RouteStopsModal";
 import { TyreIcon } from "@/components/logistics/TyreIcon";
 import { useToast } from "@/components/ui/Toast";
 import { formatOrderNumber } from "@/lib/logistics/order-number";
 import { computeVehicleLoad, moveOrderBetweenColumns } from "@/lib/logistics/vehicle-board";
 import { suggestRouteAssignments, suggestRouteForOrder } from "@/lib/logistics/route-suggestion";
-import { operationalStatus } from "@/lib/logistics/operational-status";
+import { operationalStatus, OPERATIONAL_BUCKETS, operationalBucketMeta } from "@/lib/logistics/operational-status";
 import type { OperationalBucket } from "@/lib/logistics/operational-status";
+import { VAN_BORDER_CLASS } from "@/lib/logistics/vehicle-colors";
 import type { RoutableOrder, RoutableVehicle } from "@/lib/logistics/route-suggestion";
 import type { OrderListRow } from "@/lib/server/orders";
+import type { VehicleRow } from "@/lib/types/logistics";
 
 /**
- * "Livrări" — the day-scoped operational board: orders grouped under the
- * vehicle they're assigned to, draggable between vehicles and reorderable
- * within one ("ordinea livrării"). Owns its own date/search/status filter
- * state entirely client-side, so switching days or typing a search never
- * re-fetches — every active order (any date) is fetched once by the server
- * page and filtered here.
+ * "Livrări" — the day-scoped, high-density dispatch board: orders grouped
+ * under the vehicle they're assigned to, draggable between vehicles and
+ * reorderable within one ("ordinea livrării"). Owns its own date/search/
+ * status filter state entirely client-side, so switching days or typing a
+ * search never re-fetches — every active order (any date) is fetched once
+ * by the server page and filtered here.
+ *
+ * Compact by design (redesign brief "5-van board"): the priority is more
+ * orders visible on one office monitor, not decorative widgets — see
+ * renderCard/renderColumnHeader below for the deliberately small type scale.
  *
  * Native HTML5 drag-and-drop, deliberately not a library: this is a
  * desktop-first admin tool, the interaction is a plain "pick up a card,
@@ -46,20 +53,11 @@ export interface VehicleColumnData {
   /** Display number for the van icon's badge — null for "unassigned" (no icon). */
   number: number | null;
   capacityUnits: number | null;
+  colorKey: string | null;
   orders: OrderListRow[];
 }
 
 type QuickFilter = "all" | "unassigned" | OperationalBucket;
-
-const QUICK_FILTERS: { key: QuickFilter; label: string }[] = [
-  { key: "all", label: "Toate" },
-  { key: "unassigned", label: "Neasignate" },
-  { key: "waiting_goods", label: "Așteaptă marfa" },
-  { key: "receiving", label: "În recepție" },
-  { key: "to_prepare", label: "De pregătit" },
-  { key: "ready", label: "Gata" },
-  { key: "problem", label: "Probleme" },
-];
 
 function formatDate(value: string | null): string {
   if (!value) return "—";
@@ -90,6 +88,14 @@ function shortSupplierName(name: string): string {
   return firstWord.charAt(0).toUpperCase() + firstWord.slice(1).toLowerCase();
 }
 
+/** "Via Santa Fosca, NR. 25, 37030 Dueville" -> "Santa Fosca 25" — street + number only, one line. */
+function shortAddress(address: string | null): string | null {
+  if (!address) return null;
+  const withoutPrefix = address.replace(/^(via|viale|piazza|corso|strada)\s+/i, "");
+  const firstSegment = withoutPrefix.split(",")[0]?.trim();
+  return firstSegment || null;
+}
+
 function matchesSearch(order: OrderListRow, query: string): boolean {
   if (!query) return true;
   const haystack = [
@@ -111,11 +117,17 @@ function matchesQuickFilter(order: OrderListRow, filter: QuickFilter): boolean {
   return operationalStatus(order.status, order.progress.problem > 0).bucket === filter;
 }
 
+/** Pauses on a hidden tab and while the user is mid-interaction (drag, an open drawer/modal) so a refresh never yanks something out from under them. */
+const AUTO_REFRESH_MS = 45_000;
+
 export function VehicleBoard({
   columns: initialColumns,
+  vehicles,
   depotLocation,
 }: {
   columns: VehicleColumnData[];
+  /** Raw fleet list (including any deactivated ones may pass through, though the server only sends active) — feeds the fleet management sheet, which needs registration/display_order beyond what a column carries. */
+  vehicles: VehicleRow[];
   depotLocation: { lat: number; lng: number } | null;
 }) {
   const router = useRouter();
@@ -127,6 +139,7 @@ export function VehicleBoard({
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const [openOrderId, setOpenOrderId] = useState<string | null>(null);
   const [mapColumnKey, setMapColumnKey] = useState<string | null>(null);
+  const [fleetModalOpen, setFleetModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>(todayIso());
   const [search, setSearch] = useState("");
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
@@ -149,6 +162,20 @@ export function VehicleBoard({
   useEffect(() => {
     setColumnsByKey(Object.fromEntries(initialColumns.map((column) => [column.key, column.orders])));
   }, [initialColumns]);
+
+  // Keeps the board up to date without a manual reload — paused whenever the
+  // tab is hidden, or the user is mid-interaction (dragging, or has the
+  // order drawer / route map / fleet sheet open), so a background refresh
+  // never yanks focus or a card out from under them.
+  const interactionActive = drag !== null || openOrderId !== null || mapColumnKey !== null || fleetModalOpen;
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      if (interactionActive) return;
+      router.refresh();
+    }, AUTO_REFRESH_MS);
+    return () => window.clearInterval(interval);
+  }, [router, interactionActive]);
 
   const commitColumn = useCallback(
     async (vehicleId: string | null, orderedOrderIds: string[]) => {
@@ -314,22 +341,23 @@ export function VehicleBoard({
     [allOrders]
   );
 
-  const summary = useMemo(() => {
-    const totalTyres = ordersForDate.reduce((sum, order) => sum + order.tyre_count, 0);
-    const unassigned = ordersForDate.filter((order) => !order.vehicle_id).length;
-    const waitingGoods = ordersForDate.filter(
-      (order) => operationalStatus(order.status, order.progress.problem > 0).bucket === "waiting_goods"
-    ).length;
-    return { total: ordersForDate.length, totalTyres, unassigned, waitingGoods };
-  }, [ordersForDate]);
-
-  const quickFilterCounts = useMemo(() => {
-    const counts = new Map<QuickFilter, number>();
-    for (const filter of QUICK_FILTERS) {
-      counts.set(filter.key, ordersForDate.filter((order) => matchesQuickFilter(order, filter.key)).length);
+  const bucketCounts = useMemo(() => {
+    const counts = new Map<OperationalBucket, number>();
+    for (const bucket of OPERATIONAL_BUCKETS) {
+      counts.set(bucket, ordersForDate.filter((order) => matchesQuickFilter(order, bucket)).length);
     }
     return counts;
   }, [ordersForDate]);
+  const unassignedCount = useMemo(() => ordersForDate.filter((order) => !order.vehicle_id).length, [ordersForDate]);
+
+  /** vehicleId -> currently assigned order count, for the fleet sheet's remove-confirmation copy — no separate fetch needed. */
+  const orderCountsByVehicle = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const column of initialColumns) {
+      if (column.vehicleId) counts[column.vehicleId] = (columnsByKey[column.key] ?? []).length;
+    }
+    return counts;
+  }, [initialColumns, columnsByKey]);
 
   function visibleOrdersFor(columnKey: string): OrderListRow[] {
     return (columnsByKey[columnKey] ?? []).filter(
@@ -351,6 +379,7 @@ export function VehicleBoard({
     const moveTargets = initialColumns
       .filter((column) => column.key !== columnKey)
       .map((column) => ({ key: column.key, name: column.name }));
+    const address = shortAddress(order.customer_address);
 
     return (
       <div
@@ -382,20 +411,20 @@ export function VehicleBoard({
           if (justDraggedRef.current) return;
           setOpenOrderId(order.id);
         }}
-        className={`cursor-pointer rounded-xl bg-white p-2.5 shadow-sm ring-1 ring-ink/5 transition hover:shadow-card active:cursor-grabbing ${
+        className={`cursor-pointer rounded-lg bg-white p-2 shadow-sm ring-1 ring-ink/5 transition hover:shadow-card active:cursor-grabbing ${
           drag?.orderId === order.id ? "opacity-40" : ""
         }`}
       >
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-1.5">
           <span className="font-mono text-[11px] font-semibold text-ink-soft">
             {formatOrderNumber(order.order_number)}
           </span>
-          <div className="flex flex-none items-center gap-1">
+          <div className="flex flex-none items-center gap-0.5">
             <span
               title={status.label}
-              className="inline-flex items-center gap-1 rounded-md bg-surface-soft px-1.5 py-0.5 text-[10px] font-bold text-ink"
+              className="inline-flex items-center gap-0.5 rounded-md bg-surface-soft px-1 py-0.5 text-[10px] font-bold leading-none text-ink"
             >
-              {status.emoji} {status.label}
+              {status.emoji}
             </span>
             <VehicleCardActionsMenu
               orderId={order.id}
@@ -407,25 +436,24 @@ export function VehicleBoard({
           </div>
         </div>
 
-        <div className="mt-1 truncate text-sm font-bold text-ink">{order.customer_name ?? "—"}</div>
-        {order.customer_address && (
-          <div className="truncate text-[11px] text-ink-soft">{order.customer_address}</div>
-        )}
+        <div className="mt-0.5 truncate text-[13px] font-bold leading-tight text-ink">
+          {order.customer_name ?? "—"}
+        </div>
 
-        <div className="mt-1.5 flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-1.5">
-            <span className="flex items-center gap-1 text-xs font-semibold text-ink">
-              <TyreIcon className="h-3.5 w-3.5 flex-none text-ink-soft" />
-              {order.tyre_count}
-            </span>
+        <div className="mt-1 flex items-center justify-between gap-1.5">
+          <div className="flex min-w-0 items-center gap-1 text-[11px] font-semibold text-ink">
+            <TyreIcon className="h-3 w-3 flex-none text-ink-soft" />
+            <span>{order.tyre_count} anv.</span>
             {order.supplier_name && (
-              <span className="truncate rounded-md bg-state-neutral-soft px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-state-neutral">
-                {shortSupplierName(order.supplier_name)}
-              </span>
+              <>
+                <span className="text-ink-soft">·</span>
+                <span className="truncate text-ink-soft">{shortSupplierName(order.supplier_name)}</span>
+              </>
             )}
           </div>
-          <span className="flex-none text-[11px] text-ink-soft">{formatDate(order.planned_delivery_date)}</span>
+          <span className="flex-none text-[10px] text-ink-soft">{formatDate(order.planned_delivery_date)}</span>
         </div>
+        {address && <div className="mt-0.5 truncate text-[10px] text-ink-soft">{address}</div>}
       </div>
     );
   }
@@ -442,7 +470,7 @@ export function VehicleBoard({
           event.preventDefault();
           handleDrop(column.key, (columnsByKey[column.key] ?? []).length);
         }}
-        className={`min-h-24 space-y-2 rounded-xl p-2 transition-colors ${isOver ? "bg-accent-light/50" : ""}`}
+        className={`min-h-16 flex-1 space-y-1.5 overflow-y-auto rounded-lg p-1.5 transition-colors ${isOver ? "bg-accent-light/50" : ""}`}
       >
         {orders.length === 0 && <p className="py-6 text-center text-xs text-ink-soft">Nicio comandă</p>}
         {orders.map((order) => renderCard(order, column.key))}
@@ -456,22 +484,14 @@ export function VehicleBoard({
     const tyreCount = orders.reduce((sum, order) => sum + order.tyre_count, 0);
 
     return (
-      <div className="flex items-center gap-3 px-1 pb-2">
-        {column.number !== null ? (
-          <VehicleIcon number={column.number} />
-        ) : (
-          <span className="flex h-11 w-11 flex-none items-center justify-center rounded-2xl bg-state-neutral-soft text-lg font-bold text-state-neutral">
-            —
-          </span>
-        )}
+      <div className="flex items-start gap-1.5 px-1.5 pb-1.5 pt-1">
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-bold text-ink">{column.name}</div>
-          <div className="text-xs text-ink-soft">
-            {stats.orderCount} {stats.orderCount === 1 ? "oprire" : "opriri"} · {tyreCount} anvelope
-            {stats.occupancyPercent !== null && ` · ${stats.occupancyPercent}%`}
+          <div className="truncate text-[13px] font-bold text-ink">{column.name}</div>
+          <div className="text-[11px] text-ink-soft">
+            {stats.orderCount} {stats.orderCount === 1 ? "oprire" : "opriri"} · {tyreCount} anv.
           </div>
           {stats.occupancyPercent !== null && (
-            <div className="mt-1 h-1 w-full max-w-[8rem] overflow-hidden rounded-full bg-ink/10">
+            <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-ink/10">
               <div
                 className={`h-full rounded-full ${stats.occupancyPercent > 100 ? "bg-state-danger" : "bg-accent"}`}
                 style={{ width: `${Math.min(100, stats.occupancyPercent)}%` }}
@@ -479,19 +499,22 @@ export function VehicleBoard({
             </div>
           )}
           {stats.returnTrips > 0 && (
-            <div className="mt-0.5 text-[11px] font-semibold text-state-warning">
-              ⟲ {stats.returnTrips} {stats.returnTrips === 1 ? "revenire" : "reveniri"} la hală
+            <div className="mt-0.5 text-[10px] font-semibold text-state-warning">
+              ⟲ {stats.returnTrips} {stats.returnTrips === 1 ? "revenire" : "reveniri"}
             </div>
           )}
         </div>
-        {column.vehicleId !== null && (
-          <button
-            type="button"
-            onClick={() => setMapColumnKey(column.key)}
-            className="flex-none rounded-lg px-2 py-1 text-xs font-semibold text-accent hover:bg-accent-light"
-          >
-            Hartă
-          </button>
+        {column.vehicleId !== null ? (
+          <VehicleLaneMenu
+            vehicleId={column.vehicleId}
+            vehicleName={column.name}
+            orderCount={orderCountsByVehicle[column.vehicleId] ?? 0}
+            onOpenMap={() => setMapColumnKey(column.key)}
+          />
+        ) : (
+          <span className="flex-none rounded-md bg-state-warning-soft px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-state-warning">
+            Necesită dispecerizare
+          </span>
         )}
       </div>
     );
@@ -499,16 +522,23 @@ export function VehicleBoard({
 
   return (
     <section aria-label="Livrări">
-      {/* ---------------------------------------------------------- summary */}
-      <p className="mb-4 text-sm text-ink-soft">
-        <strong className="text-ink">{summary.total}</strong> {summary.total === 1 ? "comandă" : "comenzi"} ·{" "}
-        <strong className="text-ink">{summary.totalTyres}</strong> anvelope ·{" "}
-        <strong className="text-ink">{summary.unassigned}</strong> neasignate ·{" "}
-        <strong className="text-ink">{summary.waitingGoods}</strong> așteaptă marfa
-      </p>
+      {/* ------------------------------------------------- compact status strip */}
+      <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-ink/10 bg-white px-3 py-2">
+        <span className="text-xs font-semibold text-ink-soft">
+          <strong className="text-ink">{unassignedCount}</strong> neasignate
+        </span>
+        {OPERATIONAL_BUCKETS.map((bucket) => {
+          const meta = operationalBucketMeta(bucket);
+          return (
+            <span key={bucket} className="text-xs font-semibold text-ink-soft">
+              {meta.emoji} <strong className="text-ink">{bucketCounts.get(bucket) ?? 0}</strong> {meta.label}
+            </span>
+          );
+        })}
+      </div>
 
       {/* ------------------------------------------------------- date + CTA */}
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-1.5">
           <span className="text-sm font-semibold text-ink-soft">Livrări pentru:</span>
           <button
@@ -563,62 +593,73 @@ export function VehicleBoard({
       </div>
 
       {/* --------------------------------------------------------- filters */}
-      <div className="mb-4 space-y-2">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <input
           type="search"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Caută client / comandă / adresă / furnizor"
-          className="h-10 w-full rounded-lg border border-ink/15 bg-white px-3 text-sm text-ink outline-none focus:border-accent sm:max-w-sm"
+          className="h-9 w-full rounded-lg border border-ink/15 bg-white px-3 text-sm text-ink outline-none focus:border-accent sm:max-w-[220px]"
         />
 
-        <div className="flex flex-wrap items-center gap-1.5">
-          {QUICK_FILTERS.map((filter) => {
-            const count = quickFilterCounts.get(filter.key) ?? 0;
-            const active = quickFilter === filter.key;
-            return (
-              <button
-                key={filter.key}
-                type="button"
-                onClick={() => setQuickFilter(filter.key)}
-                className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
-                  active
-                    ? "border-accent bg-accent-light text-accent-dark"
-                    : "border-ink/15 bg-white text-ink-soft hover:bg-surface-soft"
-                }`}
-              >
-                {filter.label}
-                {filter.key !== "all" && <span className="ml-1 tabular-nums opacity-70">{count}</span>}
-              </button>
-            );
-          })}
+        <select
+          value={quickFilter}
+          onChange={(event) => setQuickFilter(event.target.value as QuickFilter)}
+          className="h-9 rounded-lg border border-ink/15 bg-white px-2 text-xs font-semibold text-ink-soft"
+        >
+          <option value="all">Toate statusurile</option>
+          <option value="unassigned">Neasignate</option>
+          {OPERATIONAL_BUCKETS.map((bucket) => (
+            <option key={bucket} value={bucket}>
+              {operationalBucketMeta(bucket).label}
+            </option>
+          ))}
+        </select>
 
-          {supplierOptions.length > 1 && (
-            <select
-              value={supplierFilter}
-              onChange={(event) => setSupplierFilter(event.target.value)}
-              className="h-8 rounded-full border border-ink/15 bg-white px-3 text-xs font-semibold text-ink-soft"
-            >
-              <option value="all">Toți furnizorii</option>
-              {supplierOptions.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
+        {supplierOptions.length > 1 && (
+          <select
+            value={supplierFilter}
+            onChange={(event) => setSupplierFilter(event.target.value)}
+            className="h-9 rounded-lg border border-ink/15 bg-white px-2 text-xs font-semibold text-ink-soft"
+          >
+            <option value="all">Toți furnizorii</option>
+            {supplierOptions.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setFleetModalOpen(true)}
+          className="ml-auto flex h-9 items-center gap-1.5 rounded-lg border border-ink/15 bg-white px-3 text-xs font-semibold text-ink hover:bg-surface-soft"
+        >
+          <svg aria-hidden="true" viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6">
+            <path d="M3 6h14M3 10h14M3 14h8" strokeLinecap="round" />
+            <circle cx="15" cy="14" r="1.6" />
+          </svg>
+          Gestionează mașinile
+        </button>
       </div>
 
       {/* ----------------------------------------------------------- board */}
 
-      {/* Desktop / tablet landscape: full Kanban row. */}
-      <div className="hidden gap-3 overflow-x-auto pb-2 lg:flex">
+      {/* Desktop / tablet landscape: full-width Kanban row, up to 5 vans + Neasignate fit without horizontal scroll. */}
+      <div className="hidden gap-2 overflow-x-auto pb-2 lg:flex" style={{ height: "calc(100vh - 340px)", minHeight: "420px" }}>
         {initialColumns.map((column) => {
           const orders = visibleOrdersFor(column.key);
           const isOver = dragOverKey === column.key;
+          const borderClass =
+            column.key === "unassigned"
+              ? "border-t-state-warning bg-state-warning-soft/40"
+              : `${VAN_BORDER_CLASS[(column.colorKey as keyof typeof VAN_BORDER_CLASS) ?? "default"] ?? VAN_BORDER_CLASS.default} bg-surface-soft`;
           return (
-            <div key={column.key} className="w-72 flex-none rounded-2xl bg-surface-soft p-2">
+            <div
+              key={column.key}
+              className={`flex min-w-[190px] max-w-[260px] flex-1 basis-0 flex-col rounded-xl border-t-[3px] p-1.5 ${borderClass}`}
+            >
               {renderColumnHeader(column, orders)}
               {renderColumnBody(column, orders, isOver)}
             </div>
@@ -648,6 +689,13 @@ export function VehicleBoard({
               </button>
             );
           })}
+          <button
+            type="button"
+            onClick={() => setFleetModalOpen(true)}
+            className="flex-none rounded-full border border-ink/15 bg-white px-3 py-2 text-sm font-semibold text-ink-soft"
+          >
+            Mașini ⚙
+          </button>
         </div>
 
         {(() => {
@@ -655,7 +703,7 @@ export function VehicleBoard({
           if (!column) return null;
           const orders = visibleOrdersFor(column.key);
           return (
-            <div className="rounded-2xl bg-surface-soft p-2">
+            <div className="flex flex-col rounded-2xl bg-surface-soft p-2" style={{ height: "calc(100vh - 420px)", minHeight: "360px" }}>
               {renderColumnHeader(column, orders)}
               {renderColumnBody(column, orders, dragOverKey === column.key)}
             </div>
@@ -678,6 +726,14 @@ export function VehicleBoard({
           orders={columnsByKey[mapColumn.key] ?? []}
           depotLocation={depotLocation}
           onClose={() => setMapColumnKey(null)}
+        />
+      )}
+
+      {fleetModalOpen && (
+        <FleetManagementModal
+          vehicles={vehicles}
+          orderCounts={orderCountsByVehicle}
+          onClose={() => setFleetModalOpen(false)}
         />
       )}
     </section>

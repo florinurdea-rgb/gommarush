@@ -49,6 +49,7 @@ export default async function AdminDashboardPage() {
       name: "Neasignate",
       number: null,
       capacityUnits: null,
+      colorKey: null,
       orders: orders.filter((order) => !order.vehicle_id),
     },
     ...vehicles.map((vehicle, index) => ({
@@ -57,6 +58,7 @@ export default async function AdminDashboardPage() {
       name: vehicle.name,
       number: index + 1,
       capacityUnits: vehicle.capacity_units,
+      colorKey: vehicle.color_key,
       orders: orders.filter((order) => order.vehicle_id === vehicle.id),
     })),
   ];
@@ -74,7 +76,7 @@ export default async function AdminDashboardPage() {
         }
       />
 
-      <VehicleBoard columns={vehicleColumns} depotLocation={depotLocation} />
+      <VehicleBoard columns={vehicleColumns} vehicles={vehicles} depotLocation={depotLocation} />
     </>
   );
 }
