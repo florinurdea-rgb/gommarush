@@ -3,6 +3,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase/server-admin";
 import { PROFIT_PER_DELIVERED_TYRE_EUR } from "@/lib/logistics/summary-constants";
 import { listActiveOrders } from "@/lib/server/orders";
 import { operationalStatus } from "@/lib/logistics/operational-status";
+import { isMissingSchemaError } from "@/lib/server/schema-errors";
+import { logError } from "@/lib/logger";
 
 /**
  * "Sumar" — the period-scoped operational summary. Everything here is
@@ -46,6 +48,7 @@ export interface DeliveryRow {
 export interface VehicleSummaryRow {
   vehicleId: string;
   vehicleName: string;
+  colorKey: string | null;
   orders: number;
   tyres: number;
   profit: number;
@@ -68,6 +71,41 @@ function endOfDayIso(dateIso: string): string {
   return `${dateIso}T23:59:59.999`;
 }
 
+const UNITS_DELIVERED_SELECT =
+  "id, order_id, delivered_at, orders!inner ( order_number, status, customer_id, supplier_id, vehicle_id, customers ( name ), suppliers ( name ), vehicles ( name, color_key ) )";
+const UNITS_DELIVERED_SELECT_LEGACY =
+  "id, order_id, delivered_at, orders!inner ( order_number, status, customer_id, supplier_id, vehicle_id, customers ( name ), suppliers ( name ), vehicles ( name ) )";
+
+/** Falls back to a select without vehicles.color_key if the fleet-management migration hasn't run yet — Sumar just can't tint its vehicle tabs until it does. */
+async function queryDeliveredUnits(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  rangeStart: string,
+  rangeEnd: string
+) {
+  const primary = await supabase
+    .from("inventory_units")
+    .select(UNITS_DELIVERED_SELECT)
+    .eq("unit_type", "tyre")
+    .eq("status", "delivered")
+    .not("delivered_at", "is", null)
+    .gte("delivered_at", rangeStart)
+    .lte("delivered_at", rangeEnd);
+
+  if (isMissingSchemaError(primary.error)) {
+    logError("vehicles_color_key_column_missing_summary", primary.error);
+    return supabase
+      .from("inventory_units")
+      .select(UNITS_DELIVERED_SELECT_LEGACY)
+      .eq("unit_type", "tyre")
+      .eq("status", "delivered")
+      .not("delivered_at", "is", null)
+      .gte("delivered_at", rangeStart)
+      .lte("delivered_at", rangeEnd);
+  }
+
+  return primary;
+}
+
 export async function getOperationalSummary(startDate: string, endDate: string): Promise<OperationalSummary> {
   const supabase = createSupabaseAdminClient();
   const rangeStart = `${startDate}T00:00:00`;
@@ -87,16 +125,7 @@ export async function getOperationalSummary(startDate: string, endDate: string):
       .not("received_at", "is", null)
       .gte("received_at", rangeStart)
       .lte("received_at", rangeEnd),
-    supabase
-      .from("inventory_units")
-      .select(
-        "id, order_id, delivered_at, orders!inner ( order_number, status, customer_id, supplier_id, vehicle_id, customers ( name ), suppliers ( name ), vehicles ( name ) )"
-      )
-      .eq("unit_type", "tyre")
-      .eq("status", "delivered")
-      .not("delivered_at", "is", null)
-      .gte("delivered_at", rangeStart)
-      .lte("delivered_at", rangeEnd),
+    queryDeliveredUnits(supabase, rangeStart, rangeEnd),
     listActiveOrders(),
   ]);
 
@@ -156,7 +185,7 @@ export async function getOperationalSummary(startDate: string, endDate: string):
       vehicle_id: string | null;
       customers: { name: string } | null;
       suppliers: { name: string } | null;
-      vehicles: { name: string } | null;
+      vehicles: { name: string; color_key?: string | null } | null;
     } | null;
   };
   const deliveredUnits = ((unitsDeliveredResult.data ?? []) as unknown as RawDeliveredUnit[]).filter(
@@ -164,8 +193,10 @@ export async function getOperationalSummary(startDate: string, endDate: string):
   );
 
   const deliveryByOrder = new Map<string, DeliveryRow>();
+  const vehicleColorById = new Map<string, string | null>();
   for (const unit of deliveredUnits) {
     const order = unit.orders!;
+    if (order.vehicle_id) vehicleColorById.set(order.vehicle_id, order.vehicles?.color_key ?? null);
     const existing = deliveryByOrder.get(unit.order_id);
     if (existing) {
       existing.tyreCount += 1;
@@ -195,6 +226,7 @@ export async function getOperationalSummary(startDate: string, endDate: string):
     const existing = vehicleAgg.get(delivery.vehicleId) ?? {
       vehicleId: delivery.vehicleId,
       vehicleName: delivery.vehicleName ?? "—",
+      colorKey: vehicleColorById.get(delivery.vehicleId) ?? null,
       orders: 0,
       tyres: 0,
       profit: 0,

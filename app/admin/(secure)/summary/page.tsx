@@ -2,7 +2,6 @@ import { PageHeading } from "@/components/logistics/AdminShell";
 import { SummaryPeriodSelector } from "@/components/logistics/SummaryPeriodSelector";
 import { SummaryDashboard } from "@/components/logistics/SummaryDashboard";
 import { getOperationalSummary } from "@/lib/server/summary";
-import { listVehicles } from "@/lib/server/reference";
 import { resolvePeriod, PERIOD_OPTIONS } from "@/lib/logistics/summary-period";
 import type { PeriodKey } from "@/lib/logistics/summary-period";
 
@@ -32,10 +31,7 @@ export default async function SummaryPage({
   const periodKey: PeriodKey = VALID_PERIODS.has(params.period as PeriodKey) ? (params.period as PeriodKey) : "7d";
   const range = resolvePeriod(periodKey, new Date(), { start: params.start, end: params.end });
 
-  const [summary, vehicles] = await Promise.all([
-    getOperationalSummary(range.start, range.end),
-    listVehicles(),
-  ]);
+  const summary = await getOperationalSummary(range.start, range.end);
 
   const periodLabel =
     range.start === range.end ? formatDateRo(range.start) : `${formatDateRo(range.start)} – ${formatDateRo(range.end)}`;
@@ -48,11 +44,7 @@ export default async function SummaryPage({
         <SummaryPeriodSelector activePeriod={periodKey} />
       </div>
 
-      <SummaryDashboard
-        summary={summary}
-        vehicleOptions={vehicles.map((vehicle) => ({ id: vehicle.id, name: vehicle.name }))}
-        periodLabel={periodLabel}
-      />
+      <SummaryDashboard summary={summary} periodLabel={periodLabel} />
     </>
   );
 }

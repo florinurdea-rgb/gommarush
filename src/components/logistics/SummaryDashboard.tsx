@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { DeliveriesModal } from "@/components/logistics/DeliveriesModal";
+import { VAN_DOT_CLASS } from "@/lib/logistics/vehicle-colors";
 import type { OperationalSummary } from "@/lib/server/summary";
 
 function formatEuro(value: number): string {
@@ -17,20 +19,39 @@ function KpiCard({ value, label }: { value: string | number; label: string }) {
   );
 }
 
+/** AUTO_REFRESH_MS matches VehicleBoard's cadence — the same "stay current without a manual reload" behavior on both operational dashboards. */
+const AUTO_REFRESH_MS = 45_000;
+
 export function SummaryDashboard({
   summary,
-  vehicleOptions,
   periodLabel,
 }: {
   summary: OperationalSummary;
-  vehicleOptions: { id: string; name: string }[];
   periodLabel: string;
 }) {
+  const router = useRouter();
   const [activeVehicle, setActiveVehicle] = useState<string>("total");
   const [deliveriesOpen, setDeliveriesOpen] = useState(false);
 
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      if (deliveriesOpen) return;
+      router.refresh();
+    }, AUTO_REFRESH_MS);
+    return () => window.clearInterval(interval);
+  }, [router, deliveriesOpen]);
+
   const vehicleRowById = useMemo(
     () => new Map(summary.vehicles.map((row) => [row.vehicleId, row])),
+    [summary.vehicles]
+  );
+  // Vehicles rendered here (active or since-removed) come straight from what
+  // actually delivered tyres in the selected period — never a separately
+  // fetched "current fleet" list — so a van removed from active planning
+  // still shows its historical numbers instead of vanishing from Sumar.
+  const vehicleTabs = useMemo(
+    () => [...summary.vehicles].sort((a, b) => a.vehicleName.localeCompare(b.vehicleName, "ro")),
     [summary.vehicles]
   );
 
@@ -45,13 +66,12 @@ export function SummaryDashboard({
         }
       : (() => {
           const row = vehicleRowById.get(activeVehicle);
-          const vehicleName = vehicleOptions.find((v) => v.id === activeVehicle)?.name ?? "—";
           return {
             orders: row?.orders ?? 0,
             tyres: row?.tyres ?? 0,
             profit: row?.profit ?? 0,
             deliveries: summary.deliveries.filter((d) => d.vehicleId === activeVehicle),
-            label: vehicleName,
+            label: row?.vehicleName ?? "—",
           };
         })();
 
@@ -155,10 +175,10 @@ export function SummaryDashboard({
       </section>
 
       {/* ------------------------------------------------------ Vehicles */}
-      {vehicleOptions.length > 0 && (
+      {vehicleTabs.length > 0 && (
         <section className="mt-6">
           <h2 className="text-sm font-bold uppercase tracking-wide text-ink-soft">Pe mașină</h2>
-          <div className="mt-2 flex flex-wrap gap-1.5">
+          <div className="mt-2 flex flex-wrap gap-1.5 overflow-x-auto">
             <button
               type="button"
               onClick={() => setActiveVehicle("total")}
@@ -170,18 +190,22 @@ export function SummaryDashboard({
             >
               Total
             </button>
-            {vehicleOptions.map((vehicle) => (
+            {vehicleTabs.map((vehicle) => (
               <button
-                key={vehicle.id}
+                key={vehicle.vehicleId}
                 type="button"
-                onClick={() => setActiveVehicle(vehicle.id)}
-                className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${
-                  activeVehicle === vehicle.id
+                onClick={() => setActiveVehicle(vehicle.vehicleId)}
+                className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${
+                  activeVehicle === vehicle.vehicleId
                     ? "border-accent bg-accent-light text-accent-dark"
                     : "border-ink/15 bg-white text-ink-soft hover:bg-surface-soft"
                 }`}
               >
-                {vehicle.name}
+                <span
+                  className={`h-2 w-2 flex-none rounded-full ${VAN_DOT_CLASS[(vehicle.colorKey as keyof typeof VAN_DOT_CLASS) ?? "default"] ?? VAN_DOT_CLASS.default}`}
+                  aria-hidden="true"
+                />
+                {vehicle.vehicleName}
               </button>
             ))}
           </div>
