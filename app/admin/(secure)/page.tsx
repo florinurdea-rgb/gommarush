@@ -58,9 +58,14 @@ export default async function AdminDashboardPage() {
         title={t("ordersInProgress")}
         description={`${orders.length} comenzi active`}
         action={
-          <LinkButton href="/admin/orders/new" size="lg">
-            + {t("addOrder")}
-          </LinkButton>
+          <div className="flex items-center gap-2">
+            <LinkButton href="/admin/orders/import" variant="secondary" size="lg">
+              Import DDT
+            </LinkButton>
+            <LinkButton href="/admin/orders/new" size="lg">
+              + {t("addOrder")}
+            </LinkButton>
+          </div>
         }
       />
 
