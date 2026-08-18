@@ -161,6 +161,28 @@ export async function createVehicle(input: { name: string; registration?: string
       .insert({ name, registration: input.registration?.trim() || null, active: true })
       .select(VEHICLE_SELECT_NO_FLEET_COLS)
       .single();
+
+    if (isMissingSchemaError(fallback.error)) {
+      // capacity_units doesn't exist either — an even older DB state
+      // (20260818000000_vehicle_board.sql hasn't run either). Same
+      // insert, degrade the select further.
+      logError("vehicles_capacity_units_column_missing_on_insert", fallback.error);
+      const minimal = await supabase
+        .from("vehicles")
+        .insert({ name, registration: input.registration?.trim() || null, active: true })
+        .select(VEHICLE_SELECT_MINIMAL)
+        .single();
+      if (minimal.error) throw minimal.error;
+      const vehicle = {
+        ...(minimal.data as object),
+        capacity_units: null,
+        display_order: null,
+        color_key: null,
+      } as unknown as VehicleRow;
+      logEvent("vehicle_created", { vehicleId: vehicle.id, name });
+      return vehicle;
+    }
+
     if (fallback.error) throw fallback.error;
     const vehicle = { ...(fallback.data as object), display_order: null, color_key: null } as unknown as VehicleRow;
     logEvent("vehicle_created", { vehicleId: vehicle.id, name });
