@@ -6,23 +6,17 @@ import { PageHeading } from "@/components/logistics/AdminShell";
 import { VehicleBoard } from "@/components/logistics/VehicleBoard";
 import type { VehicleColumnData } from "@/components/logistics/VehicleBoard";
 import { NewOrderLauncher } from "@/components/logistics/NewOrderLauncher";
+import { DashboardLiveRefresh } from "@/components/logistics/DashboardLiveRefresh";
 import { freeStands } from "@/lib/logistics/stand-allocation";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 export const metadata = { title: "Livrări" };
 
 /**
- * "Livrări" — the default operational screen. Server-rendered on every
- * request (`force-dynamic`) so scans performed on the warehouse floor show
- * up on a refresh without any client-side polling.
- *
- * Fetches every active order once, unfiltered by date — VehicleBoard owns
- * the day-scoped view (date control, summary line, filters) entirely
- * client-side, so switching days never re-fetches or reloads the board.
- * Shows only the board itself: the stand board, print-job queue and the
- * flat orders table all still exist elsewhere (stands via each order's
- * detail page, print jobs at /admin/print-jobs), just not competing for
- * attention here.
+ * "Livrări" — the default operational screen. Server-rendered from the live
+ * database on every request. DashboardLiveRefresh keeps already-open copies
+ * on other devices converged as warehouse/admin activity changes the data.
  */
 export default async function AdminDashboardPage() {
   const [orders, stands, vehicles, depotLocation] = await Promise.all([
@@ -38,9 +32,6 @@ export default async function AdminDashboardPage() {
       .map((stand) => ({ id: stand.orderId!, stand_code: stand.standCode, status: stand.status! }))
   );
 
-  // "Neasignate" first so it's the obvious place to drag FROM; vehicles
-  // after, in the same name order listVehicles() already returns, numbered
-  // for the van icon's badge.
   const vehicleColumns: VehicleColumnData[] = [
     {
       key: "unassigned",
@@ -64,6 +55,7 @@ export default async function AdminDashboardPage() {
 
   return (
     <>
+      <DashboardLiveRefresh />
       <PageHeading
         title="Livrări"
         action={
