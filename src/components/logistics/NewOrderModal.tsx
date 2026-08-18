@@ -7,6 +7,8 @@ import { useToast } from "@/components/ui/Toast";
 import { OrderReviewForm } from "@/components/logistics/OrderReviewForm";
 import { UploadOrderPanel } from "@/components/logistics/UploadOrderPanel";
 import { emptyResult } from "@/lib/documents/analyzer";
+import { ddtDocumentToAnalysisResult } from "@/lib/ddt-import/to-analysis-result";
+import type { ProcessedDocumentWithMatch } from "@/lib/ddt-import/client-helpers";
 import type { OptionRef } from "@/components/logistics/NewOrderFlow";
 import type { StandCode } from "@/lib/types/logistics";
 
@@ -21,7 +23,7 @@ import type { StandCode } from "@/lib/types/logistics";
  * full page.
  */
 
-type Step = "choice" | "manual" | "upload";
+type Step = "choice" | "manual" | "upload" | "edit";
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -41,6 +43,10 @@ export function NewOrderModal({
   const router = useRouter();
   const { showToast } = useToast();
   const [step, setStep] = useState<Step>("choice");
+  const [editingDoc, setEditingDoc] = useState<{
+    doc: ProcessedDocumentWithMatch;
+    sourceDocumentId: string;
+  } | null>(null);
 
   return (
     <Modal onClose={onClose} size={step === "choice" ? "md" : "xl"} label="Comandă nouă / Nuovo ordine">
@@ -87,17 +93,46 @@ export function NewOrderModal({
           />
         )}
 
-        {step === "upload" && (
-          <UploadOrderPanel
-            onBack={() => setStep("choice")}
-            onDone={(createdCount) => {
+        {/* Kept mounted (just hidden) while "edit" is active, so a detour to
+            fix one document never loses the rest of an already-analyzed
+            batch — unmounting would reset UploadOrderPanel's own state. */}
+        {(step === "upload" || step === "edit") && (
+          <div className={step === "upload" ? "" : "hidden"}>
+            <UploadOrderPanel
+              onBack={() => setStep("choice")}
+              onDone={(createdCount) => {
+                onClose();
+                showToast(
+                  createdCount === 1
+                    ? "1 comandă adăugată în Așteaptă asignare."
+                    : `${createdCount} comenzi adăugate în Așteaptă asignare.`,
+                  "success"
+                );
+                router.refresh();
+              }}
+              onEditDocument={(doc, sourceDocumentId) => {
+                setEditingDoc({ doc, sourceDocumentId });
+                setStep("edit");
+              }}
+            />
+          </div>
+        )}
+
+        {step === "edit" && editingDoc && (
+          <OrderReviewForm
+            analysis={ddtDocumentToAnalysisResult(editingDoc.doc)}
+            customerMatch={editingDoc.doc.customerMatch}
+            documentId={editingDoc.sourceDocumentId}
+            sourceType="pdf"
+            plannedDate={todayIso()}
+            drivers={drivers}
+            vehicles={vehicles}
+            availableStands={availableStands}
+            onBack={() => setStep("upload")}
+            onSaved={(orderId) => {
               onClose();
-              showToast(
-                createdCount === 1
-                  ? "1 comandă adăugată în Așteaptă asignare."
-                  : `${createdCount} comenzi adăugate în Așteaptă asignare.`,
-                "success"
-              );
+              showToast("Comandă adăugată în Așteaptă asignare.", "success");
+              router.push(`/admin?created=${orderId}`);
               router.refresh();
             }}
           />

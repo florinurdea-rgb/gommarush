@@ -111,12 +111,14 @@ export function DdtImportFlow() {
       const payload = (await response.json()) as {
         ok: boolean;
         code?: string;
+        details?: string[];
         orderId?: string;
         orderNumber?: string;
       };
 
       if (!payload.ok || !payload.orderId) {
-        setConfirmErrors((current) => new Map(current).set(index, payload.code ?? "SAVE_FAILED"));
+        const detail = [payload.code ?? "SAVE_FAILED", ...(payload.details ?? [])].filter(Boolean).join(" — ");
+        setConfirmErrors((current) => new Map(current).set(index, detail));
         return;
       }
 

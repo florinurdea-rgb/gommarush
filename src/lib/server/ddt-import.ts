@@ -165,6 +165,11 @@ export async function analyzeDdtUpload(input: {
 
   const recentFingerprints = await getRecentFingerprints();
   const supplierCache = new Map<string, string>();
+  // A multi-DDT upload very often has several documents from the same
+  // supplier (see this function's own callers) — without this cache,
+  // getExistingOrderIdentities() re-ran the identical query once per
+  // document instead of once per DISTINCT supplier in the batch.
+  const existingOrdersBySupplier = new Map<string, Awaited<ReturnType<typeof getExistingOrderIdentities>>>();
 
   const processed: ProcessedDocumentWithMatch[] = [];
 
@@ -183,7 +188,11 @@ export async function analyzeDdtUpload(input: {
       }
     }
 
-    const existingOrders = supplierId ? await getExistingOrderIdentities(supplierId) : [];
+    let existingOrders: Awaited<ReturnType<typeof getExistingOrderIdentities>> = [];
+    if (supplierId) {
+      existingOrders = existingOrdersBySupplier.get(supplierId) ?? (await getExistingOrderIdentities(supplierId));
+      existingOrdersBySupplier.set(supplierId, existingOrders);
+    }
 
     const result = processExtractedDocument({
       extracted,

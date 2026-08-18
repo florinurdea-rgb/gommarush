@@ -43,7 +43,16 @@ interface AnalyzeResponse {
 
 type Phase = "pick" | "analyzing" | "review" | "importing";
 
-export function UploadOrderPanel({ onBack, onDone }: { onBack: () => void; onDone: (createdCount: number) => void }) {
+export function UploadOrderPanel({
+  onBack,
+  onDone,
+  onEditDocument,
+}: {
+  onBack: () => void;
+  onDone: (createdCount: number) => void;
+  /** "Editează și finalizează" — opens the manual form pre-filled with whatever this document DID extract. */
+  onEditDocument: (doc: ProcessedDocumentWithMatch, sourceDocumentId: string) => void;
+}) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [phase, setPhase] = useState<Phase>("pick");
   const [error, setError] = useState<string | null>(null);
@@ -129,9 +138,13 @@ export function UploadOrderPanel({ onBack, onDone }: { onBack: () => void; onDon
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ processed: doc, sourceDocumentId: result.documentId, ...customerResolution }),
         });
-        const payload = (await response.json()) as { ok: boolean; code?: string };
-        if (payload.ok) createdCount += 1;
-        else errors.push(`${doc.extracted.document.documentNumber ?? "DDT necunoscut"}: ${payload.code ?? "eroare"}`);
+        const payload = (await response.json()) as { ok: boolean; code?: string; details?: string[] };
+        if (payload.ok) {
+          createdCount += 1;
+        } else {
+          const detail = [payload.code, ...(payload.details ?? [])].filter(Boolean).join(" — ");
+          errors.push(`${doc.extracted.document.documentNumber ?? "DDT necunoscut"}: ${detail || "eroare"}`);
+        }
       } catch {
         errors.push(`${doc.extracted.document.documentNumber ?? "DDT necunoscut"}: eroare de rețea`);
       }
@@ -254,9 +267,23 @@ export function UploadOrderPanel({ onBack, onDone }: { onBack: () => void; onDon
             {documents.map((doc, index) => {
               const confirmable = canAutoConfirmDdtDocument(doc);
               const isExpanded = expanded.has(index);
+              const sizedItems = doc.physicalItems.filter((item) => item.raw.width && item.raw.rimDiameter);
+              const sizesLabel =
+                sizedItems.length > 0
+                  ? [
+                      ...new Set(
+                        sizedItems.map((item) => `${item.raw.width}/${item.raw.aspectRatio} R${item.raw.rimDiameter}`)
+                      ),
+                    ].join(", ")
+                  : null;
 
               return (
-                <div key={index} className="rounded-xl border border-ink/10 bg-white p-4">
+                <div
+                  key={index}
+                  className={`rounded-xl border bg-white p-4 ${
+                    confirmable ? "border-ink/10" : "border-state-warning/40 bg-state-warning-soft/20"
+                  }`}
+                >
                   <div className="flex items-start gap-3">
                     <input
                       type="checkbox"
@@ -265,24 +292,23 @@ export function UploadOrderPanel({ onBack, onDone }: { onBack: () => void; onDon
                       disabled={!confirmable || phase === "importing"}
                       onChange={() => toggleSelected(index)}
                     />
-                    <button
-                      type="button"
-                      onClick={() => toggleExpanded(index)}
-                      className="min-w-0 flex-1 text-left"
-                    >
+                    <button type="button" onClick={() => toggleExpanded(index)} className="min-w-0 flex-1 text-left">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-bold ${DDT_STATUS_TONE[doc.status]}`}>
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-bold ${DDT_STATUS_TONE[doc.status]}`}
+                        >
                           {DDT_STATUS_LABEL[doc.status]}
                         </span>
-                        <span className="font-mono text-sm font-bold text-ink">
+                        <span className="font-mono text-xs font-semibold text-ink-soft">
                           {doc.extracted.document.documentNumber ?? "DDT necunoscut"}
                         </span>
                       </div>
-                      <div className="mt-1 text-sm font-semibold text-ink">
+                      <div className="mt-1 truncate text-base font-bold text-ink">
                         {doc.extracted.customer.companyName ?? "Client necunoscut"}
-                        <span className="ml-2 font-normal text-ink-soft">
-                          {doc.extracted.supplier.name ?? "Furnizor necunoscut"}
-                        </span>
+                      </div>
+                      <div className="truncate text-xs text-ink-soft">
+                        {doc.extracted.supplier.name ?? "Furnizor necunoscut"}
+                        {doc.extracted.customer.city ? ` · ${doc.extracted.customer.city}` : ""}
                       </div>
                     </button>
                     <div className="flex-none text-right">
@@ -291,8 +317,29 @@ export function UploadOrderPanel({ onBack, onDone }: { onBack: () => void; onDon
                     </div>
                   </div>
 
+                  {sizesLabel && <div className="mt-2 pl-7 font-mono text-xs text-ink-soft">{sizesLabel}</div>}
+
+                  {!confirmable && (
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-state-warning/30 pt-3 pl-7">
+                      <span className="text-xs font-semibold text-state-warning">
+                        {doc.status === "DUPLICATE" || doc.status === "POSSIBLE_DUPLICATE"
+                          ? "Necesită decizie manuală înainte de import."
+                          : "Date lipsă — necesită completare manuală."}
+                      </span>
+                      {doc.status === "NEEDS_REVIEW" && (
+                        <button
+                          type="button"
+                          onClick={() => result?.documentId && onEditDocument(doc, result.documentId)}
+                          className="rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-white hover:bg-accent-dark"
+                        >
+                          Editează și finalizează →
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   {isExpanded && (
-                    <div className="mt-3 space-y-2 border-t border-ink/10 pt-3 text-sm">
+                    <div className="mt-3 space-y-2 border-t border-ink/10 pt-3 pl-7 text-sm">
                       {doc.reasons.length > 0 && (
                         <ul className="list-inside list-disc space-y-0.5 text-xs text-ink-soft">
                           {doc.reasons.map((reason) => (
@@ -305,12 +352,22 @@ export function UploadOrderPanel({ onBack, onDone }: { onBack: () => void; onDon
                         {doc.extracted.customer.city ? `, ${doc.extracted.customer.city}` : ""}
                       </div>
                       <ul className="space-y-1">
-                        {doc.physicalItems.map((item, itemIndex) => (
-                          <li key={itemIndex} className="flex items-center justify-between text-xs">
-                            <span className="min-w-0 truncate text-ink">{item.raw.rawDescription}</span>
-                            <span className="flex-none font-mono text-ink-soft">×{item.raw.quantity ?? "?"}</span>
-                          </li>
-                        ))}
+                        {doc.physicalItems.map((item, itemIndex) => {
+                          const size =
+                            item.raw.width && item.raw.rimDiameter
+                              ? `${item.raw.width}/${item.raw.aspectRatio} R${item.raw.rimDiameter}`
+                              : null;
+                          return (
+                            <li key={itemIndex} className="flex items-center justify-between gap-2 text-xs">
+                              <span className="min-w-0 truncate text-ink">
+                                {[item.raw.brand, size].filter(Boolean).join(" ") || item.raw.rawDescription}
+                              </span>
+                              <span className="flex-none font-mono text-ink-soft">
+                                ×{item.raw.quantity ?? "?"}
+                              </span>
+                            </li>
+                          );
+                        })}
                       </ul>
                     </div>
                   )}
