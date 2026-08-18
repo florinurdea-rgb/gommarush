@@ -5,8 +5,10 @@ import {
   cancelOrder,
   holdOrder,
   reactivateOrder,
+  setOrderStatusManually,
   updateOrder,
 } from "@/lib/server/orders";
+import { ORDER_STATUSES } from "@/lib/types/logistics";
 import { fail, ok, readJsonBody, runAdminRoute, zodDetails } from "@/lib/server/route-helpers";
 
 export const runtime = "nodejs";
@@ -44,7 +46,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const parsed = orderActionSchema.safeParse(body);
     if (!parsed.success) return fail(400, "VALIDATION_FAILED", zodDetails(parsed.error));
-    const { action, reason, stand_code, planned_delivery_date } = parsed.data;
+    const { action, reason, stand_code, planned_delivery_date, status } = parsed.data;
 
     switch (action) {
       case "hold": {
@@ -70,6 +72,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
         const result = await assignStand(id, stand_code ?? null, session.subject);
         if (!result.ok) return fail(409, result.code ?? "STAND_OCCUPIED");
         return ok({ orderId: id, standCode: stand_code ?? null });
+      }
+      case "set_status": {
+        if (!status || !(ORDER_STATUSES as readonly string[]).includes(status)) {
+          return fail(400, "VALIDATION_FAILED");
+        }
+        const result = await setOrderStatusManually(id, status as (typeof ORDER_STATUSES)[number], session.subject);
+        if (!result.ok) return fail(400, result.code ?? "UNKNOWN");
+        return ok({ orderId: id, status });
       }
       default:
         return fail(400, "VALIDATION_FAILED");

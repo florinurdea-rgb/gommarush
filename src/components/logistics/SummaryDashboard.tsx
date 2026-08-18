@@ -19,8 +19,8 @@ function KpiCard({ value, label }: { value: string | number; label: string }) {
   );
 }
 
-/** AUTO_REFRESH_MS matches VehicleBoard's cadence — the same "stay current without a manual reload" behavior on both operational dashboards. */
-const AUTO_REFRESH_MS = 45_000;
+/** Matches VehicleBoard's 12s cadence — the same near-live behavior on both operational dashboards, see its own comment for why 12s is the sweet spot here. */
+const AUTO_REFRESH_MS = 12_000;
 
 export function SummaryDashboard({
   summary,

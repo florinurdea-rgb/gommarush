@@ -553,6 +553,31 @@ export async function markOrderPrepared(orderId: string, changedBy: string): Pro
 }
 
 /**
+ * Manual status override from the Livrări board's card menu — the admin
+ * needs to be able to correct or advance an order's status directly,
+ * without walking through each intermediate scan/confirmation step.
+ *
+ * Deliberately restricted to ACTIVE_ORDER_STATUSES (open/in-progress
+ * statuses only): 'delivered'/'partially_delivered' must go through
+ * gorush_deliver_order instead, since that RPC also moves the matching
+ * inventory_units — setting the order status alone here would desync it
+ * from unit state and silently corrupt the Sumar "Anvelope livrate"/profit
+ * numbers (grounded in inventory_units.delivered_at, not order.status).
+ * 'cancelled' already has its own "Șterge" action; 'draft'/'review_required'
+ * don't apply to an order that already made it onto the board.
+ */
+export async function setOrderStatusManually(
+  orderId: string,
+  status: OrderStatus,
+  changedBy: string
+): Promise<StatusChangeResult> {
+  if (!ACTIVE_ORDER_STATUSES.includes(status)) {
+    return { ok: false, code: "STATUS_NOT_ALLOWED" };
+  }
+  return setStatus(orderId, status, { reason: "manual_override", changedBy });
+}
+
+/**
  * Brings an order back out of hold. The stand it used to hold may have been
  * taken meanwhile, so the RPC re-checks and reports a warning rather than
  * double-booking it.

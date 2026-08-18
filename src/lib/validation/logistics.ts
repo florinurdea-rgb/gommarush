@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ITEM_TYPES, STAND_CODES } from "@/lib/types/logistics";
+import { ITEM_TYPES, ORDER_STATUSES, STAND_CODES } from "@/lib/types/logistics";
 
 /**
  * Server-side validation for every logistics route.
@@ -218,6 +218,15 @@ export const reorderOrdersSchema = z
     orderedOrderIds: z.array(uuid).min(1).max(200),
   })
   .strict();
+
+/**
+ * The board card menu's manual status override. Accepts any known order
+ * status at the schema layer — the real gate (only ACTIVE_ORDER_STATUSES,
+ * i.e. not 'delivered'/'cancelled'/etc.) lives in
+ * setOrderStatusManually() itself, which is the single source of truth for
+ * which transitions are safe to make this way.
+ */
+export const changeOrderStatusSchema = z.object({ status: z.enum(ORDER_STATUSES) }).strict();
 
 const vehicleName = z.string().trim().min(1).max(60);
 

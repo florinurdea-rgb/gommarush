@@ -117,8 +117,16 @@ function matchesQuickFilter(order: OrderListRow, filter: QuickFilter): boolean {
   return operationalStatus(order.status, order.progress.problem > 0).bucket === filter;
 }
 
-/** Pauses on a hidden tab and while the user is mid-interaction (drag, an open drawer/modal) so a refresh never yanks something out from under them. */
-const AUTO_REFRESH_MS = 45_000;
+/**
+ * 12s: near-live without hammering the server — this is a low-concurrency
+ * internal admin tool (a handful of staff, not thousands of users), so a
+ * plain router.refresh() every 12s is cheap, and Next only re-runs the
+ * server component, it doesn't remount the page — client state (search
+ * text, open menus) survives every tick. Paused on a hidden tab and while
+ * the user is mid-interaction (drag, an open drawer/modal) so a refresh
+ * never yanks something out from under them.
+ */
+const AUTO_REFRESH_MS = 12_000;
 
 export function VehicleBoard({
   columns: initialColumns,
@@ -429,6 +437,7 @@ export function VehicleBoard({
             <VehicleCardActionsMenu
               orderId={order.id}
               orderLabel={formatOrderNumber(order.order_number)}
+              currentStatus={order.status}
               moveTargets={moveTargets}
               onAssignRecommended={() => handleAssignRecommended(order, columnKey)}
               onMoveTo={(targetKey) => moveOrderToColumn(order, columnKey, targetKey)}
