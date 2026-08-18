@@ -1,4 +1,3 @@
-import { listDrivers, listVehicles } from "@/lib/server/reference";
 import { listStandOverview } from "@/lib/server/stands";
 import { isAnalysisConfigured } from "@/lib/documents";
 import { PageHeading } from "@/components/logistics/AdminShell";
@@ -18,11 +17,7 @@ export const metadata = { title: "Adaugă comandă" };
  * invoice remains one order.
  */
 export default async function NewOrderPage() {
-  const [drivers, vehicles, stands] = await Promise.all([
-    listDrivers(),
-    listVehicles(),
-    listStandOverview(),
-  ]);
+  const stands = await listStandOverview();
 
   const available = freeStands(
     stands
@@ -37,12 +32,7 @@ export default async function NewOrderPage() {
         description="Încarcă documentul furnizorului, verifică datele extrase, apoi salvează comanda."
         back
       />
-      <NewOrderFlow
-        drivers={drivers.map((driver) => ({ id: driver.id, name: driver.name }))}
-        vehicles={vehicles.map((vehicle) => ({ id: vehicle.id, name: vehicle.name }))}
-        availableStands={available}
-        analysisConfigured={isAnalysisConfigured()}
-      />
+      <NewOrderFlow availableStands={available} analysisConfigured={isAnalysisConfigured()} />
     </>
   );
 }

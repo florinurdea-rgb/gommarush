@@ -2,19 +2,10 @@
 
 import { useState } from "react";
 import { NewOrderModal } from "@/components/logistics/NewOrderModal";
-import type { OptionRef } from "@/components/logistics/NewOrderFlow";
 import type { StandCode } from "@/lib/types/logistics";
 
 /** The dashboard's "+ Comandă nouă" button, plus the modal it opens. */
-export function NewOrderLauncher({
-  drivers,
-  vehicles,
-  availableStands,
-}: {
-  drivers: OptionRef[];
-  vehicles: OptionRef[];
-  availableStands: StandCode[];
-}) {
+export function NewOrderLauncher({ availableStands }: { availableStands: StandCode[] }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -26,14 +17,7 @@ export function NewOrderLauncher({
       >
         + Comandă nouă
       </button>
-      {open && (
-        <NewOrderModal
-          drivers={drivers}
-          vehicles={vehicles}
-          availableStands={availableStands}
-          onClose={() => setOpen(false)}
-        />
-      )}
+      {open && <NewOrderModal availableStands={availableStands} onClose={() => setOpen(false)} />}
     </>
   );
 }

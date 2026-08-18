@@ -28,8 +28,6 @@ export interface OptionRef {
 }
 
 interface NewOrderFlowProps {
-  drivers: OptionRef[];
-  vehicles: OptionRef[];
   availableStands: StandCode[];
   analysisConfigured: boolean;
 }
@@ -43,8 +41,6 @@ function isoDateOffset(days: number): string {
 const ACCEPTED = ".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.docx,application/pdf,image/*";
 
 export function NewOrderFlow({
-  drivers,
-  vehicles,
   availableStands,
   analysisConfigured,
 }: NewOrderFlowProps) {
@@ -210,8 +206,6 @@ export function NewOrderFlow({
       documentId={documentId}
       sourceType={sourceType}
       plannedDate={plannedDate}
-      drivers={drivers}
-      vehicles={vehicles}
       availableStands={availableStands}
       onBack={() => setStep("method")}
       onSaved={(orderId) => {

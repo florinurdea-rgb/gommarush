@@ -10,7 +10,6 @@ import { CustomerPickerField } from "@/components/logistics/CustomerPickerField"
 import type { AnalysisResult, ExtractedProductLine } from "@/lib/documents/analyzer";
 import type { CustomerMatchResult, LocationResolution } from "@/lib/logistics/customer-matching";
 import type { CustomerLocationRow, CustomerRow, ItemType, StandCode } from "@/lib/types/logistics";
-import type { OptionRef } from "@/components/logistics/NewOrderFlow";
 
 /**
  * The review screen: everything extracted, fully editable, before anything is
@@ -38,8 +37,6 @@ interface OrderReviewFormProps {
   documentId: string | null;
   sourceType: string;
   plannedDate: string;
-  drivers: OptionRef[];
-  vehicles: OptionRef[];
   availableStands: StandCode[];
   onBack: () => void;
   onSaved: (orderId: string) => void;
@@ -83,8 +80,6 @@ export function OrderReviewForm({
   documentId,
   sourceType,
   plannedDate,
-  drivers,
-  vehicles,
   availableStands,
   onBack,
   onSaved,
@@ -202,10 +197,10 @@ export function OrderReviewForm({
   const [paymentMethod, setPaymentMethod] = useState(analysis.payment.paymentMethod ?? "");
 
   // --- Assignment -------------------------------------------------------
+  // Driver/vehicle deliberately not asked here — see the Assignment
+  // section's own comment below.
   const [deliveryDate, setDeliveryDate] = useState(plannedDate);
   const [standCode, setStandCode] = useState<string>("");
-  const [driverId, setDriverId] = useState("");
-  const [vehicleId, setVehicleId] = useState("");
 
   // --- Products ---------------------------------------------------------
   const [lines, setLines] = useState<EditableLine[]>(() =>
@@ -285,8 +280,8 @@ export function OrderReviewForm({
         planned_delivery_date: deliveryDate || null,
         stand_code: standCode || null,
         auto_allocate_stand: !standCode,
-        driver_id: driverId || null,
-        vehicle_id: vehicleId || null,
+        // driver_id/vehicle_id deliberately omitted — assignment happens
+        // later, on the Livrări board.
 
         requires_payment_on_delivery: requiresPayment,
         payment_method: paymentMethod.trim() || null,
@@ -639,8 +634,13 @@ export function OrderReviewForm({
       </Section>
 
       {/* -------------------------------------------------------- Assignment */}
+      {/* Driver/vehicle on purpose NOT here: that assignment happens after
+          the order exists, on the Livrări board (drag from "Neasignate" or
+          "Optimizează rutele") — asking for it again at creation time would
+          just duplicate that flow with a second, easier-to-forget place to
+          set it. */}
       <Section title={t("assignment")}>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label className={labelClass} htmlFor="delivery-date">{t("plannedDate")}</label>
             <input id="delivery-date" type="date" className={inputClass} value={deliveryDate}
@@ -656,26 +656,6 @@ export function OrderReviewForm({
                   {code}
                   {availableStands.includes(code) ? "" : " — ocupat"}
                 </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="driver">{t("driver")}</label>
-            <select id="driver" className={inputClass} value={driverId}
-              onChange={(event) => setDriverId(event.target.value)}>
-              <option value="">—</option>
-              {drivers.map((driver) => (
-                <option key={driver.id} value={driver.id}>{driver.name}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="vehicle">{t("vehicle")}</label>
-            <select id="vehicle" className={inputClass} value={vehicleId}
-              onChange={(event) => setVehicleId(event.target.value)}>
-              <option value="">—</option>
-              {vehicles.map((vehicle) => (
-                <option key={vehicle.id} value={vehicle.id}>{vehicle.name}</option>
               ))}
             </select>
           </div>

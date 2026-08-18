@@ -9,7 +9,6 @@ import { UploadOrderPanel } from "@/components/logistics/UploadOrderPanel";
 import { emptyResult } from "@/lib/documents/analyzer";
 import { ddtDocumentToAnalysisResult } from "@/lib/ddt-import/to-analysis-result";
 import type { ProcessedDocumentWithMatch } from "@/lib/ddt-import/client-helpers";
-import type { OptionRef } from "@/components/logistics/NewOrderFlow";
 import type { StandCode } from "@/lib/types/logistics";
 
 /**
@@ -30,13 +29,9 @@ function todayIso(): string {
 }
 
 export function NewOrderModal({
-  drivers,
-  vehicles,
   availableStands,
   onClose,
 }: {
-  drivers: OptionRef[];
-  vehicles: OptionRef[];
   availableStands: StandCode[];
   onClose: () => void;
 }) {
@@ -80,8 +75,6 @@ export function NewOrderModal({
             documentId={null}
             sourceType="manual"
             plannedDate={todayIso()}
-            drivers={drivers}
-            vehicles={vehicles}
             availableStands={availableStands}
             onBack={() => setStep("choice")}
             onSaved={(orderId) => {
@@ -125,8 +118,6 @@ export function NewOrderModal({
             documentId={editingDoc.sourceDocumentId}
             sourceType="pdf"
             plannedDate={todayIso()}
-            drivers={drivers}
-            vehicles={vehicles}
             availableStands={availableStands}
             onBack={() => setStep("upload")}
             onSaved={(orderId) => {

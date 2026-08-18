@@ -1,5 +1,5 @@
 import { listActiveOrders } from "@/lib/server/orders";
-import { listDrivers, listVehicles } from "@/lib/server/reference";
+import { listVehicles } from "@/lib/server/reference";
 import { listStandOverview } from "@/lib/server/stands";
 import { getDepotLocation } from "@/lib/server/settings";
 import { PageHeading } from "@/components/logistics/AdminShell";
@@ -25,11 +25,10 @@ export const metadata = { title: "Livrări" };
  * attention here.
  */
 export default async function AdminDashboardPage() {
-  const [orders, stands, vehicles, drivers, depotLocation] = await Promise.all([
+  const [orders, stands, vehicles, depotLocation] = await Promise.all([
     listActiveOrders(),
     listStandOverview(),
     listVehicles(),
-    listDrivers(),
     getDepotLocation(),
   ]);
 
@@ -68,11 +67,7 @@ export default async function AdminDashboardPage() {
       <PageHeading
         title="Livrări"
         action={
-          <NewOrderLauncher
-            drivers={drivers.map((driver) => ({ id: driver.id, name: driver.name }))}
-            vehicles={vehicles.map((vehicle) => ({ id: vehicle.id, name: vehicle.name }))}
-            availableStands={available}
-          />
+          <NewOrderLauncher availableStands={available} />
         }
       />
 
