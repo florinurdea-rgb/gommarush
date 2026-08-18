@@ -20,6 +20,8 @@ const SAMPLE = {
   unit_index: 2,
   unit_total: 4,
   item_type: "tyre",
+  supplier: "Carlini Gomme Srl",
+  delivery_address: "Via Santa Fosca 25, Vicenza",
 };
 
 const outputDir = resolve(process.env.OUTPUT_DIR ?? "./output");

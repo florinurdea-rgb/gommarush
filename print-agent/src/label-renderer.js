@@ -184,6 +184,28 @@ export async function renderLabelPdf(labelData, options = {}) {
       .text(`Obiect ${labelData.unit_index} / ${labelData.unit_total}`, margin, cursorY, {
         width: textWidth,
       });
+    cursorY += 11;
+  }
+
+  // Supplier + delivery address: only present on labels queued from the
+  // "Pregătește comanda" flow (src/lib/server/prepare-order.ts in the web
+  // app) — a deliberate exception to keeping addresses off labels in
+  // general, made explicitly by the user for that flow. Absent on every
+  // other label (e.g. the receiving-time one), so these stay optional.
+  if (labelData.supplier) {
+    document
+      .font("Helvetica")
+      .fontSize(8)
+      .text(truncate(labelData.supplier, 34), margin, cursorY, { width: textWidth });
+    cursorY += 10;
+  }
+
+  if (labelData.delivery_address) {
+    document
+      .font("Helvetica")
+      .fontSize(8)
+      .text(truncate(labelData.delivery_address, 46), margin, cursorY, { width: textWidth });
+    cursorY += 10;
   }
 
   // ---- Machine-readable block along the bottom ---------------------------

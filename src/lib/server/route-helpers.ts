@@ -102,6 +102,32 @@ export async function runWarehouseRoute(
   }
 }
 
+/**
+ * Extracts a human-useful detail string from whatever got thrown, WITHOUT
+ * relying on `instanceof Error` — Supabase/PostgREST errors do extend
+ * Error in the installed version, but that check has still been observed
+ * to fail here (a Next.js route handler bundles server code per-route, and
+ * a class identity check can fail across that boundary even for a
+ * genuinely Error-descended object). Duck-typing the fields PostgrestError
+ * actually carries (code/message/details/hint) works regardless of the
+ * prototype chain, and `hint` in particular is often the actually-useful
+ * field per Supabase's own docs — logging only `.message` misses it.
+ */
+export function describeError(error: unknown): string[] {
+  if (error && typeof error === "object") {
+    const candidate = error as { code?: unknown; message?: unknown; details?: unknown; hint?: unknown };
+    const parts = [
+      typeof candidate.code === "string" ? `[${candidate.code}]` : null,
+      typeof candidate.message === "string" ? candidate.message : null,
+      typeof candidate.details === "string" ? candidate.details : null,
+      typeof candidate.hint === "string" ? `hint: ${candidate.hint}` : null,
+    ].filter((part): part is string => Boolean(part));
+    if (parts.length > 0) return [parts.join(" — ")];
+  }
+  if (typeof error === "string" && error.trim()) return [error];
+  return ["eroare necunoscută"];
+}
+
 export function handleRouteError(error: unknown): NextResponse<ApiError> {
   if (error instanceof UnauthorizedError) {
     return fail(401, "UNAUTHORIZED");
@@ -115,7 +141,7 @@ export function handleRouteError(error: unknown): NextResponse<ApiError> {
   }
 
   logError("route_unhandled_error", error);
-  return fail(500, "UNKNOWN");
+  return fail(500, "UNKNOWN", describeError(error));
 }
 
 /** Flattens a Zod error into safe field paths — never the submitted values. */

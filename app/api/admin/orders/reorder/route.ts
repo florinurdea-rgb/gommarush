@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { reorderOrdersSchema } from "@/lib/validation/logistics";
 import { reorderVehicleColumn } from "@/lib/server/orders";
-import { fail, ok, readJsonBody, runAdminRoute, zodDetails } from "@/lib/server/route-helpers";
+import { describeError, fail, ok, readJsonBody, runAdminRoute, zodDetails } from "@/lib/server/route-helpers";
 import { logError } from "@/lib/logger";
 
 export const runtime = "nodejs";
@@ -28,11 +28,7 @@ export async function POST(request: NextRequest) {
       // way once before (missing delivery_sequence column) and the generic
       // 500 gave no way to tell that apart from a genuinely new failure.
       logError("orders_reorder_failed", error);
-      const pgError = error as { code?: string; message?: string } | null;
-      return fail(500, "REORDER_FAILED", [
-        pgError?.code ? `Postgres ${pgError.code}` : "eroare necunoscută",
-        pgError?.message ?? "",
-      ].filter(Boolean));
+      return fail(500, "REORDER_FAILED", describeError(error));
     }
 
     return ok({});

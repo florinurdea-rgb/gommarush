@@ -4,7 +4,8 @@ import { locationResolutionSchema } from "@/lib/validation/logistics";
 import { confirmDdtDocument } from "@/lib/server/ddt-import";
 import type { ProcessedDocumentWithMatch } from "@/lib/server/ddt-import";
 import type { CustomerInput } from "@/lib/server/customers";
-import { fail, ok, readJsonBody, runAdminRoute, zodDetails } from "@/lib/server/route-helpers";
+import { describeError, fail, ok, readJsonBody, runAdminRoute, zodDetails } from "@/lib/server/route-helpers";
+import { logError } from "@/lib/logger";
 
 export const runtime = "nodejs";
 
@@ -55,7 +56,8 @@ export async function POST(request: NextRequest) {
 
       return ok({ ...result }, 201);
     } catch (error) {
-      return fail(500, "SAVE_FAILED", [error instanceof Error ? error.message : "UNKNOWN"]);
+      logError("ddt_confirm_failed", error, { sourceDocumentId: parsed.data.sourceDocumentId });
+      return fail(500, "SAVE_FAILED", describeError(error));
     }
   });
 }
