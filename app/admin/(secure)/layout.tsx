@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getAdminSession } from "@/lib/auth/admin-session";
 import { AdminShell } from "@/components/logistics/AdminShell";
+import { ToastProvider } from "@/components/ui/Toast";
 
 export const dynamic = "force-dynamic";
 
@@ -20,5 +21,9 @@ export default async function SecureAdminLayout({ children }: { children: React.
   const session = await getAdminSession();
   if (!session) redirect("/admin/login");
 
-  return <AdminShell displayName={session.displayName}>{children}</AdminShell>;
+  return (
+    <ToastProvider>
+      <AdminShell displayName={session.displayName}>{children}</AdminShell>
+    </ToastProvider>
+  );
 }

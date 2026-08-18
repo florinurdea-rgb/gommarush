@@ -1,14 +1,11 @@
-import Link from "next/link";
 import { listActiveOrders } from "@/lib/server/orders";
-import { countPendingPrintJobs } from "@/lib/server/print-jobs";
+import { listDrivers, listVehicles } from "@/lib/server/reference";
 import { listStandOverview } from "@/lib/server/stands";
-import { listVehicles } from "@/lib/server/reference";
 import { PageHeading } from "@/components/logistics/AdminShell";
-import { OrdersTable } from "@/components/logistics/OrdersTable";
-import { StandBoard } from "@/components/logistics/StandBoard";
 import { VehicleBoard } from "@/components/logistics/VehicleBoard";
 import type { VehicleColumnData } from "@/components/logistics/VehicleBoard";
-import { LinkButton } from "@/components/LinkButton";
+import { NewOrderLauncher } from "@/components/logistics/NewOrderLauncher";
+import { freeStands } from "@/lib/logistics/stand-allocation";
 import { t } from "@/lib/i18n/logistics";
 
 export const dynamic = "force-dynamic";
@@ -19,25 +16,35 @@ export const metadata = { title: "Comenzi în curs" };
  * scans performed on the warehouse floor show up on a refresh without any
  * client-side polling — the simple invalidation strategy the brief asks for
  * rather than an over-engineered subscription.
+ *
+ * Shows only the vehicle board, per the "vreau sa vad doar coloanele fara
+ * restul si vreau sa fie clare vizual" brief — the stand board, print-job
+ * queue and the flat orders table all still exist (stands via each order's
+ * detail page, print jobs at /admin/print-jobs), just not competing for
+ * attention here.
  */
 export default async function AdminDashboardPage() {
-  const [orders, stands, pendingPrintJobs, vehicles] = await Promise.all([
+  const [orders, stands, vehicles, drivers] = await Promise.all([
     listActiveOrders(),
     listStandOverview(),
-    countPendingPrintJobs(),
     listVehicles(),
+    listDrivers(),
   ]);
 
-  const unassigned = orders.filter((order) => !order.stand_code).length;
+  const available = freeStands(
+    stands
+      .filter((stand) => stand.orderId && stand.status)
+      .map((stand) => ({ id: stand.orderId!, stand_code: stand.standCode, status: stand.status! }))
+  );
 
-  // "Neasignat" first so it's the obvious place to drag FROM; vehicles after,
-  // in the same name order listVehicles() already returns, numbered for the
-  // van icon's badge.
+  // "Așteaptă asignare" first so it's the obvious place to drag FROM;
+  // vehicles after, in the same name order listVehicles() already returns,
+  // numbered for the van icon's badge.
   const vehicleColumns: VehicleColumnData[] = [
     {
       key: "unassigned",
       vehicleId: null,
-      name: "Neasignat",
+      name: "Așteaptă asignare",
       number: null,
       capacityUnits: null,
       orders: orders.filter((order) => !order.vehicle_id),
@@ -58,43 +65,15 @@ export default async function AdminDashboardPage() {
         title={t("ordersInProgress")}
         description={`${orders.length} comenzi active`}
         action={
-          <div className="flex items-center gap-2">
-            <LinkButton href="/admin/orders/import" variant="secondary" size="lg">
-              Import DDT
-            </LinkButton>
-            <LinkButton href="/admin/orders/new" size="lg">
-              + {t("addOrder")}
-            </LinkButton>
-          </div>
+          <NewOrderLauncher
+            drivers={drivers.map((driver) => ({ id: driver.id, name: driver.name }))}
+            vehicles={vehicles.map((vehicle) => ({ id: vehicle.id, name: vehicle.name }))}
+            availableStands={available}
+          />
         }
       />
 
       <VehicleBoard columns={vehicleColumns} />
-
-      <StandBoard stands={stands} />
-
-      {unassigned > 0 && (
-        <div
-          role="alert"
-          className="mb-5 rounded-xl border border-state-warning/30 bg-state-warning-soft px-4 py-3 text-sm font-semibold text-state-warning"
-        >
-          {unassigned === 1
-            ? "O comandă activă nu are stativ alocat."
-            : `${unassigned} comenzi active nu au stativ alocat.`}{" "}
-          Alocă manual din pagina comenzii.
-        </div>
-      )}
-
-      {pendingPrintJobs > 0 && (
-        <div className="mb-5 rounded-xl border border-ink/10 bg-white px-4 py-3 text-sm text-ink-soft">
-          {pendingPrintJobs} etichete în coada de printare.{" "}
-          <Link href="/admin/print-jobs" className="font-semibold text-accent hover:underline">
-            Vezi coada
-          </Link>
-        </div>
-      )}
-
-      <OrdersTable orders={orders} variant="active" />
     </>
   );
 }

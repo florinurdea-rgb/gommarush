@@ -5,8 +5,13 @@ import { useRouter } from "next/navigation";
 import { VehicleIcon } from "@/components/logistics/VehicleIcon";
 import { OrderStatusBadge } from "@/components/logistics/StatusBadge";
 import { OrderDetailModal } from "@/components/logistics/OrderDetailModal";
+import { VehicleCardActionsMenu } from "@/components/logistics/VehicleCardActionsMenu";
+import { RouteStopsModal } from "@/components/logistics/RouteStopsModal";
+import { useToast } from "@/components/ui/Toast";
 import { formatOrderNumber } from "@/lib/logistics/order-number";
 import { computeVehicleLoad, moveOrderBetweenColumns } from "@/lib/logistics/vehicle-board";
+import { suggestRouteAssignments, suggestRouteForOrder } from "@/lib/logistics/route-suggestion";
+import type { RoutableOrder, RoutableVehicle } from "@/lib/logistics/route-suggestion";
 import type { OrderListRow } from "@/lib/server/orders";
 
 /**
@@ -43,8 +48,13 @@ function formatDate(value: string | null): string {
   return new Intl.DateTimeFormat("ro-RO", { day: "2-digit", month: "short" }).format(date);
 }
 
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export function VehicleBoard({ columns: initialColumns }: { columns: VehicleColumnData[] }) {
   const router = useRouter();
+  const { showToast } = useToast();
   const [columnsByKey, setColumnsByKey] = useState<Record<string, OrderListRow[]>>(() =>
     Object.fromEntries(initialColumns.map((column) => [column.key, column.orders]))
   );
@@ -52,6 +62,8 @@ export function VehicleBoard({ columns: initialColumns }: { columns: VehicleColu
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openOrderId, setOpenOrderId] = useState<string | null>(null);
+  const [mapColumnKey, setMapColumnKey] = useState<string | null>(null);
+  const [occupancyDate, setOccupancyDate] = useState<string>(todayIso());
   // Suppresses the click that would otherwise open the modal right after a
   // real drag-and-drop — see the click handler below.
   const justDraggedRef = useRef(false);
@@ -80,6 +92,17 @@ export function VehicleBoard({ columns: initialColumns }: { columns: VehicleColu
     [router]
   );
 
+  /** Vehicles as route-suggestion input, load taken from the live board state (not the server snapshot). */
+  const routableVehicles = useCallback((): RoutableVehicle[] => {
+    return initialColumns
+      .filter((column) => column.vehicleId !== null)
+      .map((column) => ({
+        id: column.vehicleId as string,
+        currentLoad: (columnsByKey[column.key] ?? []).reduce((sum, order) => sum + order.progress.total, 0),
+        capacityUnits: column.capacityUnits,
+      }));
+  }, [initialColumns, columnsByKey]);
+
   function handleDrop(toKey: string, toIndex: number) {
     setDragOverKey(null);
     if (!drag) return;
@@ -97,12 +120,133 @@ export function VehicleBoard({ columns: initialColumns }: { columns: VehicleColu
         targetVehicleId,
         next[toKey].map((order) => order.id)
       );
+      if (fromKey !== toKey) {
+        const targetName = columnMeta.get(toKey)?.name ?? "coloană";
+        showToast(`Comandă mutată pe ${targetName}.`, "success");
+      }
       return next;
     });
   }
 
+  function handleAssignRecommended(order: OrderListRow, fromKey: string) {
+    const vehicles = routableVehicles();
+    if (vehicles.length === 0) {
+      showToast("Nicio mașină disponibilă pentru sugestie.", "error");
+      return;
+    }
+    const routableOrder: RoutableOrder = {
+      id: order.id,
+      city: order.customer_city,
+      unitCount: order.progress.total,
+    };
+    const suggestedVehicleId = suggestRouteForOrder(routableOrder, vehicles);
+    if (!suggestedVehicleId) {
+      showToast("Nicio mașină disponibilă pentru sugestie.", "error");
+      return;
+    }
+    if (suggestedVehicleId === fromKey) {
+      showToast("Comanda este deja pe ruta recomandată.", "info");
+      return;
+    }
+
+    setColumnsByKey((current) => {
+      const toIndex = current[suggestedVehicleId]?.length ?? 0;
+      const next = moveOrderBetweenColumns(current, order.id, fromKey, suggestedVehicleId, toIndex);
+      void commitColumn(
+        suggestedVehicleId,
+        next[suggestedVehicleId].map((o) => o.id)
+      );
+      return next;
+    });
+
+    const vehicleName = columnMeta.get(suggestedVehicleId)?.name ?? "mașină";
+    showToast(`Comandă mutată pe ${vehicleName} (rută recomandată).`, "success");
+  }
+
+  function handleBulkAssignRecommended() {
+    const unassignedOrders = columnsByKey["unassigned"] ?? [];
+    if (unassignedOrders.length === 0) {
+      showToast("Nu există comenzi în Așteaptă asignare.", "info");
+      return;
+    }
+    const vehicles = routableVehicles();
+    if (vehicles.length === 0) {
+      showToast("Nicio mașină disponibilă pentru sugestie.", "error");
+      return;
+    }
+
+    const routableOrders: RoutableOrder[] = unassignedOrders.map((order) => ({
+      id: order.id,
+      city: order.customer_city,
+      unitCount: order.progress.total,
+    }));
+    const assignments = suggestRouteAssignments(routableOrders, vehicles);
+    if (assignments.length === 0) {
+      showToast("Nicio sugestie disponibilă.", "info");
+      return;
+    }
+
+    setColumnsByKey((current) => {
+      const assignedIds = new Set(assignments.map((a) => a.orderId));
+      const byOrderId = new Map(unassignedOrders.map((order) => [order.id, order]));
+      const byVehicle = new Map<string, string[]>();
+      for (const assignment of assignments) {
+        const list = byVehicle.get(assignment.vehicleId) ?? [];
+        list.push(assignment.orderId);
+        byVehicle.set(assignment.vehicleId, list);
+      }
+
+      const next: Record<string, OrderListRow[]> = {
+        ...current,
+        unassigned: (current["unassigned"] ?? []).filter((order) => !assignedIds.has(order.id)),
+      };
+
+      for (const [vehicleId, orderIds] of byVehicle) {
+        const moved = orderIds.map((id) => byOrderId.get(id)).filter((o): o is OrderListRow => Boolean(o));
+        next[vehicleId] = [...(next[vehicleId] ?? []), ...moved];
+        void commitColumn(
+          vehicleId,
+          next[vehicleId].map((o) => o.id)
+        );
+      }
+
+      return next;
+    });
+
+    showToast(
+      assignments.length === 1
+        ? "1 comandă asignată în ruta recomandată."
+        : `${assignments.length} comenzi asignate în rutele recomandate.`,
+      "success"
+    );
+  }
+
+  const mapColumn = mapColumnKey ? columnMeta.get(mapColumnKey) : null;
+
   return (
     <section aria-label="Mașini" className="mb-8">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-sm text-ink-soft">
+          <label htmlFor="occupancy-date" className="font-semibold">
+            Ocupare pentru ziua:
+          </label>
+          <input
+            id="occupancy-date"
+            type="date"
+            value={occupancyDate}
+            onChange={(event) => setOccupancyDate(event.target.value)}
+            className="h-9 rounded-lg border border-ink/15 px-2 text-sm text-ink"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={handleBulkAssignRecommended}
+          className="h-10 rounded-xl bg-accent px-4 text-sm font-bold text-white hover:bg-accent-dark"
+        >
+          Asignează toate comenzile rute recomandate
+        </button>
+      </div>
+
       {error && (
         <p role="alert" className="mb-3 rounded-lg bg-state-danger-soft px-3 py-2 text-sm font-semibold text-state-danger">
           {error}
@@ -114,6 +258,11 @@ export function VehicleBoard({ columns: initialColumns }: { columns: VehicleColu
           const orders = columnsByKey[column.key] ?? [];
           const unitCount = orders.reduce((sum, order) => sum + order.progress.total, 0);
           const stats = computeVehicleLoad(orders.length, unitCount, column.capacityUnits);
+
+          const dayOrders = orders.filter((order) => order.planned_delivery_date === occupancyDate);
+          const dayUnitCount = dayOrders.reduce((sum, order) => sum + order.progress.total, 0);
+          const dayStats = computeVehicleLoad(dayOrders.length, dayUnitCount, column.capacityUnits);
+
           const isOver = dragOverKey === column.key;
 
           return (
@@ -157,6 +306,24 @@ export function VehicleBoard({ columns: initialColumns }: { columns: VehicleColu
                   <div className="mt-1.5 text-xs font-semibold text-state-warning">
                     ⟲ {stats.returnTrips} {stats.returnTrips === 1 ? "revenire" : "reveniri"} la hală
                   </div>
+                )}
+
+                {column.vehicleId !== null && (
+                  <div className="mt-1.5 text-[11px] text-ink-soft">
+                    {formatDate(occupancyDate)}: {dayStats.orderCount}{" "}
+                    {dayStats.orderCount === 1 ? "comandă" : "comenzi"}
+                    {dayStats.occupancyPercent !== null && ` · ${dayStats.occupancyPercent}%`}
+                  </div>
+                )}
+
+                {column.vehicleId !== null && (
+                  <button
+                    type="button"
+                    onClick={() => setMapColumnKey(column.key)}
+                    className="mt-1.5 text-xs font-semibold text-accent hover:underline"
+                  >
+                    Hartă
+                  </button>
                 )}
               </div>
 
@@ -203,11 +370,26 @@ export function VehicleBoard({ columns: initialColumns }: { columns: VehicleColu
                       <span className="font-mono text-xs font-semibold text-ink-soft">
                         {formatOrderNumber(order.order_number)}
                       </span>
-                      <OrderStatusBadge status={order.status} size="sm" />
+                      <div className="flex items-center gap-1">
+                        <OrderStatusBadge status={order.status} size="sm" />
+                        <VehicleCardActionsMenu
+                          orderId={order.id}
+                          orderLabel={formatOrderNumber(order.order_number)}
+                          onAssignRecommended={() => handleAssignRecommended(order, column.key)}
+                        />
+                      </div>
                     </div>
                     <div className="mt-1.5 truncate text-sm font-bold text-ink">
                       {order.customer_name ?? "—"}
                     </div>
+                    {order.supplier_name && (
+                      <span className="mt-1 inline-flex max-w-full truncate rounded-md bg-state-neutral-soft px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-state-neutral">
+                        {order.supplier_name}
+                      </span>
+                    )}
+                    {order.customer_address && (
+                      <div className="mt-1 truncate text-[11px] text-ink-soft">{order.customer_address}</div>
+                    )}
                     <div className="mt-0.5 text-xs text-ink-soft">{formatDate(order.planned_delivery_date)}</div>
                   </div>
                 ))}
@@ -218,6 +400,14 @@ export function VehicleBoard({ columns: initialColumns }: { columns: VehicleColu
       </div>
 
       {openOrderId && <OrderDetailModal orderId={openOrderId} onClose={() => setOpenOrderId(null)} />}
+
+      {mapColumn && (
+        <RouteStopsModal
+          vehicleName={mapColumn.name}
+          orders={columnsByKey[mapColumn.key] ?? []}
+          onClose={() => setMapColumnKey(null)}
+        />
+      )}
     </section>
   );
 }

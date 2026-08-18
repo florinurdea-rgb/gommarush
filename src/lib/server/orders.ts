@@ -30,6 +30,7 @@ export interface OrderListRow {
   planned_delivery_date: string | null;
   customer_name: string | null;
   customer_city: string | null;
+  customer_address: string | null;
   driver_id: string | null;
   driver_name: string | null;
   vehicle_id: string | null;
@@ -51,7 +52,7 @@ const ORDER_LIST_SELECT = `
   id, order_number, stand_code, status, planned_delivery_date, held_at,
   supplier_document_number, driver_id, vehicle_id, delivery_sequence,
   customers ( name ),
-  customer_locations ( city ),
+  customer_locations ( city, address_line1 ),
   drivers ( name ),
   vehicles ( name ),
   suppliers ( name ),
@@ -70,7 +71,7 @@ const ORDER_LIST_SELECT_LEGACY = `
   id, order_number, stand_code, status, planned_delivery_date, held_at,
   supplier_document_number, driver_id, vehicle_id,
   customers ( name ),
-  customer_locations ( city ),
+  customer_locations ( city, address_line1 ),
   drivers ( name ),
   vehicles ( name ),
   suppliers ( name ),
@@ -92,7 +93,7 @@ interface RawOrderListRow {
   vehicle_id: string | null;
   delivery_sequence: number | null;
   customers: { name: string } | null;
-  customer_locations: { city: string | null } | null;
+  customer_locations: { city: string | null; address_line1: string | null } | null;
   drivers: { name: string } | null;
   vehicles: { name: string } | null;
   suppliers: { name: string } | null;
@@ -108,6 +109,7 @@ function toListRow(raw: RawOrderListRow): OrderListRow {
     planned_delivery_date: raw.planned_delivery_date,
     customer_name: raw.customers?.name ?? null,
     customer_city: raw.customer_locations?.city ?? null,
+    customer_address: raw.customer_locations?.address_line1 ?? null,
     driver_id: raw.driver_id,
     driver_name: raw.drivers?.name ?? null,
     vehicle_id: raw.vehicle_id,
@@ -575,6 +577,30 @@ export async function reorderVehicleColumn(vehicleId: string | null, orderedOrde
   );
 
   const failed = results.find((result) => result.error);
+
+  // Same defensive fallback as the read paths above: the vehicle-board
+  // migration (delivery_sequence column) may not have been run yet against
+  // this database. Without this, every drag-and-drop move on the board
+  // fails outright ("Mutarea nu a putut fi salvată") instead of at least
+  // saving the vehicle assignment.
+  if (failed?.error?.code === UNDEFINED_COLUMN) {
+    logError("orders_delivery_sequence_column_missing_on_write", failed.error);
+    const fallbackResults = await Promise.all(
+      orderedOrderIds.map((orderId) =>
+        supabase.from("orders").update({ vehicle_id: vehicleId }).eq("id", orderId)
+      )
+    );
+    const fallbackFailed = fallbackResults.find((result) => result.error);
+    if (fallbackFailed?.error) throw fallbackFailed.error;
+
+    logEvent("orders_reordered", {
+      vehicleId: vehicleId ?? "unassigned",
+      count: orderedOrderIds.length,
+      deliverySequenceSkipped: true,
+    });
+    return;
+  }
+
   if (failed?.error) throw failed.error;
 
   logEvent("orders_reordered", { vehicleId: vehicleId ?? "unassigned", count: orderedOrderIds.length });

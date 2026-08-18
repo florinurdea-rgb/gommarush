@@ -3,8 +3,13 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { formatOrderNumber } from "@/lib/logistics/order-number";
-import type { DocumentStatus, ProcessedDocument } from "@/lib/ddt-import/pipeline";
-import type { CustomerMatchResult } from "@/lib/logistics/customer-matching";
+import {
+  DDT_STATUS_LABEL as STATUS_LABEL,
+  DDT_STATUS_TONE as STATUS_TONE,
+  buildCustomerResolution,
+  canAutoConfirmDdtDocument as canAutoConfirm,
+} from "@/lib/ddt-import/client-helpers";
+import type { ProcessedDocumentWithMatch } from "@/lib/ddt-import/client-helpers";
 
 /**
  * The multi-DDT import screen: upload -> processing summary -> one card per
@@ -15,12 +20,12 @@ import type { CustomerMatchResult } from "@/lib/logistics/customer-matching";
  * loading state followed by the final result rather than a live stream —
  * still shows the same information the spec asks for (§34), just not
  * incrementally.
+ *
+ * Shares its status labels/tones and confirm-eligibility logic with the
+ * "Comandă nouă" modal's upload step (src/components/logistics/
+ * UploadOrderPanel.tsx) via src/lib/ddt-import/client-helpers.ts — one
+ * definition of "when is a document safe to auto-confirm", not two.
  */
-
-interface ProcessedDocumentWithMatch extends ProcessedDocument {
-  supplierId: string | null;
-  customerMatch: CustomerMatchResult | null;
-}
 
 interface AnalyzeResponse {
   ok: boolean;
@@ -40,56 +45,6 @@ interface AnalyzeResponse {
   /** AI extraction isn't configured — an expected, disclosed state, never an error. */
   unconfigured?: boolean;
   notes?: string[];
-}
-
-const STATUS_LABEL: Record<DocumentStatus, string> = {
-  READY: "PREGĂTIT",
-  READY_MISSING_OPTIONAL: "PREGĂTIT — date opționale lipsă",
-  NEEDS_REVIEW: "NECESITĂ VERIFICARE",
-  POSSIBLE_DUPLICATE: "POSIBIL DUPLICAT",
-  DUPLICATE: "DEJA IMPORTAT",
-};
-
-const STATUS_TONE: Record<DocumentStatus, string> = {
-  READY: "bg-state-success-soft text-state-success",
-  READY_MISSING_OPTIONAL: "bg-state-progress-soft text-state-progress",
-  NEEDS_REVIEW: "bg-state-warning-soft text-state-warning",
-  POSSIBLE_DUPLICATE: "bg-state-warning-soft text-state-warning",
-  DUPLICATE: "bg-state-neutral-soft text-state-neutral",
-};
-
-/** Builds the confirm payload's customer decision — only for the two unambiguous match kinds; anything else must be resolved by a human first. */
-function buildCustomerResolution(doc: ProcessedDocumentWithMatch) {
-  const match = doc.customerMatch;
-  if (!match) return null;
-
-  if (match.kind === "match_confirmed" && match.customer) {
-    return {
-      customerId: match.customer.id,
-      customerLocationId: match.location?.id ?? null,
-      newCustomer: null,
-      resolution: match.location ? ("use_existing" as const) : ("add_as_new_location" as const),
-      supplierCustomerCode: doc.extracted.customer.supplierCustomerCode,
-    };
-  }
-
-  if (match.kind === "new_customer" && doc.extracted.customer.companyName) {
-    return {
-      customerId: null,
-      customerLocationId: null,
-      newCustomer: { name: doc.extracted.customer.companyName, vat_number: doc.extracted.customer.vatNumber },
-      resolution: "add_as_new_location" as const,
-      supplierCustomerCode: doc.extracted.customer.supplierCustomerCode,
-    };
-  }
-
-  return null; // possible_match / new_location: ambiguous, needs a human decision this quick-confirm doesn't offer yet
-}
-
-function canAutoConfirm(doc: ProcessedDocumentWithMatch): boolean {
-  return (
-    (doc.status === "READY" || doc.status === "READY_MISSING_OPTIONAL") && buildCustomerResolution(doc) !== null
-  );
 }
 
 export function DdtImportFlow() {
