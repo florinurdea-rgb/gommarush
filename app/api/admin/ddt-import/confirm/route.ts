@@ -4,22 +4,16 @@ import { locationResolutionSchema } from "@/lib/validation/logistics";
 import { confirmDdtDocument } from "@/lib/server/ddt-import";
 import type { ProcessedDocumentWithMatch } from "@/lib/server/ddt-import";
 import type { CustomerInput } from "@/lib/server/customers";
+import { createSupabaseAdminClient } from "@/lib/supabase/server-admin";
+import { normaliseDocumentNumber } from "@/lib/logistics/ddt-dedup";
+import { isMissingSchemaError } from "@/lib/server/schema-errors";
 import { describeError, fail, ok, readJsonBody, runAdminRoute, zodDetails } from "@/lib/server/route-helpers";
-import { logError } from "@/lib/logger";
+import { logError, logEvent } from "@/lib/logger";
 
 export const runtime = "nodejs";
 
 const uuid = z.string().uuid();
 
-/**
- * Deliberately light validation on `processed`: it is the exact JSON this
- * same server returned from /analyze moments earlier (an admin-only,
- * authenticated round trip, not third-party input), and every field
- * confirmDdtDocument() reads from it is already handled defensively
- * (optional chaining, `?? null`) — a malformed shape degrades a field to
- * null rather than opening a security hole. What's validated strictly here
- * is what actually gates a write: the resolution enum and the ids.
- */
 const confirmSchema = z
   .object({
     processed: z.record(z.string(), z.unknown()),
@@ -32,6 +26,67 @@ const confirmSchema = z
   })
   .strict();
 
+type ExistingOrder = {
+  id: string;
+  order_number: string | number;
+  supplier_document_number: string | null;
+};
+
+/**
+ * Confirmation must be idempotent. A previous request can successfully create
+ * the order and then fail while attaching DDT metadata (settings/migration/
+ * network error). Retrying that same READY document must return the already
+ * created order, not turn a partial success into ALREADY_IMPORTED.
+ *
+ * The normalized column is preferred when the DDT migration exists. Older DB
+ * states fall back to normalising the raw supplier_document_number in code.
+ */
+async function findExistingOrder(processed: ProcessedDocumentWithMatch): Promise<ExistingOrder | null> {
+  const supplierId = processed.supplierId;
+  const rawNumber = processed.extracted?.document?.documentNumber ?? null;
+  const normalized = processed.normalizedDocumentNumber ?? (rawNumber ? normaliseDocumentNumber(rawNumber) : null);
+  if (!supplierId || !normalized) return null;
+
+  const supabase = createSupabaseAdminClient();
+  const primary = await supabase
+    .from("orders")
+    .select("id, order_number, supplier_document_number")
+    .eq("supplier_id", supplierId)
+    .eq("normalized_document_number", normalized)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!primary.error) return (primary.data as ExistingOrder | null) ?? null;
+  if (!isMissingSchemaError(primary.error)) throw primary.error;
+
+  const fallback = await supabase
+    .from("orders")
+    .select("id, order_number, supplier_document_number")
+    .eq("supplier_id", supplierId)
+    .not("supplier_document_number", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(500);
+  if (fallback.error) throw fallback.error;
+
+  return (
+    ((fallback.data ?? []) as ExistingOrder[]).find(
+      (row) => row.supplier_document_number && normaliseDocumentNumber(row.supplier_document_number) === normalized
+    ) ?? null
+  );
+}
+
+function recoveredPayload(processed: ProcessedDocumentWithMatch, existing: ExistingOrder) {
+  return {
+    orderId: existing.id,
+    orderNumber: String(existing.order_number),
+    tyreCount: processed.tyreCount,
+    transportRevenue: 0,
+    droppedLineCount: processed.physicalItems.filter((line) => line.raw.quantity === null).length,
+    recoveredExisting: true,
+  };
+}
+
 export async function POST(request: NextRequest) {
   return runAdminRoute(async (session) => {
     const body = await readJsonBody(request);
@@ -40,9 +95,24 @@ export async function POST(request: NextRequest) {
     const parsed = confirmSchema.safeParse(body);
     if (!parsed.success) return fail(400, "VALIDATION_FAILED", zodDetails(parsed.error));
 
+    const processed = parsed.data.processed as unknown as ProcessedDocumentWithMatch;
+
     try {
+      // READY documents are allowed to be retried safely. Explicit duplicate
+      // flows keep their existing human-decision behaviour ("Adaugă din nou").
+      if (processed.status !== "DUPLICATE" && processed.status !== "POSSIBLE_DUPLICATE") {
+        const existing = await findExistingOrder(processed);
+        if (existing) {
+          logEvent("ddt_confirm_retry_recovered", {
+            orderId: existing.id,
+            sourceDocumentId: parsed.data.sourceDocumentId,
+          });
+          return ok(recoveredPayload(processed, existing), 200);
+        }
+      }
+
       const result = await confirmDdtDocument({
-        processed: parsed.data.processed as unknown as ProcessedDocumentWithMatch,
+        processed,
         sourceDocumentId: parsed.data.sourceDocumentId,
         customerResolution: {
           customerId: parsed.data.customerId ?? null,
@@ -56,21 +126,38 @@ export async function POST(request: NextRequest) {
 
       return ok({ ...result }, 201);
     } catch (error) {
-      // Defense in depth: the pipeline's own duplicate check
-      // (findExactDuplicate in ddt-dedup.ts) is what's SUPPOSED to catch
-      // this and show "DEJA IMPORTAT" before it ever gets here — but that
-      // check can't prevent a genuine race (two confirms for the same
-      // document landing at once), and the database's unique constraint on
-      // (supplier_id, supplier_document_number) is the real backstop for
-      // that case. Give it an honest code instead of a raw SQL dump.
       const pgError = error as { code?: string; message?: string } | null;
-      if (pgError?.code === "23505" && pgError.message?.includes("orders_supplier_document_unique")) {
-        logError("ddt_confirm_duplicate_race", error, { sourceDocumentId: parsed.data.sourceDocumentId });
-        return fail(409, "ALREADY_IMPORTED", ["Acest document a fost deja importat ca o altă comandă."]);
+
+      // Race-safe idempotency: if another request inserted the same DDT between
+      // our pre-check and createOrder(), resolve the winner and return it.
+      if (pgError?.code === "23505") {
+        try {
+          const existing = await findExistingOrder(processed);
+          if (existing) {
+            logEvent("ddt_confirm_duplicate_race_recovered", {
+              orderId: existing.id,
+              sourceDocumentId: parsed.data.sourceDocumentId,
+            });
+            return ok(recoveredPayload(processed, existing), 200);
+          }
+        } catch (lookupError) {
+          logError("ddt_confirm_duplicate_recovery_failed", lookupError, {
+            sourceDocumentId: parsed.data.sourceDocumentId,
+          });
+        }
+
+        const message = pgError.message ?? "";
+        if (
+          message.includes("orders_supplier_document_unique") ||
+          message.includes("orders_supplier_doc_number_key") ||
+          message.includes("supplier_document") ||
+          message.includes("normalized_document_number")
+        ) {
+          logError("ddt_confirm_duplicate_race", error, { sourceDocumentId: parsed.data.sourceDocumentId });
+          return fail(409, "ALREADY_IMPORTED", ["Acest document a fost deja importat ca o altă comandă."]);
+        }
       }
 
-      // Mirrors pipeline.ts's `blocked` — the UI already refuses a direct
-      // confirm here, this is only reachable via a stale client state.
       if (pgError?.message?.includes("NOTHING_IMPORTABLE")) {
         return fail(400, "NOTHING_IMPORTABLE", ["Nicio linie cu cantitate citibilă — completează manual."]);
       }
