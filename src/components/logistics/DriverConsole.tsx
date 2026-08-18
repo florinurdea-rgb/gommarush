@@ -62,6 +62,47 @@ export function DriverConsole({
   const [outcome, setOutcome] = useState<ScanOutcome | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [deliveringOrderId, setDeliveringOrderId] = useState<string | null>(null);
+
+  /** "Marchează comanda ca livrată" — the delivery-confirmation step, one tap per order. */
+  const submitDeliverOrder = useCallback(
+    async (order: DriverOrderSummary) => {
+      if (deliveringOrderId) return;
+      setDeliveringOrderId(order.id);
+      try {
+        const response = await fetch("/api/driver/deliver-order", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ order_id: order.id }),
+        });
+        const payload = (await response.json()) as { ok: boolean; code?: string };
+        if (!payload.ok) {
+          sounds.feedback("error");
+          setOutcome({
+            tone: "error",
+            title: errorMessage(payload.code),
+            orderNumber: formatOrderNumber(order.order_number),
+            customer: order.customer_name ?? undefined,
+          });
+          return;
+        }
+        sounds.feedback("success");
+        setOutcome({
+          tone: "success",
+          title: "Comandă livrată",
+          orderNumber: formatOrderNumber(order.order_number),
+          customer: order.customer_name ?? undefined,
+        });
+        router.refresh();
+      } catch {
+        sounds.feedback("error");
+        setOutcome({ tone: "error", title: errorMessage("UNKNOWN") });
+      } finally {
+        setDeliveringOrderId(null);
+      }
+    },
+    [deliveringOrderId, router, sounds]
+  );
 
   /** Loading scan: verifies ownership server-side, then reports the verdict. */
   const submitLoadScan = useCallback(
@@ -257,6 +298,17 @@ export function DriverConsole({
                     </li>
                   ))}
                 </ul>
+
+                {order.progress.loadedPercent === 100 && (
+                  <button
+                    type="button"
+                    disabled={deliveringOrderId === order.id}
+                    onClick={() => void submitDeliverOrder(order)}
+                    className="mt-3 flex h-12 w-full items-center justify-center rounded-xl bg-state-success text-sm font-bold text-white disabled:opacity-50"
+                  >
+                    {deliveringOrderId === order.id ? "Se salvează…" : "Marchează comanda ca livrată"}
+                  </button>
+                )}
               </article>
             ))}
           </section>

@@ -357,3 +357,57 @@ export async function listLoadableUnits(driverId: string): Promise<
       customer_name: row.orders!.customers?.name ?? null,
     }));
 }
+
+export interface DeliverOrderResult {
+  ok: boolean;
+  code: string;
+  status?: string;
+  deliveredUnits?: number;
+  totalUnits?: number;
+}
+
+/**
+ * "Marchează comanda ca livrată" — the delivery-confirmation step the app
+ * never had (see 20260822000000_deliver_order.sql). One tap per order
+ * rather than per-unit scanning: a driver delivers a customer's whole
+ * order in one visit, not one tyre at a time. Marks every currently-loaded
+ * unit as delivered and resolves the order to 'delivered' (all units were
+ * loaded) or 'partially_delivered' (a shortage meant not everything made
+ * it onto the van in the first place).
+ */
+export async function deliverOrder(input: {
+  orderId: string;
+  driverId: string;
+  operator?: string | null;
+}): Promise<DeliverOrderResult> {
+  const supabase = createSupabaseAdminClient();
+
+  const { data, error } = await supabase.rpc("gorush_deliver_order", {
+    p_order_id: input.orderId,
+    p_driver_id: input.driverId,
+    p_operator: input.operator ?? null,
+  });
+
+  if (error) {
+    logError("deliver_order_failed", error, { orderId: input.orderId, driverId: input.driverId });
+    throw error;
+  }
+
+  const result = data as {
+    ok: boolean;
+    code: string;
+    status?: string;
+    delivered_units?: number;
+    total_units?: number;
+  };
+
+  logEvent("order_delivered", { orderId: input.orderId, code: result.code, ok: result.ok });
+
+  return {
+    ok: result.ok,
+    code: result.code,
+    status: result.status,
+    deliveredUnits: result.delivered_units,
+    totalUnits: result.total_units,
+  };
+}

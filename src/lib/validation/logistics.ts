@@ -332,6 +332,8 @@ export const manualLoadSchema = z
   })
   .strict();
 
+export const deliverOrderSchema = z.object({ order_id: uuid }).strict();
+
 export const printJobActionSchema = z
   .object({ action: z.literal("retry") })
   .strict();
