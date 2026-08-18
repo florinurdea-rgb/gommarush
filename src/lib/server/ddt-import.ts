@@ -66,11 +66,19 @@ export interface DdtUploadResult {
 
 async function getExistingOrderIdentities(supplierId: string): Promise<OrderIdentity[]> {
   const supabase = createSupabaseAdminClient();
+  // Deliberately NOT filtered to `normalized_document_number is not null`:
+  // an order created before that column existed (or whose backfill update
+  // failed on a prior confirm attempt) has it NULL, but still has a real
+  // supplier_document_number — findExactDuplicate() falls back to
+  // normalizing that raw value on the fly. Filtering those rows out here
+  // is exactly what let an already-imported document look READY again and
+  // crash on the database's own unique constraint instead of showing
+  // "DEJA IMPORTAT".
   const { data, error } = await supabase
     .from("orders")
-    .select("id, supplier_id, normalized_document_number")
+    .select("id, supplier_id, normalized_document_number, supplier_document_number")
     .eq("supplier_id", supplierId)
-    .not("normalized_document_number", "is", null);
+    .not("supplier_document_number", "is", null);
 
   if (isMissingSchemaError(error)) {
     // normalized_document_number doesn't exist yet — the DDT-import migration
@@ -82,9 +90,19 @@ async function getExistingOrderIdentities(supplierId: string): Promise<OrderIden
   }
   if (error) throw error;
 
-  return ((data ?? []) as { id: string; supplier_id: string; normalized_document_number: string | null }[]).map(
-    (row) => ({ id: row.id, supplierId: row.supplier_id, normalizedDocumentNumber: row.normalized_document_number })
-  );
+  return (
+    (data ?? []) as {
+      id: string;
+      supplier_id: string;
+      normalized_document_number: string | null;
+      supplier_document_number: string | null;
+    }[]
+  ).map((row) => ({
+    id: row.id,
+    supplierId: row.supplier_id,
+    normalizedDocumentNumber: row.normalized_document_number,
+    supplierDocumentNumber: row.supplier_document_number,
+  }));
 }
 
 async function getRecentFingerprints(limit = 2000): Promise<{ orderId: string; fingerprint: string }[]> {

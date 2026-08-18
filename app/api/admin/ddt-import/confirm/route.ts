@@ -56,6 +56,19 @@ export async function POST(request: NextRequest) {
 
       return ok({ ...result }, 201);
     } catch (error) {
+      // Defense in depth: the pipeline's own duplicate check
+      // (findExactDuplicate in ddt-dedup.ts) is what's SUPPOSED to catch
+      // this and show "DEJA IMPORTAT" before it ever gets here — but that
+      // check can't prevent a genuine race (two confirms for the same
+      // document landing at once), and the database's unique constraint on
+      // (supplier_id, supplier_document_number) is the real backstop for
+      // that case. Give it an honest code instead of a raw SQL dump.
+      const pgError = error as { code?: string; message?: string } | null;
+      if (pgError?.code === "23505" && pgError.message?.includes("orders_supplier_document_unique")) {
+        logError("ddt_confirm_duplicate_race", error, { sourceDocumentId: parsed.data.sourceDocumentId });
+        return fail(409, "ALREADY_IMPORTED", ["Acest document a fost deja importat ca o altă comandă."]);
+      }
+
       logError("ddt_confirm_failed", error, { sourceDocumentId: parsed.data.sourceDocumentId });
       return fail(500, "SAVE_FAILED", describeError(error));
     }

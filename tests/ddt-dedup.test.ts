@@ -17,7 +17,12 @@ describe("normaliseDocumentNumber", () => {
 describe("Test D — same supplier + same DDT uploaded twice", () => {
   it("finds the existing order as an exact duplicate — never a second order", () => {
     const existing = [
-      { id: "order-1", supplierId: "carlini", normalizedDocumentNumber: normaliseDocumentNumber("26-21-0562124") },
+      {
+        id: "order-1",
+        supplierId: "carlini",
+        normalizedDocumentNumber: normaliseDocumentNumber("26-21-0562124"),
+        supplierDocumentNumber: "26-21-0562124",
+      },
     ];
 
     const duplicate = findExactDuplicate(existing, "carlini", normaliseDocumentNumber("26-21-0562124"));
@@ -26,7 +31,12 @@ describe("Test D — same supplier + same DDT uploaded twice", () => {
 
   it("is not fooled by whitespace/case differences in the re-scanned document number", () => {
     const existing = [
-      { id: "order-1", supplierId: "carlini", normalizedDocumentNumber: normaliseDocumentNumber("26-21-0562124") },
+      {
+        id: "order-1",
+        supplierId: "carlini",
+        normalizedDocumentNumber: normaliseDocumentNumber("26-21-0562124"),
+        supplierDocumentNumber: "26-21-0562124",
+      },
     ];
 
     const duplicate = findExactDuplicate(existing, "carlini", normaliseDocumentNumber(" 26-21-0562124 "));
@@ -35,7 +45,7 @@ describe("Test D — same supplier + same DDT uploaded twice", () => {
 
   it("does not match the same DDT number from a DIFFERENT supplier", () => {
     const existing = [
-      { id: "order-1", supplierId: "carlini", normalizedDocumentNumber: "26-21-0562124" },
+      { id: "order-1", supplierId: "carlini", normalizedDocumentNumber: "26-21-0562124", supplierDocumentNumber: "26-21-0562124" },
     ];
 
     expect(findExactDuplicate(existing, "zuin", "26-21-0562124")).toBeNull();
@@ -43,10 +53,33 @@ describe("Test D — same supplier + same DDT uploaded twice", () => {
 
   it("does not match an unrelated document number from the same supplier", () => {
     const existing = [
-      { id: "order-1", supplierId: "carlini", normalizedDocumentNumber: "26-21-0562124" },
+      { id: "order-1", supplierId: "carlini", normalizedDocumentNumber: "26-21-0562124", supplierDocumentNumber: "26-21-0562124" },
     ];
 
     expect(findExactDuplicate(existing, "carlini", "26-21-0562999")).toBeNull();
+  });
+
+  it("falls back to the raw supplier_document_number when normalized_document_number is NULL (a legacy row)", () => {
+    // The exact bug found in production: an order created before the DDT
+    // migration backfilled normalized_document_number (or whose confirm-
+    // time update step never ran) has it NULL, but still has the raw
+    // value — re-uploading the same DDT must still be recognised as a
+    // duplicate instead of crashing on the database's own unique
+    // constraint on a doomed re-insert.
+    const existing = [
+      { id: "order-1", supplierId: "carlini", normalizedDocumentNumber: null, supplierDocumentNumber: "26-21-0562124" },
+    ];
+
+    const duplicate = findExactDuplicate(existing, "carlini", normaliseDocumentNumber("26-21-0562124"));
+    expect(duplicate?.id).toBe("order-1");
+  });
+
+  it("still returns null when both the normalized and raw document numbers are missing", () => {
+    const existing = [
+      { id: "order-1", supplierId: "carlini", normalizedDocumentNumber: null, supplierDocumentNumber: null },
+    ];
+
+    expect(findExactDuplicate(existing, "carlini", normaliseDocumentNumber("26-21-0562124"))).toBeNull();
   });
 });
 

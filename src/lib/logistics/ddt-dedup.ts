@@ -24,6 +24,20 @@ export interface OrderIdentity {
   id: string;
   supplierId: string;
   normalizedDocumentNumber: string | null;
+  /**
+   * The raw, un-normalized document number as stored on the order —
+   * needed as a fallback because `normalized_document_number` is a
+   * column added after orders already existed (20260819000000), so any
+   * order created before that migration ran (or before its backfill,
+   * if the update step failed on a given confirm) has it NULL. Without
+   * this fallback, a duplicate detection check that only compares
+   * normalized values silently misses those older rows — the pipeline
+   * marks the document READY again, and the *database's own* unique
+   * constraint on (supplier_id, supplier_document_number) is what
+   * actually stops the re-import, as a confusing SAVE_FAILED instead of
+   * an honest "DEJA IMPORTAT".
+   */
+  supplierDocumentNumber: string | null;
 }
 
 /** supplier_id + normalized_document_number must be unique — the spec's "primary identity". */
@@ -33,11 +47,13 @@ export function findExactDuplicate(
   normalizedDocumentNumber: string
 ): OrderIdentity | null {
   return (
-    candidates.find(
-      (candidate) =>
-        candidate.supplierId === supplierId &&
-        candidate.normalizedDocumentNumber === normalizedDocumentNumber
-    ) ?? null
+    candidates.find((candidate) => {
+      if (candidate.supplierId !== supplierId) return false;
+      const candidateNormalized =
+        candidate.normalizedDocumentNumber ??
+        (candidate.supplierDocumentNumber ? normaliseDocumentNumber(candidate.supplierDocumentNumber) : null);
+      return candidateNormalized === normalizedDocumentNumber;
+    }) ?? null
   );
 }
 

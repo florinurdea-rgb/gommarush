@@ -245,7 +245,7 @@ describe("processExtractedDocument — duplicate detection (spec §15-16)", () =
       extracted: document(),
       supplierId: "supplier-1",
       existingOrders: [
-        { id: "order-existing", supplierId: "supplier-1", normalizedDocumentNumber: "26-21-0562123" },
+        { id: "order-existing", supplierId: "supplier-1", normalizedDocumentNumber: "26-21-0562123", supplierDocumentNumber: "26-21-0562123" },
       ],
       existingFingerprints: [],
     });
@@ -259,7 +259,7 @@ describe("processExtractedDocument — duplicate detection (spec §15-16)", () =
       extracted: document(),
       supplierId: "supplier-1",
       existingOrders: [
-        { id: "order-existing", supplierId: "supplier-2", normalizedDocumentNumber: "26-21-0562123" },
+        { id: "order-existing", supplierId: "supplier-2", normalizedDocumentNumber: "26-21-0562123", supplierDocumentNumber: "26-21-0562123" },
       ],
       existingFingerprints: [],
     });
@@ -295,7 +295,7 @@ describe("processExtractedDocument — duplicate detection (spec §15-16)", () =
       extracted: document(),
       supplierId: "supplier-1",
       existingOrders: [
-        { id: "order-exact", supplierId: "supplier-1", normalizedDocumentNumber: "26-21-0562123" },
+        { id: "order-exact", supplierId: "supplier-1", normalizedDocumentNumber: "26-21-0562123", supplierDocumentNumber: "26-21-0562123" },
       ],
       existingFingerprints: [{ orderId: "order-fuzzy", fingerprint: "anything" }],
     });
