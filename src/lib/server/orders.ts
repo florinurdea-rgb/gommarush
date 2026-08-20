@@ -4,6 +4,7 @@ import { calculateOrderProgress, resolveReactivationStatus } from "@/lib/logisti
 import { logError, logEvent } from "@/lib/logger";
 import { isMissingSchemaError } from "@/lib/server/schema-errors";
 import { getVehicle } from "@/lib/server/reference";
+import { isManuallySettableStatus } from "@/lib/logistics/order-status-rules";
 import { ACTIVE_ORDER_STATUSES } from "@/lib/types/logistics";
 import type {
   InventoryUnitRow,
@@ -567,29 +568,18 @@ export async function markOrderPrepared(orderId: string, changedBy: string): Pro
 }
 
 /**
- * Statuses excluded from the generic manual override because they each
- * carry required side effects a plain status write would skip: 'loaded'
- * needs a vehicle and loaded_at (gorush_mark_order_loaded), 'delivered'/
- * 'partially_delivered' need delivered_at and payment recording
- * (gorush_deliver_order). Use markOrderLoaded()/deliverOrder() from
- * src/lib/server/loading.ts for those instead. 'cancelled' already has its
- * own "Șterge" action; 'draft'/'review_required' don't apply to an order
- * that already made it onto the board.
- */
-const MANUAL_STATUS_EXCLUDED: readonly OrderStatus[] = ["loaded", "delivered", "partially_delivered"];
-
-/**
  * Manual status override from the Livrări board's card menu — the admin
  * needs to be able to correct or advance an order's status directly,
  * without walking through each intermediate step. See
- * MANUAL_STATUS_EXCLUDED for what this deliberately does NOT cover.
+ * isManuallySettableStatus() (src/lib/logistics/order-status-rules.ts) for
+ * what this deliberately does NOT cover, and why.
  */
 export async function setOrderStatusManually(
   orderId: string,
   status: OrderStatus,
   changedBy: string
 ): Promise<StatusChangeResult> {
-  if (!ACTIVE_ORDER_STATUSES.includes(status) || MANUAL_STATUS_EXCLUDED.includes(status)) {
+  if (!isManuallySettableStatus(status)) {
     return { ok: false, code: "STATUS_NOT_ALLOWED" };
   }
   return setStatus(orderId, status, { reason: "manual_override", changedBy });

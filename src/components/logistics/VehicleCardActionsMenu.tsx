@@ -5,15 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useToast } from "@/components/ui/Toast";
 import { orderStatusMeta } from "@/lib/i18n/logistics";
-import { ACTIVE_ORDER_STATUSES } from "@/lib/types/logistics";
+import { MANUALLY_SETTABLE_STATUSES } from "@/lib/logistics/order-status-rules";
 import type { OrderStatus } from "@/lib/types/logistics";
-
-/** Mirrors MANUAL_STATUS_EXCLUDED in src/lib/server/orders.ts: these have
- * their own dedicated actions above (with required side effects a plain
- * status write would skip), so they don't belong in the generic list. */
-const MANUALLY_SETTABLE_STATUSES = ACTIVE_ORDER_STATUSES.filter(
-  (status) => status !== "loaded" && status !== "delivered" && status !== "partially_delivered"
-);
 
 export interface MoveTarget {
   key: string;
