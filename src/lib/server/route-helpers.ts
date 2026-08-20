@@ -84,25 +84,6 @@ export async function runDriverRoute(
 }
 
 /**
- * Warehouse routes (storage scanning). Accepts either an admin session or a
- * driver session: the storage station is operated by whoever is on shift, and
- * whichever identity was used is recorded on the scan.
- */
-export async function runWarehouseRoute(
-  handler: (operator: string) => Promise<NextResponse>
-): Promise<NextResponse> {
-  try {
-    const driver = await getDriverSession();
-    if (driver) return await handler(`driver:${driver.driverName}`);
-
-    const admin = await requireAdminSession();
-    return await handler(admin.subject);
-  } catch (error) {
-    return handleRouteError(error);
-  }
-}
-
-/**
  * Extracts a human-useful detail string from whatever got thrown, WITHOUT
  * relying on `instanceof Error` — Supabase/PostgREST errors do extend
  * Error in the installed version, but that check has still been observed

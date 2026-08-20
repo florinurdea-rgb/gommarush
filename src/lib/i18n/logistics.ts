@@ -360,6 +360,12 @@ const ro: Dictionary = {
     NOT_STORED: "Obiectul nu este încă depozitat — scanează-l mai întâi la depozitare",
     WRONG_DRIVER: "Produsul aparține altei mașini",
     WRONG_VEHICLE: "Produsul aparține altei mașini",
+    NOT_READY: "Comanda nu este pregătită pentru încărcare",
+    NO_VEHICLE: "Alocă mai întâi o mașină comenzii",
+    NOT_LOADED: "Comanda nu a fost încă încărcată",
+    ALREADY_DELIVERED: "Comanda a fost deja livrată",
+    ALREADY_LOADED_ORDER: "Comanda a fost deja marcată ca încărcată",
+    STATUS_NOT_ALLOWED: "Acest status nu poate fi setat manual",
     PRINTER_UNAVAILABLE:
       "Imprimanta nu este disponibilă — eticheta rămâne în coada de printare",
     REASON_REQUIRED: "Motivul este obligatoriu",

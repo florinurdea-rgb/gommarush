@@ -1,32 +1,30 @@
 import { NextRequest } from "next/server";
-import { deliverOrderSchema } from "@/lib/validation/logistics";
-import { deliverOrder } from "@/lib/server/loading";
+import { deliveryFailedSchema } from "@/lib/validation/logistics";
+import { markDeliveryFailed } from "@/lib/server/loading";
 import { fail, ok, readJsonBody, runDriverRoute, zodDetails } from "@/lib/server/route-helpers";
 
 export const runtime = "nodejs";
 
 /**
- * POST /api/driver/deliver-order — "Marchează comanda ca livrată".
+ * POST /api/driver/delivery-failed — the delivery exception path.
  *
- * The driver identity comes from the server-side session, never the
- * request body — same rule as every other driver route — so a phone can
- * only deliver its own assigned orders. Optionally records the COD amount
- * collected in the same transactional call.
+ * A reason is mandatory. The order returns to an explicit attention state
+ * (on_hold) rather than a new status — see the Phase 1 stabilisation
+ * brief §21.
  */
 export async function POST(request: NextRequest) {
   return runDriverRoute(async (session) => {
     const body = await readJsonBody(request);
     if (body === null) return fail(400, "VALIDATION_FAILED");
 
-    const parsed = deliverOrderSchema.safeParse(body);
+    const parsed = deliveryFailedSchema.safeParse(body);
     if (!parsed.success) return fail(400, "VALIDATION_FAILED", zodDetails(parsed.error));
 
-    const result = await deliverOrder({
+    const result = await markDeliveryFailed({
       orderId: parsed.data.order_id,
       driverId: session.driverId,
       operator: `driver:${session.driverName}`,
-      amountCollected: parsed.data.amount_collected ?? null,
-      paymentMethod: parsed.data.payment_method ?? null,
+      reason: parsed.data.reason,
     });
 
     if (!result.ok) return fail(409, result.code);

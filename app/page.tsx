@@ -24,7 +24,7 @@ export default function Landing() {
           <LinkButton href="/cauta-cauciuc" variant="secondary" className="flex-none">
             Caută cauciuc
           </LinkButton>
-          <LinkButton href="/driver/route" variant="secondary" className="flex-none">
+          <LinkButton href="/driver" variant="secondary" className="flex-none">
             Logare șofer
           </LinkButton>
           <LinkButton href="/admin" variant="secondary" className="flex-none">

@@ -8,6 +8,7 @@ import {
   setOrderStatusManually,
   updateOrder,
 } from "@/lib/server/orders";
+import { deliverOrder, markDeliveryFailed, markOrderLoaded } from "@/lib/server/loading";
 import { ORDER_STATUSES } from "@/lib/types/logistics";
 import { fail, ok, readJsonBody, runAdminRoute, zodDetails } from "@/lib/server/route-helpers";
 
@@ -46,7 +47,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const parsed = orderActionSchema.safeParse(body);
     if (!parsed.success) return fail(400, "VALIDATION_FAILED", zodDetails(parsed.error));
-    const { action, reason, stand_code, planned_delivery_date, status } = parsed.data;
+    const { action, reason, stand_code, planned_delivery_date, status, vehicle_id, amount_collected, payment_method } =
+      parsed.data;
 
     switch (action) {
       case "hold": {
@@ -80,6 +82,38 @@ export async function POST(request: NextRequest, context: RouteContext) {
         const result = await setOrderStatusManually(id, status as (typeof ORDER_STATUSES)[number], session.subject);
         if (!result.ok) return fail(400, result.code ?? "UNKNOWN");
         return ok({ orderId: id, status });
+      }
+      case "mark_loaded": {
+        const result = await markOrderLoaded({
+          orderId: id,
+          vehicleId: vehicle_id ?? null,
+          operator: `admin:${session.subject}`,
+        });
+        if (!result.ok) return fail(409, result.code);
+        return ok({ orderId: id, status: result.status ?? "loaded" });
+      }
+      case "deliver": {
+        const result = await deliverOrder({
+          orderId: id,
+          // Admin/warehouse-initiated: no driver check.
+          driverId: null,
+          operator: `admin:${session.subject}`,
+          amountCollected: amount_collected ?? null,
+          paymentMethod: payment_method ?? null,
+        });
+        if (!result.ok) return fail(409, result.code);
+        return ok({ orderId: id, status: result.status ?? "delivered" });
+      }
+      case "delivery_failed": {
+        if (!reason) return fail(400, "REASON_REQUIRED");
+        const result = await markDeliveryFailed({
+          orderId: id,
+          driverId: null,
+          operator: `admin:${session.subject}`,
+          reason,
+        });
+        if (!result.ok) return fail(409, result.code);
+        return ok({ orderId: id, status: result.status ?? "on_hold" });
       }
       default:
         return fail(400, "VALIDATION_FAILED");

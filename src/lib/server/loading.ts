@@ -1,81 +1,94 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/server-admin";
 import { logError, logEvent } from "@/lib/logger";
-import { calculateOrderProgress } from "@/lib/logistics/order-progress";
-import type { OrderProgress } from "@/lib/logistics/order-progress";
-import type {
-  InventoryUnitStatus,
-  ItemType,
-  OrderStatus,
-  StandCode,
-} from "@/lib/types/logistics";
+import type { OrderStatus } from "@/lib/types/logistics";
 
 /**
- * Van loading operations for the driver interface.
+ * Driver-facing order operations — Phase 1 (order-level, no tyre scanning).
  *
- * The driver identity always comes from the server-side session, never from the
- * request body — that is what makes the wrong-item protection real rather than
- * dependent on the phone being honest.
+ * GommaRush Phase 1 stabilisation deliberately removed individual-tyre
+ * scanning from the active workflow: a driver loads and delivers a
+ * customer's whole ORDER in one tap, not one tyre at a time. The driver
+ * identity always comes from the server-side session, never the request
+ * body — that is what makes "Driver A cannot touch Driver B's route"
+ * real rather than dependent on the phone being honest.
  */
 
 export interface DriverOrderSummary {
   id: string;
   order_number: number;
   status: OrderStatus;
-  stand_code: StandCode | null;
+  stand_code: string | null;
   customer_name: string | null;
   customer_city: string | null;
+  customer_address: string | null;
+  customer_phone: string | null;
   planned_delivery_date: string | null;
+  delivery_sequence: number | null;
+  vehicle_id: string | null;
   vehicle_name: string | null;
-  progress: OrderProgress;
-  items: {
-    id: string;
-    description: string;
-    item_type: ItemType;
-    quantity: number;
-    units: { id: string; unit_sequence: number; status: InventoryUnitStatus }[];
-  }[];
+  tyre_count: number;
+  delivery_notes: string | null;
+  cash_on_delivery: boolean;
+  amount_to_collect: number | null;
+  payment_method: string | null;
+  payment_status: string | null;
+  amount_collected: number | null;
+  delivery_failure_reason: string | null;
+  items: { id: string; description: string; quantity: number }[];
 }
 
 const DRIVER_ORDER_SELECT = `
-  id, order_number, status, stand_code, planned_delivery_date,
+  id, order_number, status, stand_code, planned_delivery_date, delivery_sequence,
+  vehicle_id, delivery_notes, cash_on_delivery, amount_to_collect, payment_method,
+  payment_status, amount_collected, delivery_failure_reason,
   customers ( name ),
-  customer_locations ( city ),
+  customer_locations ( city, address_line1, phone ),
   vehicles ( name ),
-  order_items ( id, description, raw_description, item_type, quantity, is_physical, line_number ),
-  inventory_units ( id, order_item_id, unit_sequence, status )
+  order_items ( id, description, raw_description, quantity, is_physical, line_number )
 `;
 
 interface RawDriverOrder {
   id: string;
   order_number: number;
   status: OrderStatus;
-  stand_code: StandCode | null;
+  stand_code: string | null;
   planned_delivery_date: string | null;
+  delivery_sequence: number | null;
+  vehicle_id: string | null;
+  delivery_notes: string | null;
+  cash_on_delivery: boolean;
+  amount_to_collect: number | null;
+  payment_method: string | null;
+  payment_status: string | null;
+  amount_collected: number | null;
+  delivery_failure_reason: string | null;
   customers: { name: string } | null;
-  customer_locations: { city: string | null } | null;
+  customer_locations: { city: string | null; address_line1: string | null; phone: string | null } | null;
   vehicles: { name: string } | null;
   order_items: {
     id: string;
     description: string | null;
     raw_description: string | null;
-    item_type: ItemType;
     quantity: number;
     is_physical: boolean;
     line_number: number | null;
   }[];
-  inventory_units: {
-    id: string;
-    order_item_id: string;
-    unit_sequence: number;
-    status: InventoryUnitStatus;
-  }[];
 }
 
+/** Statuses a driver can still act on today — anything not yet closed out. */
+const DRIVER_ACTIVE_STATUSES: OrderStatus[] = [
+  "stored",
+  "ready_for_loading",
+  "loaded",
+  "out_for_delivery",
+];
+
 /**
- * Orders assigned to this driver — and only this driver. The filter is applied
- * in SQL, so a driver's phone never receives another driver's deliveries in the
- * first place.
+ * Orders assigned to this driver — and only this driver. The filter is
+ * applied in SQL, so a driver's phone never receives another driver's
+ * deliveries in the first place. Ordered the same way the Livrări board
+ * orders a van's column: manual delivery_sequence first, then planned date.
  */
 export async function listDriverOrders(driverId: string): Promise<DriverOrderSummary[]> {
   const supabase = createSupabaseAdminClient();
@@ -84,301 +97,118 @@ export async function listDriverOrders(driverId: string): Promise<DriverOrderSum
     .from("orders")
     .select(DRIVER_ORDER_SELECT)
     .eq("driver_id", driverId)
-    .in("status", [
-      "confirmed",
-      "expected",
-      "partially_received",
-      "received",
-      "sorting",
-      "stored",
-      "ready_for_loading",
-      "partially_loaded",
-      "loaded",
-    ])
-    .order("planned_delivery_date", { ascending: true, nullsFirst: false })
-    .order("stand_code", { ascending: true, nullsFirst: false });
+    .in("status", DRIVER_ACTIVE_STATUSES)
+    .order("delivery_sequence", { ascending: true, nullsFirst: false })
+    .order("planned_delivery_date", { ascending: true, nullsFirst: false });
 
   if (error) throw error;
 
-  return ((data ?? []) as unknown as RawDriverOrder[]).map((raw) => {
-    const unitsByItem = new Map<string, RawDriverOrder["inventory_units"]>();
-    for (const unit of raw.inventory_units) {
-      const list = unitsByItem.get(unit.order_item_id) ?? [];
-      list.push(unit);
-      unitsByItem.set(unit.order_item_id, list);
-    }
-
-    return {
-      id: raw.id,
-      order_number: raw.order_number,
-      status: raw.status,
-      stand_code: raw.stand_code,
-      customer_name: raw.customers?.name ?? null,
-      customer_city: raw.customer_locations?.city ?? null,
-      planned_delivery_date: raw.planned_delivery_date,
-      vehicle_name: raw.vehicles?.name ?? null,
-      progress: calculateOrderProgress(raw.inventory_units),
-      items: [...raw.order_items]
-        .filter((item) => item.is_physical)
-        .sort((a, b) => (a.line_number ?? 0) - (b.line_number ?? 0))
-        .map((item) => ({
-          id: item.id,
-          description: item.description ?? item.raw_description ?? "—",
-          item_type: item.item_type,
-          quantity: item.quantity,
-          units: (unitsByItem.get(item.id) ?? []).sort((a, b) => a.unit_sequence - b.unit_sequence),
-        })),
-    };
-  });
+  return ((data ?? []) as unknown as RawDriverOrder[]).map((raw) => ({
+    id: raw.id,
+    order_number: raw.order_number,
+    status: raw.status,
+    stand_code: raw.stand_code,
+    customer_name: raw.customers?.name ?? null,
+    customer_city: raw.customer_locations?.city ?? null,
+    customer_address: raw.customer_locations?.address_line1 ?? null,
+    customer_phone: raw.customer_locations?.phone ?? null,
+    planned_delivery_date: raw.planned_delivery_date,
+    delivery_sequence: raw.delivery_sequence,
+    vehicle_id: raw.vehicle_id,
+    vehicle_name: raw.vehicles?.name ?? null,
+    delivery_notes: raw.delivery_notes,
+    cash_on_delivery: raw.cash_on_delivery,
+    amount_to_collect: raw.amount_to_collect,
+    payment_method: raw.payment_method,
+    payment_status: raw.payment_status,
+    amount_collected: raw.amount_collected,
+    delivery_failure_reason: raw.delivery_failure_reason,
+    // SUM(order line quantities) for physical lines — never a per-unit
+    // scan count. See the Phase 1 stabilisation brief §23.
+    tyre_count: raw.order_items
+      .filter((item) => item.is_physical)
+      .reduce((sum, item) => sum + item.quantity, 0),
+    items: [...raw.order_items]
+      .filter((item) => item.is_physical)
+      .sort((a, b) => (a.line_number ?? 0) - (b.line_number ?? 0))
+      .map((item) => ({
+        id: item.id,
+        description: item.description ?? item.raw_description ?? "—",
+        quantity: item.quantity,
+      })),
+  }));
 }
 
-/** Aggregate loading progress across a driver's whole run, e.g. "12 / 18". */
-export function summariseDriverProgress(orders: readonly DriverOrderSummary[]): {
-  loaded: number;
-  total: number;
-  label: string;
+/** "TODAY": aggregate summary across a driver's whole run. */
+export function summariseDriverDay(orders: readonly DriverOrderSummary[]): {
+  orderCount: number;
+  tyreCount: number;
+  codTotal: number;
+  deliveredCount: number;
+  remainingCount: number;
 } {
-  const loaded = orders.reduce((sum, order) => sum + order.progress.loaded, 0);
-  const total = orders.reduce((sum, order) => sum + order.progress.total, 0);
-  return { loaded, total, label: `${loaded} / ${total}` };
+  const orderCount = orders.length;
+  const tyreCount = orders.reduce((sum, order) => sum + order.tyre_count, 0);
+  const codTotal = orders.reduce(
+    (sum, order) => sum + (order.cash_on_delivery ? (order.amount_to_collect ?? 0) : 0),
+    0
+  );
+  const deliveredCount = orders.filter((order) => order.status === "delivered").length;
+  return { orderCount, tyreCount, codTotal, deliveredCount, remainingCount: orderCount - deliveredCount };
 }
 
-export interface LoadScanResult {
+export interface DispatchActionResult {
   ok: boolean;
   code: string;
-  inventoryUnitId?: string;
-  unitToken?: string;
   status?: string;
-  orderId?: string;
-  orderNumber?: number | string;
-  customer?: string;
-  description?: string | null;
-  standCode?: StandCode | null;
 }
 
 /**
- * Loading scan. Verifies the unit exists, is currently `stored`, and belongs to
- * an order assigned to THIS driver/van before marking it loaded. A wrong-driver
- * scan is rejected and recorded, never loaded.
+ * "MARK AS LOADED" — one tap per order. Idempotent (a double tap or a
+ * retried request returns the existing successful state rather than
+ * erroring or double-recording), transactional (gorush_mark_order_loaded
+ * is a single Postgres function call), and never touches inventory_units.
  */
-export async function loadUnitByToken(input: {
-  unitToken: string;
-  driverId: string;
+export async function markOrderLoaded(input: {
+  orderId: string;
   vehicleId?: string | null;
   operator?: string | null;
-  idempotencyKey?: string | null;
-}): Promise<LoadScanResult> {
+}): Promise<DispatchActionResult> {
   const supabase = createSupabaseAdminClient();
 
-  const { data, error } = await supabase.rpc("gorush_load_unit", {
-    p_unit_token: input.unitToken,
-    p_driver_id: input.driverId,
+  const { data, error } = await supabase.rpc("gorush_mark_order_loaded", {
+    p_order_id: input.orderId,
     p_vehicle_id: input.vehicleId ?? null,
-    p_operator: input.operator ?? null,
-    p_idempotency_key: input.idempotencyKey ?? null,
-  });
-
-  if (error) {
-    logError("load_unit_failed", error, { driverId: input.driverId });
-    throw error;
-  }
-
-  const result = data as {
-    ok: boolean;
-    code: string;
-    inventory_unit_id?: string;
-    unit_token?: string;
-    status?: string;
-    order_id?: string;
-    order_number?: number | string;
-    customer?: string;
-    description?: string | null;
-    stand_code?: StandCode | null;
-  };
-
-  logEvent("unit_loading_scan", {
-    code: result.code,
-    ok: result.ok,
-    driverId: input.driverId,
-  });
-
-  return {
-    ok: result.ok,
-    code: result.code,
-    inventoryUnitId: result.inventory_unit_id,
-    unitToken: result.unit_token,
-    status: result.status,
-    orderId: result.order_id,
-    orderNumber: result.order_number,
-    customer: result.customer,
-    description: result.description,
-    standCode: result.stand_code ?? null,
-  };
-}
-
-/**
- * Manual loading override — for a damaged label or a dead scanner only.
- *
- * A reason is mandatory, and the resulting scan is recorded as
- * `manual_loading` with `manual = true`, so it can never be mistaken
- * for a real barcode scan in the audit trail.
- */
-export async function manualLoadUnit(input: {
-  inventoryUnitId: string;
-  driverId: string;
-  vehicleId?: string | null;
-  reason: string;
-  operator?: string | null;
-}): Promise<LoadScanResult> {
-  const supabase = createSupabaseAdminClient();
-
-  const { data, error } = await supabase.rpc("gorush_manual_load_unit", {
-    p_inventory_unit_id: input.inventoryUnitId,
-    p_driver_id: input.driverId,
-    p_vehicle_id: input.vehicleId ?? null,
-    p_reason: input.reason,
     p_operator: input.operator ?? null,
   });
 
   if (error) {
-    logError("manual_load_failed", error, { driverId: input.driverId });
+    logError("mark_order_loaded_failed", error, { orderId: input.orderId });
     throw error;
   }
 
-  const result = data as {
-    ok: boolean;
-    code: string;
-    inventory_unit_id?: string;
-    status?: string;
-    order_number?: number | string;
-  };
+  const result = data as { ok: boolean; code: string; status?: string };
+  logEvent("order_marked_loaded", { orderId: input.orderId, code: result.code, ok: result.ok });
+  return result;
+}
 
-  logEvent("unit_manual_load_override", {
-    code: result.code,
-    ok: result.ok,
-    driverId: input.driverId,
-    inventoryUnitId: input.inventoryUnitId,
-  });
-
-  return {
-    ok: result.ok,
-    code: result.code,
-    inventoryUnitId: result.inventory_unit_id,
-    status: result.status,
-    orderNumber: result.order_number,
-  };
+export interface DeliverOrderResult extends DispatchActionResult {
+  deliveredAt?: string;
 }
 
 /**
- * Last known location/event for a unit, from the scan history. Powers the
- * "LAST KNOWN: Van 3 / 14:11 / Loading scan" display.
- */
-export async function getLastKnownEvent(inventoryUnitId: string): Promise<{
-  scan_type: string;
-  result: string;
-  scanned_at: string;
-  stand_code: StandCode | null;
-  driver_name: string | null;
-  vehicle_name: string | null;
-  manual: boolean;
-} | null> {
-  const supabase = createSupabaseAdminClient();
-
-  const { data, error } = await supabase
-    .from("inventory_scans")
-    .select("scan_type, result, scanned_at, stand_code, manual, drivers ( name ), vehicles ( name )")
-    .eq("inventory_unit_id", inventoryUnitId)
-    .order("scanned_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) throw error;
-  if (!data) return null;
-
-  const row = data as unknown as {
-    scan_type: string;
-    result: string;
-    scanned_at: string;
-    stand_code: StandCode | null;
-    manual: boolean;
-    drivers: { name: string } | null;
-    vehicles: { name: string } | null;
-  };
-
-  return {
-    scan_type: row.scan_type,
-    result: row.result,
-    scanned_at: row.scanned_at,
-    stand_code: row.stand_code,
-    driver_name: row.drivers?.name ?? null,
-    vehicle_name: row.vehicles?.name ?? null,
-    manual: row.manual,
-  };
-}
-
-/** Units on a driver's orders that are not yet loaded — the manual-override picker. */
-export async function listLoadableUnits(driverId: string): Promise<
-  {
-    id: string;
-    unit_sequence: number;
-    status: InventoryUnitStatus;
-    description: string | null;
-    order_number: number;
-    customer_name: string | null;
-  }[]
-> {
-  const supabase = createSupabaseAdminClient();
-
-  const { data, error } = await supabase
-    .from("inventory_units")
-    .select(
-      "id, unit_sequence, status, description, orders!inner ( order_number, driver_id, status, customers ( name ) )"
-    )
-    .eq("orders.driver_id", driverId)
-    .in("status", ["expected", "received", "stored"])
-    .order("unit_sequence");
-
-  if (error) throw error;
-
-  return ((data ?? []) as unknown as {
-    id: string;
-    unit_sequence: number;
-    status: InventoryUnitStatus;
-    description: string | null;
-    orders: { order_number: number; customers: { name: string } | null } | null;
-  }[])
-    .filter((row) => row.orders !== null)
-    .map((row) => ({
-      id: row.id,
-      unit_sequence: row.unit_sequence,
-      status: row.status,
-      description: row.description,
-      order_number: row.orders!.order_number,
-      customer_name: row.orders!.customers?.name ?? null,
-    }));
-}
-
-export interface DeliverOrderResult {
-  ok: boolean;
-  code: string;
-  status?: string;
-  deliveredUnits?: number;
-  totalUnits?: number;
-}
-
-/**
- * "Marchează comanda ca livrată" — the delivery-confirmation step the app
- * never had (see 20260822000000_deliver_order.sql). One tap per order
- * rather than per-unit scanning: a driver delivers a customer's whole
- * order in one visit, not one tyre at a time. Marks every currently-loaded
- * unit as delivered and resolves the order to 'delivered' (all units were
- * loaded) or 'partially_delivered' (a shortage meant not everything made
- * it onto the van in the first place).
+ * "MARK DELIVERED" — one tap per order, with optional COD collection
+ * recorded in the same call. `driverId: null` means an admin/warehouse
+ * initiated delivery from the Livrări board, exempt from the
+ * wrong-driver check by design (see the RPC comment); a real driver id
+ * (from the driver app) is always enforced server-side.
  */
 export async function deliverOrder(input: {
   orderId: string;
-  driverId: string;
+  driverId: string | null;
   operator?: string | null;
+  amountCollected?: number | null;
+  paymentMethod?: string | null;
 }): Promise<DeliverOrderResult> {
   const supabase = createSupabaseAdminClient();
 
@@ -386,28 +216,46 @@ export async function deliverOrder(input: {
     p_order_id: input.orderId,
     p_driver_id: input.driverId,
     p_operator: input.operator ?? null,
+    p_amount_collected: input.amountCollected ?? null,
+    p_payment_method: input.paymentMethod ?? null,
   });
 
   if (error) {
-    logError("deliver_order_failed", error, { orderId: input.orderId, driverId: input.driverId });
+    logError("deliver_order_failed", error, { orderId: input.orderId });
     throw error;
   }
 
-  const result = data as {
-    ok: boolean;
-    code: string;
-    status?: string;
-    delivered_units?: number;
-    total_units?: number;
-  };
-
+  const result = data as { ok: boolean; code: string; status?: string; delivered_at?: string };
   logEvent("order_delivered", { orderId: input.orderId, code: result.code, ok: result.ok });
+  return { ok: result.ok, code: result.code, status: result.status, deliveredAt: result.delivered_at };
+}
 
-  return {
-    ok: result.ok,
-    code: result.code,
-    status: result.status,
-    deliveredUnits: result.delivered_units,
-    totalUnits: result.total_units,
-  };
+/**
+ * "DELIVERY FAILED" — the delivery exception path. A reason is mandatory;
+ * the order returns to an explicit attention state (on_hold) rather than
+ * inventing a new status, and can be reactivated like any other hold.
+ */
+export async function markDeliveryFailed(input: {
+  orderId: string;
+  driverId: string | null;
+  operator?: string | null;
+  reason: string;
+}): Promise<DispatchActionResult> {
+  const supabase = createSupabaseAdminClient();
+
+  const { data, error } = await supabase.rpc("gorush_mark_delivery_failed", {
+    p_order_id: input.orderId,
+    p_driver_id: input.driverId,
+    p_operator: input.operator ?? null,
+    p_reason: input.reason,
+  });
+
+  if (error) {
+    logError("mark_delivery_failed_failed", error, { orderId: input.orderId });
+    throw error;
+  }
+
+  const result = data as { ok: boolean; code: string; status?: string };
+  logEvent("order_delivery_failed", { orderId: input.orderId, code: result.code, ok: result.ok });
+  return result;
 }

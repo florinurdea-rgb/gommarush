@@ -185,11 +185,23 @@ export const updateOrderSchema = z
 
 export const orderActionSchema = z
   .object({
-    action: z.enum(["cancel", "hold", "reactivate", "assign_stand", "set_status"]),
+    action: z.enum([
+      "cancel",
+      "hold",
+      "reactivate",
+      "assign_stand",
+      "set_status",
+      "mark_loaded",
+      "deliver",
+      "delivery_failed",
+    ]),
     reason: longText.nullish(),
     stand_code: standCodeSchema.nullish(),
     planned_delivery_date: isoDate.nullish(),
     status: z.string().trim().max(40).nullish(),
+    vehicle_id: uuid.nullish(),
+    amount_collected: z.number().min(0).max(1_000_000).nullish(),
+    payment_method: z.enum(["cash", "card", "bank_transfer", "already_paid", "other"]).nullish(),
   })
   .strict();
 
@@ -314,62 +326,36 @@ export const driverSessionSchema = z
   .strict();
 
 // ---------------------------------------------------------------------------
-// Scanning
+// Phase 1 dispatch — order-level load / deliver / delivery-failed
 // ---------------------------------------------------------------------------
+// No tyre scanning: every action here operates on a whole order in one call.
+// See the Phase 1 stabilisation brief §0/§2/§3.
 
-/**
- * What a supplier label reader produced. Every field is optional because a
- * blurry label legitimately yields almost nothing — and that must produce an
- * honest "no confident match", not a guess.
- */
-export const scannedLabelSchema = z
+export const paymentMethodSchema = z.enum(["cash", "card", "bank_transfer", "already_paid", "other"]);
+
+export const markLoadedSchema = z
   .object({
-    brand: shortText.nullish(),
-    model: shortText.nullish(),
-    size: z.string().trim().max(50).nullish(),
-    loadIndex: z.string().trim().max(20).nullish(),
-    speedRating: z.string().trim().max(5).nullish(),
-    supplierSku: shortText.nullish(),
-    supplierReference: shortText.nullish(),
-    barcode: z.string().trim().max(100).nullish(),
-    rawText: z.string().trim().max(5000).nullish(),
+    order_id: uuid,
+    vehicle_id: uuid.nullish(),
   })
   .strict();
 
-export const supplierLabelScanSchema = z
+export const deliverOrderSchema = z
   .object({
-    label: scannedLabelSchema,
-    /** Required so a double-submitted capture can't consume two units. */
-    idempotency_key: z.string().trim().min(8).max(100),
-    /** Set once the operator confirms an uncertain match. */
-    order_item_id: uuid.nullish(),
-    manual: z.boolean().default(false),
-    reason: longText.nullish(),
+    order_id: uuid,
+    amount_collected: z.number().min(0).max(1_000_000).nullish(),
+    payment_method: paymentMethodSchema.nullish(),
   })
   .strict();
 
-export const manualSearchSchema = z
-  .object({ query: z.string().trim().min(1).max(100) })
-  .strict();
-
-export const barcodeScanSchema = z
+export const deliveryFailedSchema = z
   .object({
-    unit_token: z.string().trim().min(4).max(120),
-    idempotency_key: z.string().trim().min(8).max(100).nullish(),
-    zone_id: uuid.nullish(),
-  })
-  .strict();
-
-export const manualLoadSchema = z
-  .object({
-    inventory_unit_id: uuid,
-    // Mandatory and non-trivial: a manual override without a real reason is
-    // exactly what the audit trail must never contain.
+    order_id: uuid,
+    // Mandatory and non-trivial: a failure without a real reason is exactly
+    // what the audit trail must never contain.
     reason: z.string().trim().min(3).max(500),
   })
   .strict();
-
-export const deliverOrderSchema = z.object({ order_id: uuid }).strict();
 
 export const printJobActionSchema = z
   .object({ action: z.literal("retry") })

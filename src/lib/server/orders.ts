@@ -43,6 +43,8 @@ export interface OrderListRow {
   progress: OrderProgress;
   /** SUM of physical tyre units on this order — never trusted from AI, always counted from inventory_units. */
   tyre_count: number;
+  cash_on_delivery: boolean;
+  amount_to_collect: number | null;
 }
 
 /**
@@ -54,6 +56,7 @@ export interface OrderListRow {
 const ORDER_LIST_SELECT = `
   id, order_number, stand_code, status, planned_delivery_date, held_at,
   supplier_document_number, driver_id, vehicle_id, delivery_sequence,
+  cash_on_delivery, amount_to_collect,
   customers ( name ),
   customer_locations ( city, address_line1 ),
   drivers ( name ),
@@ -92,6 +95,8 @@ interface RawOrderListRow {
   driver_id: string | null;
   vehicle_id: string | null;
   delivery_sequence: number | null;
+  cash_on_delivery: boolean | null;
+  amount_to_collect: number | null;
   customers: { name: string } | null;
   customer_locations: { city: string | null; address_line1: string | null } | null;
   drivers: { name: string } | null;
@@ -122,6 +127,8 @@ function toListRow(raw: RawOrderListRow): OrderListRow {
     held_at: raw.held_at,
     progress: calculateOrderProgress(raw.inventory_units ?? []),
     tyre_count: (raw.inventory_units ?? []).filter((unit) => unit.unit_type === "tyre").length,
+    cash_on_delivery: raw.cash_on_delivery ?? false,
+    amount_to_collect: raw.amount_to_collect ?? null,
   };
 }
 
@@ -559,25 +566,29 @@ export async function markOrderPrepared(orderId: string, changedBy: string): Pro
 }
 
 /**
+ * Statuses excluded from the generic manual override because they each
+ * carry required side effects a plain status write would skip: 'loaded'
+ * needs a vehicle and loaded_at (gorush_mark_order_loaded), 'delivered'/
+ * 'partially_delivered' need delivered_at and payment recording
+ * (gorush_deliver_order). Use markOrderLoaded()/deliverOrder() from
+ * src/lib/server/loading.ts for those instead. 'cancelled' already has its
+ * own "Șterge" action; 'draft'/'review_required' don't apply to an order
+ * that already made it onto the board.
+ */
+const MANUAL_STATUS_EXCLUDED: readonly OrderStatus[] = ["loaded", "delivered", "partially_delivered"];
+
+/**
  * Manual status override from the Livrări board's card menu — the admin
  * needs to be able to correct or advance an order's status directly,
- * without walking through each intermediate scan/confirmation step.
- *
- * Deliberately restricted to ACTIVE_ORDER_STATUSES (open/in-progress
- * statuses only): 'delivered'/'partially_delivered' must go through
- * gorush_deliver_order instead, since that RPC also moves the matching
- * inventory_units — setting the order status alone here would desync it
- * from unit state and silently corrupt the Sumar "Anvelope livrate"/profit
- * numbers (grounded in inventory_units.delivered_at, not order.status).
- * 'cancelled' already has its own "Șterge" action; 'draft'/'review_required'
- * don't apply to an order that already made it onto the board.
+ * without walking through each intermediate step. See
+ * MANUAL_STATUS_EXCLUDED for what this deliberately does NOT cover.
  */
 export async function setOrderStatusManually(
   orderId: string,
   status: OrderStatus,
   changedBy: string
 ): Promise<StatusChangeResult> {
-  if (!ACTIVE_ORDER_STATUSES.includes(status)) {
+  if (!ACTIVE_ORDER_STATUSES.includes(status) || MANUAL_STATUS_EXCLUDED.includes(status)) {
     return { ok: false, code: "STATUS_NOT_ALLOWED" };
   }
   return setStatus(orderId, status, { reason: "manual_override", changedBy });

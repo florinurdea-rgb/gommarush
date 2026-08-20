@@ -1,18 +1,22 @@
 import { getDriverSession } from "@/lib/auth/driver-session";
 import { listDrivers, listVehicles } from "@/lib/server/reference";
-import { listDriverOrders, listLoadableUnits, summariseDriverProgress } from "@/lib/server/loading";
+import { listDriverOrders, summariseDriverDay } from "@/lib/server/loading";
+import { getDepotLocation } from "@/lib/server/settings";
+import { geocodeAddresses } from "@/lib/server/geocoding";
 import { DriverSessionPicker } from "@/components/logistics/DriverSessionPicker";
-import { DriverConsole } from "@/components/logistics/DriverConsole";
+import { DriverHome } from "@/components/logistics/DriverHome";
+import type { DriverRouteStop } from "@/components/logistics/DriverRouteMapModal";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Șofer" };
 
 /**
- * /driver — the operational receiving and loading interface.
+ * /driver — the driver's home screen.
  *
- * Mobile-first: large buttons, large text, minimal typing. Everything a driver
- * sees is scoped to their own session — the orders query filters by driver_id in
- * SQL, so another driver's deliveries never reach this device.
+ * Phase 1 stabilisation (§19): order-level actions only, no tyre scanning.
+ * Everything a driver sees is scoped to their own session — the orders
+ * query filters by driver_id in SQL, so another driver's deliveries never
+ * reach this device.
  */
 export default async function DriverPage() {
   const session = await getDriverSession();
@@ -27,18 +31,38 @@ export default async function DriverPage() {
     );
   }
 
-  const [orders, loadableUnits] = await Promise.all([
+  const [orders, depotLocation] = await Promise.all([
     listDriverOrders(session.driverId),
-    listLoadableUnits(session.driverId),
+    getDepotLocation(),
   ]);
 
+  const addresses = orders
+    .map((order) => [order.customer_address, order.customer_city].filter(Boolean).join(", "))
+    .filter((address) => address.length > 0);
+  const geocoded = addresses.length > 0 ? await geocodeAddresses(addresses) : new Map();
+
+  const stops: DriverRouteStop[] = orders
+    .map((order) => {
+      const address = [order.customer_address, order.customer_city].filter(Boolean).join(", ");
+      if (!address) return null;
+      return {
+        orderId: order.id,
+        orderNumber: order.order_number,
+        customerName: order.customer_name,
+        address,
+        point: geocoded.get(address) ?? null,
+      };
+    })
+    .filter((stop): stop is DriverRouteStop => stop !== null);
+
   return (
-    <DriverConsole
+    <DriverHome
       driverName={session.driverName}
       vehicleName={session.vehicleName}
       orders={orders}
-      progress={summariseDriverProgress(orders)}
-      loadableUnits={loadableUnits}
+      summary={summariseDriverDay(orders)}
+      stops={stops}
+      depotLocation={depotLocation}
     />
   );
 }

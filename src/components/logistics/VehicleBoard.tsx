@@ -7,7 +7,6 @@ import { OrderDetailModal } from "@/components/logistics/OrderDetailModal";
 import { VehicleCardActionsMenu } from "@/components/logistics/VehicleCardActionsMenu";
 import { VehicleLaneMenu } from "@/components/logistics/VehicleLaneMenu";
 import { FleetManagementModal } from "@/components/logistics/FleetManagementModal";
-import { DemoSeedButton } from "@/components/logistics/DemoSeedButton";
 import { RouteStopsModal } from "@/components/logistics/RouteStopsModal";
 import { TyreIcon } from "@/components/logistics/TyreIcon";
 import { useToast } from "@/components/ui/Toast";
@@ -440,6 +439,9 @@ export function VehicleBoard({
               orderId={order.id}
               orderLabel={formatOrderNumber(order.order_number)}
               currentStatus={order.status}
+              hasVehicle={columnKey !== "unassigned"}
+              amountToCollect={order.amount_to_collect}
+              cashOnDelivery={order.cash_on_delivery}
               moveTargets={moveTargets}
               onAssignRecommended={() => handleAssignRecommended(order, columnKey)}
               onMoveTo={(targetKey) => moveOrderToColumn(order, columnKey, targetKey)}
@@ -688,7 +690,6 @@ export function VehicleBoard({
         )}
 
         <div className="ml-auto flex items-center gap-2">
-          <DemoSeedButton />
           <button
             type="button"
             onClick={() => setFleetModalOpen(true)}
