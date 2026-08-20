@@ -16,3 +16,4 @@ next-env.d.ts
 print-agent/node_modules
 print-agent/.env
 print-agent/output/*.pdf
+supabase/.temp/
