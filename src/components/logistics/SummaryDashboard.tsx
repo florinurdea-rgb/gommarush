@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useRealtimeSignal } from "@/hooks/useRealtimeSignal";
 import { DeliveriesModal } from "@/components/logistics/DeliveriesModal";
 import { VAN_BORDER_CLASS, VAN_DOT_CLASS } from "@/lib/logistics/vehicle-colors";
 import { TyreIcon } from "@/components/logistics/TyreIcon";
@@ -60,9 +61,6 @@ function KpiCard({
   );
 }
 
-/** Matches VehicleBoard's 12s cadence — the same near-live behavior on both operational dashboards, see its own comment for why 12s is the sweet spot here. */
-const AUTO_REFRESH_MS = 12_000;
-
 export function SummaryDashboard({
   summary,
   periodLabel,
@@ -73,15 +71,16 @@ export function SummaryDashboard({
   const router = useRouter();
   const [activeVehicle, setActiveVehicle] = useState<string>("total");
   const [deliveriesOpen, setDeliveriesOpen] = useState(false);
+  const deliveriesOpenRef = useRef(deliveriesOpen);
+  deliveriesOpenRef.current = deliveriesOpen;
 
-  useEffect(() => {
-    const interval = window.setInterval(() => {
-      if (document.visibilityState !== "visible") return;
-      if (deliveriesOpen) return;
-      router.refresh();
-    }, AUTO_REFRESH_MS);
-    return () => window.clearInterval(interval);
-  }, [router, deliveriesOpen]);
+  // Reacts to the 'gorush-ops' Realtime broadcast rather than polling
+  // blindly — see useRealtimeSignal.ts — paused while the deliveries
+  // breakdown modal is open so a refresh doesn't close it under the user.
+  useRealtimeSignal(() => {
+    if (deliveriesOpenRef.current) return;
+    router.refresh();
+  });
 
   const vehicleRowById = useMemo(
     () => new Map(summary.vehicles.map((row) => [row.vehicleId, row])),

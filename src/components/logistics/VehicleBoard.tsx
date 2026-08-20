@@ -10,6 +10,7 @@ import { FleetManagementModal } from "@/components/logistics/FleetManagementModa
 import { RouteStopsModal } from "@/components/logistics/RouteStopsModal";
 import { TyreIcon } from "@/components/logistics/TyreIcon";
 import { useToast } from "@/components/ui/Toast";
+import { useRealtimeSignal } from "@/hooks/useRealtimeSignal";
 import { formatOrderNumber } from "@/lib/logistics/order-number";
 import { computeVehicleLoad, moveOrderBetweenColumns } from "@/lib/logistics/vehicle-board";
 import { suggestRouteAssignments, suggestRouteForOrder } from "@/lib/logistics/route-suggestion";
@@ -127,8 +128,6 @@ function matchesQuickFilter(order: OrderListRow, filter: QuickFilter): boolean {
  * the user is mid-interaction (drag, an open drawer/modal) so a refresh
  * never yanks something out from under them.
  */
-const AUTO_REFRESH_MS = 12_000;
-
 export function VehicleBoard({
   columns: initialColumns,
   vehicles,
@@ -172,19 +171,18 @@ export function VehicleBoard({
     setColumnsByKey(Object.fromEntries(initialColumns.map((column) => [column.key, column.orders])));
   }, [initialColumns]);
 
-  // Keeps the board up to date without a manual reload — paused whenever the
-  // tab is hidden, or the user is mid-interaction (dragging, or has the
-  // order drawer / route map / fleet sheet open), so a background refresh
-  // never yanks focus or a card out from under them.
+  // Keeps the board up to date without a manual reload — reacts to the
+  // 'gorush-ops' Realtime broadcast (see useRealtimeSignal.ts) rather than
+  // polling blindly, and stays paused whenever the user is mid-interaction
+  // (dragging, or has the order drawer / route map / fleet sheet open), so
+  // a refresh never yanks focus or a card out from under them.
   const interactionActive = drag !== null || openOrderId !== null || mapColumnKey !== null || fleetModalOpen;
-  useEffect(() => {
-    const interval = window.setInterval(() => {
-      if (document.visibilityState !== "visible") return;
-      if (interactionActive) return;
-      router.refresh();
-    }, AUTO_REFRESH_MS);
-    return () => window.clearInterval(interval);
-  }, [router, interactionActive]);
+  const interactionActiveRef = useRef(interactionActive);
+  interactionActiveRef.current = interactionActive;
+  useRealtimeSignal(() => {
+    if (interactionActiveRef.current) return;
+    router.refresh();
+  });
 
   const commitColumn = useCallback(
     async (vehicleId: string | null, orderedOrderIds: string[]) => {
