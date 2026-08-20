@@ -318,10 +318,17 @@ export const customerLocationSchema = addressSchema
 // Driver session
 // ---------------------------------------------------------------------------
 
-export const driverSessionSchema = z
+/** Vehicle selection for the already-authenticated driver — identity never travels in the body. */
+export const driverVehicleSchema = z
   .object({
-    driver_id: uuid,
     vehicle_id: uuid.nullish(),
+  })
+  .strict();
+
+export const driverLoginSchema = z
+  .object({
+    email: z.string().trim().email().max(200),
+    password: z.string().min(1).max(200),
   })
   .strict();
 

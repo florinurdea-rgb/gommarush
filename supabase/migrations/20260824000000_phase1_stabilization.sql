@@ -34,6 +34,17 @@ alter table public.orders add column if not exists delivery_failure_reason text;
 alter table public.orders add column if not exists delivery_failed_at timestamptz;
 
 -- ---------------------------------------------------------------------------
+-- drivers: real authentication (§17) + explicit vehicle selection
+-- ---------------------------------------------------------------------------
+-- auth_user_id already exists (added in the very first migration,
+-- unused until now). current_vehicle_id is the one new column: "which van
+-- today" is an operational preference, not part of identity, so it is
+-- deliberately separate from auth_user_id and never used to decide who
+-- someone is.
+alter table public.drivers add column if not exists current_vehicle_id uuid references public.vehicles(id) on delete set null;
+create unique index if not exists drivers_auth_user_id_key on public.drivers(auth_user_id) where auth_user_id is not null;
+
+-- ---------------------------------------------------------------------------
 -- gorush_set_order_status: stamp ready_at when an order reaches
 -- 'ready_for_loading' (the "Pregătește comanda" action). Same signature,
 -- same behaviour otherwise — safe to `create or replace` in place.
@@ -327,7 +338,8 @@ begin
     select * from (values
       ('vehicles', 'capacity_units'), ('vehicles', 'display_order'), ('vehicles', 'color_key'),
       ('orders', 'delivery_sequence'), ('orders', 'normalized_document_number'),
-      ('orders', 'ready_at'), ('orders', 'amount_collected'), ('orders', 'delivery_failure_reason')
+      ('orders', 'ready_at'), ('orders', 'amount_collected'), ('orders', 'delivery_failure_reason'),
+      ('drivers', 'current_vehicle_id')
     ) as t(tbl, col)
   loop
     if not exists (

@@ -1,5 +1,6 @@
+import { redirect } from "next/navigation";
 import { getDriverSession } from "@/lib/auth/driver-session";
-import { listDrivers, listVehicles } from "@/lib/server/reference";
+import { listVehicles } from "@/lib/server/reference";
 import { listDriverOrders, summariseDriverDay } from "@/lib/server/loading";
 import { getDepotLocation } from "@/lib/server/settings";
 import { geocodeAddresses } from "@/lib/server/geocoding";
@@ -14,18 +15,21 @@ export const metadata = { title: "Șofer" };
  * /driver — the driver's home screen.
  *
  * Phase 1 stabilisation (§19): order-level actions only, no tyre scanning.
- * Everything a driver sees is scoped to their own session — the orders
- * query filters by driver_id in SQL, so another driver's deliveries never
- * reach this device.
+ * Identity comes from a real Supabase Auth session (§17) — an
+ * unauthenticated visitor is sent to /driver/login, never shown a picker
+ * of other people's names. Everything a driver sees is scoped to their
+ * own session — the orders query filters by driver_id in SQL, so another
+ * driver's deliveries never reach this device.
  */
 export default async function DriverPage() {
   const session = await getDriverSession();
+  if (!session) redirect("/driver/login");
 
-  if (!session) {
-    const [drivers, vehicles] = await Promise.all([listDrivers(), listVehicles()]);
+  if (!session.vehicleId) {
+    const vehicles = await listVehicles();
     return (
       <DriverSessionPicker
-        drivers={drivers.map((d) => ({ id: d.id, name: d.name }))}
+        driverName={session.driverName}
         vehicles={vehicles.map((v) => ({ id: v.id, name: v.name }))}
       />
     );

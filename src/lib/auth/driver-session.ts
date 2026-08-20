@@ -1,136 +1,131 @@
 import "server-only";
-import { createHmac, timingSafeEqual, randomBytes } from "node:crypto";
-import { cookies } from "next/headers";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/server-admin";
+import { logError, logEvent } from "@/lib/logger";
 
 /**
- * Phase 1 driver/operator session.
+ * Driver authentication via Supabase Auth — same mechanism and the same
+ * cookie adapter as src/lib/auth/admin-session.ts (see that file's doc
+ * comment for why: the cookie pair is managed by Supabase's own client
+ * code and middleware.ts transparently refreshes it).
  *
- * ⚠️ SIMPLIFIED BY DESIGN. The driver picks who they are and which van they're
- * using; there is no password. That is the specified Phase 1 behaviour.
+ * REPLACES the Phase 1 "pick who you are, no password" design: that
+ * session was a self-signed cookie with no real authentication behind
+ * it — any phone could claim to be any driver. Authentication vs.
+ * authorization here works the same way admin does: a valid Supabase
+ * user is not automatically a driver. Only a user whose id is linked to
+ * an active `drivers` row (drivers.auth_user_id) gets a driver session.
  *
- * It is still a signed server-side cookie rather than a value posted with each
- * request, for two reasons that matter operationally:
- *   * every scan endpoint reads the driver identity from ONE trusted place, so
- *     a request cannot claim a different driver than the session it's using
- *   * the wrong-driver protection is therefore enforced server-side, not by the
- *     phone being honest
+ * Linking a driver: an admin creates the Supabase Auth user (dashboard →
+ * Authentication → Users, "Auto Confirm User") with the SAME email as the
+ * driver's `drivers.email`. On that driver's first successful sign-in,
+ * `auth_user_id` is filled in automatically (a one-time "claim" by email)
+ * — no separate admin UI needed. Every sign-in after that matches by
+ * `auth_user_id` directly.
  *
- * REPLACING THIS LATER: implement `getDriverSession()` against real
- * authentication (Supabase Auth + a `drivers.user_id` link) and return the same
- * shape. The scan routes and the /driver UI need no changes.
+ * Vehicle selection is a separate, lower-stakes concern (drivers.
+ * current_vehicle_id): it is not part of authentication, so it is never
+ * used to decide who someone is — only which van they're driving today.
  */
-
-const COOKIE_NAME = "gorush_driver_session";
-const SESSION_TTL_SECONDS = 60 * 60 * 16; // one long shift
 
 export interface DriverSession {
   driverId: string;
   driverName: string;
   vehicleId: string | null;
   vehicleName: string | null;
-  issuedAt: number;
-  expiresAt: number;
-  /** How this identity was established. Recorded on manual-override audits. */
-  provider: "self-selected" | "supabase";
+  provider: "supabase";
 }
 
-let ephemeralSecret: string | null = null;
-
-function signingSecret(): string {
-  const configured = process.env.DRIVER_SESSION_SECRET ?? process.env.ADMIN_SESSION_SECRET;
-  if (configured && configured.length >= 16) return configured;
-  if (!ephemeralSecret) ephemeralSecret = randomBytes(32).toString("hex");
-  return ephemeralSecret;
+interface DriverRow {
+  id: string;
+  name: string;
+  active: boolean;
+  auth_user_id: string | null;
+  current_vehicle_id: string | null;
+  vehicles: { name: string } | null;
 }
+
+const DRIVER_SELECT = "id, name, active, auth_user_id, current_vehicle_id, vehicles ( name )";
 
 /**
- * True when we're in production with no stable signing secret configured (see
- * the identical concern in src/lib/auth/admin-session.ts). The driver session
- * route checks this before issuing any cookie, so a missing secret fails as an
- * immediate error instead of a session that silently stops validating on the
- * next request served by a different serverless instance.
+ * Reads the current Supabase Auth session and resolves it to a driver.
+ * Returns null when not signed in, or signed in as a Supabase user with
+ * no linked (or linkable) active driver row.
  */
-export function isDriverSigningSecretMissingInProduction(): boolean {
-  const configured = process.env.DRIVER_SESSION_SECRET ?? process.env.ADMIN_SESSION_SECRET;
-  return process.env.NODE_ENV === "production" && !(configured && configured.length >= 16);
-}
-
-function sign(payload: string): string {
-  return createHmac("sha256", signingSecret()).update(payload).digest("base64url");
-}
-
-function signaturesMatch(a: string, b: string): boolean {
-  const bufferA = Buffer.from(a);
-  const bufferB = Buffer.from(b);
-  if (bufferA.length !== bufferB.length) return false;
-  return timingSafeEqual(bufferA, bufferB);
-}
-
-export function encodeDriverSession(session: DriverSession): string {
-  const payload = Buffer.from(JSON.stringify(session), "utf8").toString("base64url");
-  return `${payload}.${sign(payload)}`;
-}
-
-export function decodeDriverSession(token: string | undefined | null): DriverSession | null {
-  if (!token) return null;
-  const separator = token.lastIndexOf(".");
-  if (separator <= 0) return null;
-
-  const payload = token.slice(0, separator);
-  if (!signaturesMatch(token.slice(separator + 1), sign(payload))) return null;
-
+export async function getDriverSession(): Promise<DriverSession | null> {
   try {
-    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as DriverSession;
-    if (typeof parsed.driverId !== "string" || typeof parsed.expiresAt !== "number") return null;
-    if (parsed.expiresAt <= Date.now()) return null;
-    return parsed;
-  } catch {
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data.user) return null;
+
+    const admin = createSupabaseAdminClient();
+
+    const byAuthId = await admin
+      .from("drivers")
+      .select(DRIVER_SELECT)
+      .eq("auth_user_id", data.user.id)
+      .eq("active", true)
+      .maybeSingle();
+    if (byAuthId.error) throw byAuthId.error;
+
+    let driver = byAuthId.data as unknown as DriverRow | null;
+
+    if (!driver && data.user.email) {
+      // One-time claim: an unlinked active driver row whose email matches
+      // this Supabase user's email adopts this auth_user_id. Scoped to
+      // auth_user_id IS NULL so a driver can never be re-parented onto a
+      // different Supabase user by someone else signing up with the same
+      // email later.
+      const claimed = await admin
+        .from("drivers")
+        .update({ auth_user_id: data.user.id })
+        .is("auth_user_id", null)
+        .eq("active", true)
+        .ilike("email", data.user.email)
+        .select(DRIVER_SELECT)
+        .maybeSingle();
+      if (claimed.error) throw claimed.error;
+      driver = claimed.data as unknown as DriverRow | null;
+      if (driver) logEvent("driver_account_claimed", { driverId: driver.id, authUserId: data.user.id });
+    }
+
+    if (!driver) return null;
+
+    return {
+      driverId: driver.id,
+      driverName: driver.name,
+      vehicleId: driver.current_vehicle_id,
+      vehicleName: driver.vehicles?.name ?? null,
+      provider: "supabase",
+    };
+  } catch (error) {
+    logError("driver_session_check_failed", error);
     return null;
   }
 }
 
-export function createDriverSession(input: {
-  driverId: string;
-  driverName: string;
-  vehicleId: string | null;
-  vehicleName: string | null;
-}): DriverSession {
-  const now = Date.now();
-  return {
-    ...input,
-    issuedAt: now,
-    expiresAt: now + SESSION_TTL_SECONDS * 1000,
-    provider: "self-selected",
-  };
+export class DriverUnauthorizedError extends Error {
+  constructor() {
+    super("UNAUTHORIZED");
+    this.name = "DriverUnauthorizedError";
+  }
 }
 
-export function driverSessionCookie(session: DriverSession) {
-  return {
-    name: COOKIE_NAME,
-    value: encodeDriverSession(session),
-    httpOnly: true,
-    sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: SESSION_TTL_SECONDS,
-  };
+export async function requireDriverSession(): Promise<DriverSession> {
+  const session = await getDriverSession();
+  if (!session) throw new DriverUnauthorizedError();
+  return session;
 }
 
-export function clearedDriverSessionCookie() {
-  return {
-    name: COOKIE_NAME,
-    value: "",
-    httpOnly: true,
-    sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 0,
-  };
+/**
+ * Sets the authenticated driver's van for today. Server-side only, and
+ * scoped to the driver's own id — never accepts a driver id from the
+ * caller, so a request can only ever change the vehicle for the driver
+ * making it.
+ */
+export async function setDriverVehicle(driverId: string, vehicleId: string | null): Promise<void> {
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin.from("drivers").update({ current_vehicle_id: vehicleId }).eq("id", driverId);
+  if (error) throw error;
+  logEvent("driver_vehicle_selected", { driverId, vehicleId: vehicleId ?? "none" });
 }
-
-export async function getDriverSession(): Promise<DriverSession | null> {
-  const store = await cookies();
-  return decodeDriverSession(store.get(COOKIE_NAME)?.value);
-}
-
-export const DRIVER_SESSION_COOKIE_NAME = COOKIE_NAME;

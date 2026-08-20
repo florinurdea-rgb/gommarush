@@ -4,9 +4,9 @@ import { resolveSupabasePublicConfig } from "@/lib/supabase/config";
 import { isAdminEmailAllowed } from "@/lib/auth/admin-authorization";
 
 /**
- * Refreshes the Supabase session cookie on every /admin request and gates
- * access to everything under it except the pages that must stay reachable
- * without a session.
+ * Refreshes the Supabase session cookie on every /admin and /driver request
+ * and gates access to everything under them except the pages that must
+ * stay reachable without a session.
  *
  * This is the fix for "logged in, then refresh/navigate and it's gone":
  * `supabase.auth.getUser()` here revalidates the access token and, when it's
@@ -14,17 +14,27 @@ import { isAdminEmailAllowed } from "@/lib/auth/admin-authorization";
  * cookies on the response — the standard @supabase/ssr refresh pattern.
  * Without this running on every request, a Server Component page can read
  * an expired cookie and see no session even though the user is still
- * genuinely signed in.
+ * genuinely signed in. Driver auth (src/lib/auth/driver-session.ts) uses
+ * the exact same Supabase session, so it needs the same refresh.
+ *
+ * Only /admin additionally gates on the admin allowlist here — /driver has
+ * no equivalent Edge-safe check (whether a Supabase user is also a linked
+ * driver is a database lookup, done server-side per-page/route via
+ * getDriverSession()/requireDriverSession()); this layer only redirects a
+ * visitor with no Supabase session at all to /driver/login, the same way
+ * an unauthenticated /admin visitor is redirected to /admin/login.
  *
  * Scoped to page routes only (see `matcher` below) — API routes under
- * /api/admin/* enforce their own session check and return 401 JSON, which a
- * `fetch()` caller can handle; redirecting an API response would just break
- * response parsing instead of taking the user anywhere.
+ * /api/admin/* and /api/driver/* enforce their own session check and
+ * return 401 JSON, which a `fetch()` caller can handle; redirecting an API
+ * response would just break response parsing instead of taking the user
+ * anywhere.
  */
 const PUBLIC_ADMIN_PATHS = ["/admin/login", "/admin/bootstrap"];
+const PUBLIC_DRIVER_PATHS = ["/driver/login"];
 
-function isPublicAdminPath(pathname: string): boolean {
-  return PUBLIC_ADMIN_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+function matchesPublicPath(pathname: string, publicPaths: string[]): boolean {
+  return publicPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
 }
 
 export async function middleware(request: NextRequest) {
@@ -58,13 +68,21 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!isPublicAdminPath(request.nextUrl.pathname) && !isAdminEmailAllowed(user?.email)) {
-    return NextResponse.redirect(new URL("/admin/login", request.url));
+  const { pathname } = request.nextUrl;
+
+  if (pathname.startsWith("/admin")) {
+    if (!matchesPublicPath(pathname, PUBLIC_ADMIN_PATHS) && !isAdminEmailAllowed(user?.email)) {
+      return NextResponse.redirect(new URL("/admin/login", request.url));
+    }
+  } else if (pathname.startsWith("/driver")) {
+    if (!matchesPublicPath(pathname, PUBLIC_DRIVER_PATHS) && !user) {
+      return NextResponse.redirect(new URL("/driver/login", request.url));
+    }
   }
 
   return response;
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: ["/admin/:path*", "/driver/:path*"],
 };

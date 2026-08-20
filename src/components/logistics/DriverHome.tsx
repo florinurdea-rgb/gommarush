@@ -142,13 +142,26 @@ export function DriverHome({
             <div className="truncate text-lg font-extrabold">{driverName}</div>
             <div className="truncate text-sm text-white/60">{vehicleName ?? "Fără mașină"}</div>
           </div>
-          <button
-            type="button"
-            onClick={() => setMapOpen(true)}
-            className="flex h-11 flex-none items-center gap-1.5 rounded-xl bg-white/10 px-4 text-sm font-bold text-white hover:bg-white/20"
-          >
-            Hartă
-          </button>
+          <div className="flex flex-none items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setMapOpen(true)}
+              className="flex h-11 items-center gap-1.5 rounded-xl bg-white/10 px-4 text-sm font-bold text-white hover:bg-white/20"
+            >
+              Hartă
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                await fetch("/api/driver/logout", { method: "POST" });
+                router.replace("/driver/login");
+                router.refresh();
+              }}
+              className="flex h-11 items-center rounded-xl px-3 text-xs font-semibold text-white/50 hover:text-white"
+            >
+              Ieșire
+            </button>
+          </div>
         </div>
       </header>
 

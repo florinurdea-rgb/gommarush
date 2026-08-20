@@ -45,6 +45,7 @@ export type UiKey =
   | "appName"
   | "admin"
   | "adminLogin"
+  | "driverLogin"
   | "email"
   | "password"
   | "signIn"
@@ -235,6 +236,7 @@ const ro: Dictionary = {
     appName: "GoRush Logistică",
     admin: "Admin",
     adminLogin: "Autentificare Admin",
+    driverLogin: "Autentificare șofer",
     email: "Email",
     password: "Parolă",
     signIn: "Intră în cont",
@@ -377,6 +379,9 @@ const ro: Dictionary = {
     UNAUTHORIZED: "Sesiune expirată — autentifică-te din nou",
     INVALID_CREDENTIALS: "Email sau parolă greșite",
     FORBIDDEN: "Acest cont nu are acces la panoul de admin",
+    NOT_A_DRIVER: "Acest cont nu este asociat niciunui șofer — contactează administratorul",
+    DRIVER_NOT_FOUND: "Nu am găsit șoferul",
+    VEHICLE_NOT_FOUND: "Nu am găsit mașina",
     SUPABASE_NOT_CONFIGURED: "Serviciul de autentificare este temporar indisponibil",
     RATE_LIMITED: "Prea multe încercări — te rog așteaptă și reîncearcă",
     ADMIN_SESSION_SECRET_MISSING:
