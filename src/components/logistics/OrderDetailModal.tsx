@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { StandBadge } from "@/components/logistics/StandBadge";
 import { OrderStatusBadge, UnitStatusBadge } from "@/components/logistics/StatusBadge";
-import { ProgressBar } from "@/components/logistics/ProgressBar";
 import { formatOrderNumber } from "@/lib/logistics/order-number";
 import { itemTypeLabel, t } from "@/lib/i18n/logistics";
 import type { OrderDetail } from "@/lib/server/orders";
@@ -169,15 +168,18 @@ export function OrderDetailModal({ orderId, onClose }: { orderId: string; onClos
                 </div>
               )}
 
-              <div className="mt-5 grid grid-cols-2 gap-4">
-                <div>
-                  <div className="text-xs text-ink-soft">{t("stored")}</div>
-                  <ProgressBar progress={detail.progress} metric="stored" />
-                </div>
-                <div>
-                  <div className="text-xs text-ink-soft">{t("loaded")}</div>
-                  <ProgressBar progress={detail.progress} metric="loaded" />
-                </div>
+              <div className="mt-5 flex flex-wrap gap-x-5 gap-y-1 text-sm">
+                {(
+                  [
+                    ["Pregătit", detail.order.ready_at],
+                    ["Încărcat", detail.order.loaded_at],
+                    ["Livrat", detail.order.delivered_at],
+                  ] as const
+                ).map(([label, timestamp]) => (
+                  <span key={label} className={timestamp ? "font-semibold text-ink" : "text-ink-soft"}>
+                    {timestamp ? "✓" : "○"} {label}
+                  </span>
+                ))}
               </div>
 
               <div className="mt-5">
