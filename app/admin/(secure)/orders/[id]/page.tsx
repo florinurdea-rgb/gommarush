@@ -1,16 +1,15 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getOrderDetail, getOrderScanHistory } from "@/lib/server/orders";
+import { getOrderDetail, getOrderStatusHistory } from "@/lib/server/orders";
 import { listDrivers, listVehicles } from "@/lib/server/reference";
 import { listStandOverview } from "@/lib/server/stands";
 import { freeStands } from "@/lib/logistics/stand-allocation";
 import { PageHeading } from "@/components/logistics/AdminShell";
 import { OrderStatusBadge, UnitStatusBadge } from "@/components/logistics/StatusBadge";
 import { StandBadge } from "@/components/logistics/StandBadge";
-import { ProgressBar } from "@/components/logistics/ProgressBar";
 import { OrderEditPanel } from "@/components/logistics/OrderEditPanel";
 import { formatOrderNumber } from "@/lib/logistics/order-number";
-import { itemTypeLabel, scanTypeLabel, t } from "@/lib/i18n/logistics";
+import { itemTypeLabel, orderStatusMeta, t } from "@/lib/i18n/logistics";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +26,7 @@ export default async function OrderDetailPage({
     listDrivers(),
     listVehicles(),
     listStandOverview(),
-    getOrderScanHistory(id, 30),
+    getOrderStatusHistory(id, 30),
   ]);
 
   const available = freeStands(
@@ -115,30 +114,23 @@ export default async function OrderDetailPage({
           </section>
 
           <section className="rounded-xl border border-ink/10 bg-white p-5 shadow-card">
-            <h2 className="text-base font-bold text-ink">Istoric scanări</h2>
+            <h2 className="text-base font-bold text-ink">Istoric</h2>
             {history.length === 0 ? (
-              <p className="mt-3 text-sm text-ink-soft">Nicio scanare încă.</p>
+              <p className="mt-3 text-sm text-ink-soft">Niciun eveniment încă.</p>
             ) : (
               <ul className="mt-3 divide-y divide-ink/5 text-sm">
-                {history.map((scan) => (
-                  <li key={scan.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
+                {history.map((event) => (
+                  <li key={event.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
                     <span className="font-mono text-xs text-ink-soft">
-                      {new Date(scan.scanned_at).toLocaleString("ro-RO")}
+                      {new Date(event.changed_at).toLocaleString("ro-RO")}
                     </span>
-                    <span className="font-semibold text-ink">{scanTypeLabel(scan.scan_type)}</span>
-                    {scan.result !== "success" && (
-                      <span className="rounded bg-state-danger-soft px-1.5 py-0.5 text-xs font-bold text-state-danger">
-                        {scan.result}
-                      </span>
-                    )}
-                    {scan.manual && (
-                      <span className="rounded bg-state-warning-soft px-1.5 py-0.5 text-xs font-bold text-state-warning">
-                        MANUAL
-                      </span>
-                    )}
-                    {scan.drivers?.name && <span className="text-ink-soft">{scan.drivers.name}</span>}
-                    {scan.vehicles?.name && <span className="text-ink-soft">{scan.vehicles.name}</span>}
-                    {scan.reason && <span className="text-xs text-ink-soft">({scan.reason})</span>}
+                    <span className="font-semibold text-ink">
+                      {event.old_status && event.old_status !== event.new_status
+                        ? `${orderStatusMeta(event.old_status).label} → ${orderStatusMeta(event.new_status).label}`
+                        : orderStatusMeta(event.new_status).label}
+                    </span>
+                    {event.changed_by_label && <span className="text-ink-soft">{event.changed_by_label}</span>}
+                    {event.notes && <span className="text-xs text-ink-soft">({event.notes})</span>}
                   </li>
                 ))}
               </ul>
@@ -148,17 +140,27 @@ export default async function OrderDetailPage({
 
         <div className="space-y-5">
           <section className="rounded-xl border border-ink/10 bg-white p-5 shadow-card">
-            <h2 className="text-base font-bold text-ink">Progres fizic</h2>
-            <div className="mt-3 space-y-3">
-              <div>
-                <div className="text-xs uppercase text-ink-soft">{t("stored")}</div>
-                <ProgressBar progress={detail.progress} metric="stored" />
-              </div>
-              <div>
-                <div className="text-xs uppercase text-ink-soft">{t("loaded")}</div>
-                <ProgressBar progress={detail.progress} metric="loaded" />
-              </div>
-            </div>
+            <h2 className="text-base font-bold text-ink">Progres</h2>
+            <ol className="mt-3 space-y-2 text-sm">
+              {(
+                [
+                  ["Pregătit", detail.order.ready_at],
+                  ["Încărcat", detail.order.loaded_at],
+                  ["Livrat", detail.order.delivered_at],
+                ] as const
+              ).map(([label, timestamp]) => (
+                <li key={label} className="flex items-center justify-between gap-2">
+                  <span className={timestamp ? "font-semibold text-ink" : "text-ink-soft"}>
+                    {timestamp ? "✓" : "○"} {label}
+                  </span>
+                  {timestamp && (
+                    <span className="font-mono text-xs text-ink-soft">
+                      {new Date(timestamp).toLocaleString("ro-RO")}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ol>
             <dl className="mt-4 space-y-1 text-sm">
               <div className="flex justify-between">
                 <dt className="text-ink-soft">{t("supplier")}</dt>

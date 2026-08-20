@@ -3,6 +3,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/server-admin";
 import { calculateOrderProgress, resolveReactivationStatus } from "@/lib/logistics/order-progress";
 import { logError, logEvent } from "@/lib/logger";
 import { isMissingSchemaError } from "@/lib/server/schema-errors";
+import { getVehicle } from "@/lib/server/reference";
 import { ACTIVE_ORDER_STATUSES } from "@/lib/types/logistics";
 import type {
   InventoryUnitRow,
@@ -661,6 +662,23 @@ export async function assignStand(
 export async function reorderVehicleColumn(vehicleId: string | null, orderedOrderIds: string[]): Promise<void> {
   const supabase = createSupabaseAdminClient();
 
+  // Audit (§13): only orders whose vehicle_id is actually CHANGING get a
+  // history row — a pure reorder within the same column is not a
+  // meaningful event on its own. old_status/new_status are identical
+  // (this isn't a status change), matching gorush_assign_stand's pattern
+  // for a non-status audit entry.
+  const { data: before, error: beforeError } = await supabase
+    .from("orders")
+    .select("id, status, vehicle_id")
+    .in("id", orderedOrderIds);
+  if (beforeError) throw beforeError;
+  const previousVehicleById = new Map(
+    ((before ?? []) as { id: string; status: OrderStatus; vehicle_id: string | null }[]).map((row) => [
+      row.id,
+      row,
+    ])
+  );
+
   const results = await Promise.all(
     orderedOrderIds.map((orderId, index) =>
       supabase
@@ -671,6 +689,28 @@ export async function reorderVehicleColumn(vehicleId: string | null, orderedOrde
   );
 
   const failed = results.find((result) => result.error);
+
+  if (!failed?.error) {
+    const changedOrderIds = orderedOrderIds.filter(
+      (orderId) => previousVehicleById.get(orderId)?.vehicle_id !== vehicleId
+    );
+    if (changedOrderIds.length > 0) {
+      const vehicleName = vehicleId ? (await getVehicle(vehicleId))?.name ?? null : null;
+      const note = vehicleId ? `vehicle_assigned:${vehicleName ?? vehicleId}` : "vehicle_unassigned";
+      const { error: historyError } = await supabase.from("order_status_history").insert(
+        changedOrderIds.map((orderId) => ({
+          order_id: orderId,
+          old_status: previousVehicleById.get(orderId)?.status ?? null,
+          new_status: previousVehicleById.get(orderId)?.status ?? "expected",
+          notes: note,
+        }))
+      );
+      // Never fail the (already-committed) assignment over an audit-row
+      // write — log and move on rather than surfacing a spurious error for
+      // a save that actually succeeded.
+      if (historyError) logError("vehicle_assignment_history_write_failed", historyError, { vehicleId: vehicleId ?? "none" });
+    }
+  }
 
   // Same defensive fallback as the read paths above: the vehicle-board
   // migration (delivery_sequence column) may not have been run yet against
@@ -757,4 +797,33 @@ export async function getOrderScanHistory(orderId: string, limit = 50) {
     drivers: { name: string } | null;
     vehicles: { name: string } | null;
   }[];
+}
+
+/**
+ * The order's real audit trail (Phase 1 stabilisation §13): every
+ * gorush_* RPC that changes an order writes here, so — unlike
+ * inventory_scans, which the active Phase 1 flow no longer writes to —
+ * this stays populated for every order regardless of whether any tyre
+ * was ever scanned.
+ */
+export interface OrderStatusHistoryRow {
+  id: string;
+  old_status: OrderStatus | null;
+  new_status: OrderStatus;
+  changed_by_label: string | null;
+  notes: string | null;
+  changed_at: string;
+}
+
+export async function getOrderStatusHistory(orderId: string, limit = 50): Promise<OrderStatusHistoryRow[]> {
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("order_status_history")
+    .select("id, old_status, new_status, changed_by_label, notes, changed_at")
+    .eq("order_id", orderId)
+    .order("changed_at", { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return (data ?? []) as unknown as OrderStatusHistoryRow[];
 }

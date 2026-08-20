@@ -337,8 +337,13 @@ export interface OrderRow {
 
   received_at: string | null;
   stored_at: string | null;
+  ready_at: string | null;
   loaded_at: string | null;
   delivered_at: string | null;
+  amount_collected: number | string | null;
+  payment_collected_at: string | null;
+  delivery_failure_reason: string | null;
+  delivery_failed_at: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
