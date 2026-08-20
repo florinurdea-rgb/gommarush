@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { OrderDetailModal } from "@/components/logistics/OrderDetailModal";
 import { VehicleCardActionsMenu } from "@/components/logistics/VehicleCardActionsMenu";
 import { VehicleLaneMenu } from "@/components/logistics/VehicleLaneMenu";
@@ -632,12 +631,6 @@ export function VehicleBoard({
         </div>
 
         <div className="flex items-center gap-2">
-          <Link
-            href="/warehouse"
-            className="hidden h-10 items-center justify-center rounded-xl border border-ink/15 bg-white px-4 text-sm font-semibold text-ink hover:bg-surface-soft sm:flex"
-          >
-            Scanează / Recepție
-          </Link>
           <button
             type="button"
             onClick={handleOptimizeRoutes}
@@ -767,13 +760,6 @@ export function VehicleBoard({
             </div>
           );
         })()}
-
-        <Link
-          href="/warehouse"
-          className="mt-4 flex h-11 items-center justify-center rounded-xl border border-ink/15 bg-white text-sm font-semibold text-ink"
-        >
-          Scanează / Recepție
-        </Link>
       </div>
 
       {activeOrder && <OrderDetailModal orderId={activeOrder.id} onClose={() => setOpenOrderId(null)} />}
