@@ -396,7 +396,7 @@ export async function advanceDdtOrderToStored(input: {
 
 /**
  * Creates ONE order from a confirmed document. Reuses createOrder() (the
- * existing atomic order+items+units+stand RPC) for the physical items —
+ * existing atomic order+items+units RPC) for the physical items —
  * PFU/fee lines are deliberately never passed to it, so they can never
  * become order_items/inventory_units. document_charges and the DDT-import
  * columns (tyre_count, transport_revenue, …) are written afterward: real,
@@ -479,7 +479,6 @@ export async function confirmDdtDocument(input: ConfirmDdtDocumentInput): Promis
       delivery_province: resolvedCustomer.addressSnapshot.province,
       delivery_postal_code: resolvedCustomer.addressSnapshot.postal_code,
       delivery_country: resolvedCustomer.addressSnapshot.country_code,
-      auto_allocate_stand: true,
       requires_payment_on_delivery: processed.payment.cashRequired || processed.payment.chequeRequired,
       payment_method: processed.payment.paymentMethod,
       collection_method: processed.payment.cashRequired ? "cash" : processed.payment.chequeRequired ? "cheque" : null,

@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getPublicOrderViewByUnitToken } from "@/lib/server/stands";
+import { getPublicOrderViewByUnitToken } from "@/lib/server/public-order-view";
 import { PublicOrderView } from "@/components/logistics/PublicOrderView";
 
 export const dynamic = "force-dynamic";

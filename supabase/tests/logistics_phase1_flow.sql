@@ -1,11 +1,14 @@
 -- ============================================================================
--- GoRush Logistics Phase 1 — end-to-end database flow test
+-- GoRush Logistics — end-to-end database flow test
 -- ============================================================================
 -- Exercises the whole physical chain through the real RPCs:
 --   create order -> inventory units generated -> supplier label match ->
 --   print job queued -> print job claimed -> GoRush barcode stored ->
 --   wrong-driver load rejected -> correct load -> progress
--- plus the negative paths: stand collision, duplicate scans, hold/reactivate.
+-- plus the negative paths: duplicate scans, hold/reactivate, and a bulk
+-- creation check proving order creation has no warehouse-location ceiling
+-- (the removed A-E stand system was the only artificial cap that ever
+-- existed here — see 20260825000000_remove_stand_allocation.sql).
 --
 -- Every check raises an exception on failure, so the script either runs to
 -- completion or stops at the first broken invariant.
@@ -16,9 +19,11 @@
 --     # the pre-existing logistics schema must already be present
 --     psql -d gorush_test -f supabase/migrations/20260817000000_logistics_phase1_schema.sql
 --     psql -d gorush_test -f supabase/migrations/20260817000100_logistics_phase1_functions.sql
+--     psql -d gorush_test -f supabase/migrations/20260824000000_phase1_stabilization.sql
+--     psql -d gorush_test -f supabase/migrations/20260825000000_remove_stand_allocation.sql
 --     psql -d gorush_test -v ON_ERROR_STOP=1 -f supabase/tests/logistics_phase1_flow.sql
 --
---   Do NOT run this against production: it inserts orders and consumes stands.
+--   Do NOT run this against production: it inserts orders.
 -- ============================================================================
 
 \set ON_ERROR_STOP on
@@ -71,7 +76,6 @@ begin
     'customer_location_id', v_location,
     'delivery_city', 'Vicenza',
     'planned_delivery_date', current_date::text,
-    'auto_allocate_stand', true,
     'driver_id', v_driver1,
     'vehicle_id', v_van1,
     'created_by', 'test',
@@ -88,12 +92,7 @@ begin
 
   v_order1 := (v_result->>'order_id')::uuid;
   if v_order1 is null then raise exception 'FAIL: order not created (%)', v_result; end if;
-
-  -- Stand A is the first free stand on a clean database.
-  if (v_result->>'stand_code') is null then
-    raise exception 'FAIL: no stand allocated (%)', v_result;
-  end if;
-  raise notice 'order GR-% on stand %', lpad(v_result->>'order_number', 3, '0'), v_result->>'stand_code';
+  raise notice 'order GR-% created', lpad(v_result->>'order_number', 3, '0');
 
   -- 4 tyres + 2 tubes = 6 physical units. The fee line must NOT produce one.
   select count(*) into v_unit_count from public.inventory_units where order_id = v_order1;
@@ -118,12 +117,11 @@ begin
   end if;
 
   -- ------------------------------------------------------------------
-  raise notice '--- 2. stand collision: a second order cannot take the same stand ---';
+  raise notice '--- 2. a second order for a second driver/van is independent ---';
   -- ------------------------------------------------------------------
   v_result := public.gorush_create_order(jsonb_build_object(
     'supplier_id', v_supplier,
     'customer_id', v_customer,
-    'stand_code', (select stand_code from public.orders where id = v_order1),
     'driver_id', v_driver2,
     'vehicle_id', v_van2,
     'items', jsonb_build_array(
@@ -132,24 +130,7 @@ begin
     )
   ));
   v_order2 := (v_result->>'order_id')::uuid;
-
-  if (v_result->>'stand_warning') is distinct from 'STAND_OCCUPIED' then
-    raise exception 'FAIL: expected STAND_OCCUPIED warning, got %', v_result;
-  end if;
-  if (v_result->>'stand_code') is not null then
-    raise exception 'FAIL: occupied stand was silently reused';
-  end if;
-  raise notice 'second order created unassigned, warning=%', v_result->>'stand_warning';
-
-  -- Manual resolution onto a genuinely free stand works.
-  v_result := public.gorush_assign_stand(v_order2, 'D', 'test');
-  if not (v_result->>'ok')::boolean then raise exception 'FAIL: manual stand assign: %', v_result; end if;
-
-  -- ...but onto the occupied one it does not.
-  v_result := public.gorush_assign_stand(v_order2, (select stand_code from public.orders where id = v_order1), 'test');
-  if (v_result->>'code') is distinct from 'STAND_OCCUPIED' then
-    raise exception 'FAIL: manual assign onto occupied stand should fail: %', v_result;
-  end if;
+  if v_order2 is null then raise exception 'FAIL: second order not created (%)', v_result; end if;
 
   -- ------------------------------------------------------------------
   raise notice '--- 3. supplier label match -> received + print job ---';
@@ -163,13 +144,11 @@ begin
   if not (v_result->>'ok')::boolean then raise exception 'FAIL: receive: %', v_result; end if;
   if (v_result->>'code') <> 'RECEIVED' then raise exception 'FAIL: receive code %', v_result; end if;
   if (v_result->>'print_job_id') is null then raise exception 'FAIL: no print job queued'; end if;
-  if (v_result->'label_data'->>'stand_code') is null then raise exception 'FAIL: label has no stand'; end if;
   if (v_result->'label_data'->>'size') <> '225/55 R18' then
     raise exception 'FAIL: label size formatted as "%"', v_result->'label_data'->>'size';
   end if;
   v_token := v_result->>'unit_token';
-  raise notice 'received unit % (stand %), label size %',
-    v_token, v_result->>'stand_code', v_result->'label_data'->>'size';
+  raise notice 'received unit %, label size %', v_token, v_result->'label_data'->>'size';
 
   -- Unit is 'received', NOT 'stored' — storage is confirmed by barcode later.
   if (select status from public.inventory_units where qr_token = v_token) <> 'received' then
@@ -357,11 +336,6 @@ begin
     raise exception 'FAIL: pre-hold status not remembered';
   end if;
 
-  -- ...and holding frees the stand for someone else.
-  if public.gorush_stand_is_occupied('D') then
-    raise exception 'FAIL: stand D still occupied by a held order';
-  end if;
-
   -- Reactivation restores it, with a new planned date.
   v_result := public.gorush_set_order_status(
     v_order2, 'expected', 'reactivat', 'test', (current_date + 1)
@@ -372,9 +346,6 @@ begin
   end if;
   if (select planned_delivery_date from public.orders where id = v_order2) <> current_date + 1 then
     raise exception 'FAIL: reactivation did not apply the new delivery date';
-  end if;
-  if (select stand_code from public.orders where id = v_order2) <> 'D' then
-    raise exception 'FAIL: reactivation did not restore stand D';
   end if;
 
   -- Cancel ("Delete" in the Admin UI) preserves everything underneath.
@@ -392,6 +363,40 @@ begin
     raise exception 'FAIL: status history incomplete';
   end if;
   raise notice 'hold / reactivate / cancel all preserve history';
+
+  -- ------------------------------------------------------------------
+  raise notice '--- 9. no warehouse-location ceiling: 60 active orders, no errors ---';
+  -- ------------------------------------------------------------------
+  -- The removed A-E stand system capped the warehouse at 5 concurrently
+  -- active orders. This proves that ceiling is gone: order creation has no
+  -- warehouse-location dependency of any kind.
+  declare
+    v_bulk_before integer;
+    v_bulk_after integer;
+    i integer;
+  begin
+    select count(*) into v_bulk_before from public.orders where status = 'expected';
+
+    for i in 1..60 loop
+      v_result := public.gorush_create_order(jsonb_build_object(
+        'supplier_id', v_supplier,
+        'supplier_document_number', 'FT-BULK-' || i,
+        'customer_id', v_customer,
+        'items', jsonb_build_array(
+          jsonb_build_object('item_type', 'tyre', 'description', 'Bulk tyre', 'quantity', 4)
+        )
+      ));
+      if (v_result->>'order_id') is null then
+        raise exception 'FAIL: bulk order % failed to create: %', i, v_result;
+      end if;
+    end loop;
+
+    select count(*) into v_bulk_after from public.orders where status = 'expected';
+    if v_bulk_after - v_bulk_before <> 60 then
+      raise exception 'FAIL: expected 60 new active orders, got %', v_bulk_after - v_bulk_before;
+    end if;
+    raise notice '60 orders created with no allocation errors and no capacity restriction (% active total)', v_bulk_after;
+  end;
 
   raise notice '';
   raise notice '===============================';

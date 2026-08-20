@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { StandBadge } from "@/components/logistics/StandBadge";
 import { OrderStatusBadge, UnitStatusBadge } from "@/components/logistics/StatusBadge";
 import { formatOrderNumber } from "@/lib/logistics/order-number";
 import { itemTypeLabel, t } from "@/lib/i18n/logistics";
@@ -92,7 +91,6 @@ export function OrderDetailModal({ orderId, onClose }: { orderId: string; onClos
           {!loading && detail && (
             <>
               <div className="flex items-start gap-3">
-                <StandBadge standCode={detail.order.stand_code} size="md" />
                 <div className="min-w-0 flex-1">
                   <div className="font-mono text-xs font-semibold text-ink-soft">
                     {formatOrderNumber(detail.order.order_number)}

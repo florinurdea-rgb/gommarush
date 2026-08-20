@@ -82,7 +82,7 @@ npm run test-label
 
 This writes `output/sample-label.pdf`. Open it and check:
 
-- the stand letter is large and legible
+- the order number, customer and product text are legible
 - the barcode and QR are crisp
 - **scan the printed barcode with your handheld scanner** — this is the
   important check, and the only way to confirm the label works before going live
@@ -145,11 +145,11 @@ Default 100 × 70 mm, configurable via `LABEL_WIDTH_MM` / `LABEL_HEIGHT_MM` /
 
 ```
 ┌──────────────────────────────────────┐
-│  GR-001            ┌──────────────┐  │
-│  ROSSI GOMME       │              │  │
-│  MICHELIN          │      A       │  │  ← stand letter, dominant
-│  225/55 R18 98V    │              │  │
-│  Obiect 2 / 4      └──────────────┘  │
+│  GR-001                               │
+│  ROSSI GOMME                          │
+│  MICHELIN                              │
+│  225/55 R18 98V                        │
+│  Obiect 2 / 4                          │
 │  ││││││││││││││││││││││││    ┌────┐  │  ← Code128 (handheld scanner)
 │  GRU9F3A21C4B87E0D6A5FC3E11  │ QR │  │  ← QR (phone fallback)
 └──────────────────────────────────────┘

@@ -3,13 +3,13 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/Button";
 import { errorMessage, itemTypeLabel, t } from "@/lib/i18n/logistics";
-import { ITEM_TYPES, STAND_CODES } from "@/lib/types/logistics";
+import { ITEM_TYPES } from "@/lib/types/logistics";
 import { totalUnitCount } from "@/lib/logistics/inventory-units";
 import { mergeIdenticalProductLines } from "@/lib/logistics/product-normalise";
 import { CustomerPickerField } from "@/components/logistics/CustomerPickerField";
 import type { AnalysisResult, ExtractedProductLine } from "@/lib/documents/analyzer";
 import type { CustomerMatchResult, LocationResolution } from "@/lib/logistics/customer-matching";
-import type { CustomerLocationRow, CustomerRow, ItemType, StandCode } from "@/lib/types/logistics";
+import type { CustomerLocationRow, CustomerRow, ItemType } from "@/lib/types/logistics";
 
 /**
  * The review screen: everything extracted, fully editable, before anything is
@@ -37,7 +37,6 @@ interface OrderReviewFormProps {
   documentId: string | null;
   sourceType: string;
   plannedDate: string;
-  availableStands: StandCode[];
   onBack: () => void;
   onSaved: (orderId: string) => void;
 }
@@ -80,7 +79,6 @@ export function OrderReviewForm({
   documentId,
   sourceType,
   plannedDate,
-  availableStands,
   onBack,
   onSaved,
 }: OrderReviewFormProps) {
@@ -200,7 +198,6 @@ export function OrderReviewForm({
   // Driver/vehicle deliberately not asked here — see the Assignment
   // section's own comment below.
   const [deliveryDate, setDeliveryDate] = useState(plannedDate);
-  const [standCode, setStandCode] = useState<string>("");
 
   // --- Products ---------------------------------------------------------
   const [lines, setLines] = useState<EditableLine[]>(() =>
@@ -278,8 +275,6 @@ export function OrderReviewForm({
         },
 
         planned_delivery_date: deliveryDate || null,
-        stand_code: standCode || null,
-        auto_allocate_stand: !standCode,
         // driver_id/vehicle_id deliberately omitted — assignment happens
         // later, on the Livrări board.
 
@@ -328,8 +323,6 @@ export function OrderReviewForm({
         code?: string;
         details?: string[];
         orderId?: string;
-        standCode?: string | null;
-        standWarning?: string | null;
         inventoryUnitCount?: number;
       };
 
@@ -337,14 +330,6 @@ export function OrderReviewForm({
         setError(errorMessage(result.code));
         setDetails(result.details ?? []);
         return;
-      }
-
-      // A stand may not have been available. Say so rather than letting the
-      // Admin assume the order got one.
-      if (result.standWarning) {
-        window.alert(
-          `${errorMessage(result.standWarning)}\n\nComanda a fost creată fără stativ. Alocă manual din pagina comenzii.`
-        );
       }
 
       onSaved(result.orderId);
@@ -645,19 +630,6 @@ export function OrderReviewForm({
             <label className={labelClass} htmlFor="delivery-date">{t("plannedDate")}</label>
             <input id="delivery-date" type="date" className={inputClass} value={deliveryDate}
               onChange={(event) => setDeliveryDate(event.target.value)} />
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="stand">{t("stand")}</label>
-            <select id="stand" className={inputClass} value={standCode}
-              onChange={(event) => setStandCode(event.target.value)}>
-              <option value="">Automat (primul liber)</option>
-              {STAND_CODES.map((code) => (
-                <option key={code} value={code} disabled={!availableStands.includes(code)}>
-                  {code}
-                  {availableStands.includes(code) ? "" : " — ocupat"}
-                </option>
-              ))}
-            </select>
           </div>
         </div>
       </Section>

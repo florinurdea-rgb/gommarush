@@ -46,7 +46,6 @@ export default async function PrintJobsPage() {
               <tr className="border-b border-ink/10 bg-surface-soft text-xs uppercase tracking-wide text-ink-soft">
                 <th scope="col" className="px-4 py-3 font-semibold">{t("status")}</th>
                 <th scope="col" className="px-4 py-3 font-semibold">{t("orderNumber")}</th>
-                <th scope="col" className="px-4 py-3 font-semibold">{t("stand")}</th>
                 <th scope="col" className="px-4 py-3 font-semibold">Produs</th>
                 <th scope="col" className="px-4 py-3 font-semibold">Încercări</th>
                 <th scope="col" className="px-4 py-3 font-semibold">Creat</th>
@@ -67,7 +66,6 @@ export default async function PrintJobsPage() {
                   <td className="px-4 py-3 font-mono">
                     {formatOrderNumber(job.label_data?.order_number ?? null)}
                   </td>
-                  <td className="px-4 py-3 font-bold">{job.label_data?.stand_code ?? "—"}</td>
                   <td className="px-4 py-3">
                     <div className="text-ink">{job.label_data?.product ?? "—"}</div>
                     <div className="text-xs text-ink-soft">{job.label_data?.customer ?? ""}</div>

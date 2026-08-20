@@ -7,7 +7,6 @@ function order(overrides: Partial<DriverOrderSummary>): DriverOrderSummary {
     id: "order-1",
     order_number: 1,
     status: "loaded",
-    stand_code: null,
     customer_name: "Autoservice Rossi",
     customer_city: "Verona",
     customer_address: "Via Roma 25",

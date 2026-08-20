@@ -196,6 +196,7 @@ export function DriverHome({
             <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-white/50">Următoarea oprire</h2>
             <OrderCard
               order={nextStop}
+              stopNumber={orders.indexOf(nextStop) + 1}
               highlight
               expanded
               busy={busyId === nextStop.id}
@@ -236,10 +237,11 @@ export function DriverHome({
             <p className="rounded-xl bg-white/5 p-6 text-center text-white/60">Nicio livrare alocată.</p>
           )}
           <ul className="space-y-2">
-            {orders.map((order) => (
+            {orders.map((order, index) => (
               <li key={order.id}>
                 <OrderCard
                   order={order}
+                  stopNumber={index + 1}
                   highlight={false}
                   expanded={expandedId === order.id}
                   busy={busyId === order.id}
@@ -292,6 +294,7 @@ function addressOf(order: DriverOrderSummary): string {
 
 function OrderCard({
   order,
+  stopNumber,
   highlight,
   expanded,
   busy,
@@ -314,6 +317,7 @@ function OrderCard({
   onReasonChange,
 }: {
   order: DriverOrderSummary;
+  stopNumber: number;
   highlight: boolean;
   expanded: boolean;
   busy: boolean;
@@ -353,7 +357,7 @@ function OrderCard({
             highlight ? "bg-ink text-white" : "bg-white text-ink"
           }`}
         >
-          {order.stand_code ?? "•"}
+          {stopNumber}
         </span>
         <div className="min-w-0 flex-1">
           <div className={`font-mono text-xs font-bold ${highlight ? "text-ink/60" : "text-white/60"}`}>

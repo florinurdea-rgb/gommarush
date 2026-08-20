@@ -2,11 +2,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getOrderDetail, getOrderStatusHistory } from "@/lib/server/orders";
 import { listDrivers, listVehicles } from "@/lib/server/reference";
-import { listStandOverview } from "@/lib/server/stands";
-import { freeStands } from "@/lib/logistics/stand-allocation";
 import { PageHeading } from "@/components/logistics/AdminShell";
 import { OrderStatusBadge, UnitStatusBadge } from "@/components/logistics/StatusBadge";
-import { StandBadge } from "@/components/logistics/StandBadge";
 import { OrderEditPanel } from "@/components/logistics/OrderEditPanel";
 import { formatOrderNumber } from "@/lib/logistics/order-number";
 import { itemTypeLabel, orderStatusMeta, t } from "@/lib/i18n/logistics";
@@ -22,19 +19,11 @@ export default async function OrderDetailPage({
   const detail = await getOrderDetail(id);
   if (!detail) notFound();
 
-  const [drivers, vehicles, stands, history] = await Promise.all([
+  const [drivers, vehicles, history] = await Promise.all([
     listDrivers(),
     listVehicles(),
-    listStandOverview(),
     getOrderStatusHistory(id, 30),
   ]);
-
-  const available = freeStands(
-    stands
-      .filter((stand) => stand.orderId && stand.status)
-      .map((stand) => ({ id: stand.orderId!, stand_code: stand.standCode, status: stand.status! })),
-    id
-  );
 
   const unitsByItem = new Map<string, typeof detail.units>();
   for (const unit of detail.units) {
@@ -49,12 +38,7 @@ export default async function OrderDetailPage({
         title={formatOrderNumber(detail.order.order_number)}
         description={detail.customer?.name ?? "Client nespecificat"}
         back
-        action={
-          <div className="flex items-center gap-3">
-            <StandBadge standCode={detail.order.stand_code} size="lg" />
-            <OrderStatusBadge status={detail.order.status} />
-          </div>
-        }
+        action={<OrderStatusBadge status={detail.order.status} />}
       />
 
       <div className="grid gap-5 lg:grid-cols-3">
@@ -201,8 +185,6 @@ export default async function OrderDetailPage({
 
           <OrderEditPanel
             orderId={detail.order.id}
-            standCode={detail.order.stand_code}
-            availableStands={available}
             drivers={drivers.map((d) => ({ id: d.id, name: d.name }))}
             vehicles={vehicles.map((v) => ({ id: v.id, name: v.name }))}
             driverId={detail.order.driver_id}

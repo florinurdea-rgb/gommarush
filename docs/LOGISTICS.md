@@ -1,29 +1,34 @@
-# GoRush Logistics — Phase 1
+# GoRush Logistics
 
-Warehouse and delivery management: supplier order import, physical goods
-matching, temporary stand assignment, label printing, barcode storage
-confirmation, and van loading.
+Warehouse and delivery management: supplier document import (DDT), manual
+order preparation, van fleet assignment, manual loading, driver delivery,
+COD/payment tracking, and realtime dashboards.
 
-Phase 1 ends at: **order import → confirmed → receiving scan → match → beep →
-label print job → label printed → GoRush barcode scanned → item stored → driver
-sees assigned orders → loading scans → item marked loaded.**
+The active workflow is entirely **manual and order-level** — there is no
+barcode/QR scanning step and no physical warehouse-location (stand/shelf/zone)
+concept anywhere in the product. An order's `status` is the only thing that
+tracks its progress through the warehouse:
+
+```
+expected → stored → ready_for_loading → loaded → out_for_delivery → delivered
+                 ↘ on_hold / cancelled (from most active states)
+```
 
 ---
 
 ## Terminology
 
-These are kept strictly separate throughout the code and database.
-
 | Term | Meaning |
 |---|---|
-| **Order** | One supplier invoice/document, for exactly one final customer. May contain many product lines and many physical items. |
-| **Order item** | One product line from the supplier document. Fees, PFU, transport and services are order items but **not** physical inventory. |
-| **Inventory unit** | One physical object. 4 tyres + 2 tubes ⇒ **6** inventory units, each with its own token and barcode. |
-| **Stand** | Temporary sorting stand **A–E**. Assigned to an active order. |
-| **Warehouse zone** | Future physical zones (1–5, Returns, Quarantine). **Deliberately NOT mapped to stands** in Phase 1. |
+| **Order** | One supplier document (or manually-entered order), for exactly one final customer. May contain many product lines and many physical items. |
+| **Order item** | One product line. Fees, PFU, transport and services are order items but **not** physical inventory. |
+| **Inventory unit** | One physical object generated per physical order item quantity (4 tyres ⇒ 4 units). Used for label/token generation and historical counts — never scanned in the active flow. |
+| **Vehicle (van)** | A fleet entry an order is assigned to for delivery. Vans are managed (added/renamed/removed) in the admin fleet UI, not hardcoded. |
+| **Driver** | The person who loads and delivers an order, authenticated via a signed session cookie. |
 
-A stand is not a zone. The database has no FK between `orders.stand_code` and
-`warehouse_zones`, on purpose.
+There is deliberately **no** warehouse-location entity (no stand, zone, shelf,
+rack, or bin). That functionality existed early in the project and was
+removed by explicit product decision — see "Removed: stand/stativ" below.
 
 ---
 
@@ -33,298 +38,203 @@ A stand is not a zone. The database has no FK between `orders.stand_code` and
 |---|---|---|
 | `/` | Public landing page, with the **Admin** button | public |
 | `/admin/login` | Admin login | public |
-| `/admin` | Dashboard — *Comenzi în curs* | admin session |
-| `/admin/orders/new` | Add/import order | admin session |
+| `/admin` | Livrări — the fleet/loading board (per-van columns + Neasignate) | admin session |
+| `/admin/summary` | Sumar — dashboard totals and historical reporting | admin session |
+| `/admin/prepare` | De pregătit — orders awaiting label/preparation | admin session |
+| `/admin/orders/new` | Add order (manual entry or document upload) | admin session |
 | `/admin/orders/[id]` | Order detail + editor | admin session |
-| `/admin/hold` | *În așteptare* | admin session |
-| `/admin/customers` | *Listă clienți* | admin session |
-| `/admin/customers/[id]` | Company + locations editor | admin session |
+| `/admin/customers` / `/admin/customers/[id]` | Customer + delivery-location management | admin session |
+| `/admin/suppliers` / `/admin/suppliers/[id]` | Supplier management | admin session |
 | `/admin/print-jobs` | Label print queue + retry | admin session |
-| `/admin/stands` | Printable permanent stand QR codes | admin session |
-| `/driver` | Driver operational page | driver session |
-| `/warehouse` | Storage barcode scanning station | admin or driver |
-| `/stand/[code]` | **Permanent** stand QR resolver | public, read-only |
+| `/admin/bootstrap` | One-time admin account bootstrap helper | admin session |
+| `/driver/login` | Driver login | public |
+| `/driver` | Driver's route: assigned orders, navigation, load/deliver/COD | driver session |
 | `/orders/[id]` | Safe read-only order view | public, read-only |
-| `/u/[token]` | Unit QR fallback view | public, read-only |
+| `/u/[token]` | Unit QR fallback view (same read-only projection) | public, read-only |
 
 ---
 
 ## The flow, step by step
 
-### 1. Import
+### 1. Order creation
 
-`Adaugă comandă` → *Unde adaugi comanda?* (today / tomorrow, stored as
-`planned_delivery_date`) → `Încarcă document`.
+Two entry points, both ending at the same atomic RPC:
 
-The delivery day is **not** an entity. One supplier invoice remains one order;
-the day is just a date on it.
+- **Manual entry** — `/admin/orders/new` or the "+ Comandă nouă" dashboard
+  launcher, filled in by hand.
+- **Document upload (DDT import)** — `src/lib/ddt-import/` extracts one or
+  more documents from an uploaded PDF (AI-assisted where configured, with a
+  disclosed `unconfigured` fallback to a manual form — nothing is ever
+  fabricated), previews a READY / NEEDS_REVIEW / POSSIBLE_DUPLICATE /
+  DUPLICATE classification per document, and only writes an order once the
+  admin explicitly confirms it (`confirmDdtDocument`).
 
-Pipeline:
+Either path calls `createOrder()` → the `gorush_create_order` RPC: one
+transaction that creates the order, its items, one `inventory_unit` per
+physical item, and the initial status-history entry. There is no window
+where an order exists without its units, and no physical-location claim of
+any kind — order creation has **no warehouse-location dependency**, and no
+ceiling on how many orders can be active at once.
 
-```
-upload → store original → extract text → identify supplier → extract customer
-      → match against customer database → extract products → normalise
-      → validate → REVIEW SCREEN → user confirmation → create order
-```
+The order appears immediately in **Livrări** as unassigned ("Neasignate")
+or, if a driver/vehicle was set, in that van's column.
 
-The original document is stored **before** analysis and is never discarded.
+### 2. Preparation (`/admin/prepare` — "De pregătit")
 
-### 2. Document analysis
+Orders not yet ready for loading surface here. Label generation
+(`src/lib/server/prepare-order.ts`) queues one print job per physical
+inventory unit; the web app never prints directly (see "Label printing"
+below).
 
-`src/lib/documents/` — one `DocumentAnalyzer` interface, interchangeable
-providers. Business logic never depends on a specific vendor.
+### 3. Assignment & loading (`/admin` — "Livrări")
 
-1. **Text layer first** (free, deterministic). `pdf-text.ts` extracts text from
-   text PDFs and DOCX with no dependencies; `text-invoice-parser.ts` reads what
-   is literally present.
-2. **Vision/OCR provider** for scans and photos, if `ANTHROPIC_API_KEY` is set.
-3. **Neither available** → `status: "unconfigured"`, zero extracted values, and
-   the review screen shows *"Analiza automată nu este configurată"* with a
-   manual form.
+The board has one column per active van (fleet-managed, not fixed) plus a
+"Neasignate" column. An admin assigns a driver/vehicle to an order, and can
+reorder a van's column — the manual order becomes `delivery_sequence`, which
+is what the driver's app later sorts by.
 
-> **The honesty rule.** Nothing is ever fabricated. A field that cannot be read
-> is left `null` and named in `reviewFields` so the review screen highlights it.
-> `raw_description` always preserves the document's own text verbatim.
+"Marchează încărcat" is a single tap per **order** (`gorush_mark_order_loaded`)
+— never per physical unit. It is idempotent: a double tap or a retried
+request returns the existing successful state rather than erroring or
+double-recording.
 
-### 3. Customer matching
+### 4. Driver delivery (`/driver`)
 
-`src/lib/logistics/customer-matching.ts`. Three outcomes:
+A driver only ever sees their own assigned orders — filtered by `driver_id`
+in SQL via the signed session cookie, never a value the client can override.
+For each order the driver can view details, navigate, and:
 
-- **MATCH CONFIRMED** — company and location both agree.
-- **POSSIBLE MATCH** — company looks familiar but details differ → admin review.
-- **NEW CUSTOMER / NEW LOCATION** — no safe match.
+- **Marchează livrat** (`gorush_deliver_order`) — one tap per order, with
+  optional COD/payment amount recorded in the same call.
+- **Livrare eșuată** (`gorush_mark_delivery_failed`) — the exception path; a
+  reason is mandatory, and the order returns to `on_hold` rather than a new
+  ad-hoc status.
 
-When the company is known but the address is new, the admin picks one of:
+`driverId: null` is accepted on the delivery RPCs to let an admin close out
+a delivery from the Livrări board itself; a real driver session always has
+its identity enforced server-side.
 
-| Choice | Effect |
-|---|---|
-| *Folosește adresa doar pentru această comandă* | Address stored on the order only. **No** `customer_locations` write. |
-| *Adaugă ca locație nouă* | Creates a new branch. |
-| *Actualizează o locație existentă* | Updates that branch — the only path that changes master data, and only when explicitly chosen. |
+### 5. Hold / reactivate / cancel
 
-**Customer master data is never silently overwritten.**
+`gorush_set_order_status` covers hold, reactivate and cancel with full
+history. Reactivating restores the status an order held before going on
+hold (`resolveReactivationStatus`), defaulting to `expected` if nothing was
+remembered, and never restores back into `on_hold` or `cancelled`.
 
-### 4. Save
+### 6. Label printing
 
-`Salvează` → `gorush_create_order` — a single transaction creating the order,
-its items, one inventory unit per physical object, the status-history entry, the
-document link, and the stand claim. There is no window where an order exists
-without its units.
+The web app never prints. It queues a `print_jobs` row; the **GoRush Print
+Agent** running on a Windows PC claims and prints it. See
+[`print-agent/README.md`](../print-agent/README.md). Labels carry the order
+number, customer, product and a Code128/QR unit token — no payment amounts,
+addresses, or credentials (enforced by `assertLabelDataIsSafe()` on every
+queueing path).
 
-The order appears immediately in *Comenzi în curs* as
-**"Se așteaptă livrare la depozit"**.
+---
 
-### 5. Stand allocation
+## Removed: stand/stativ
 
-First free stand of A–E. A stand is **never** silently reused: if the requested
-one is taken, the order is created **unassigned** with a visible warning for
-manual resolution.
+Earlier phases of this project sorted orders onto five fixed physical
+"stands" (A–E) with dedicated allocation RPCs, a public `/stand/[code]` QR
+resolver, and a printable stand-letter dominant on every label. This was a
+deliberate product decision to remove entirely — not replace with any other
+location abstraction (no zones, shelves, racks, bins, or QR locations).
+Order status alone tracks warehouse progress now.
 
-Two mechanisms guarantee this under concurrency:
-
-- a **partial unique index** `orders_active_stand_key` on `stand_code` where the
-  status is a warehouse stage
-- a **transaction advisory lock** inside `gorush_create_order`
-
-A stand frees itself when the order leaves those statuses — there is no release
-step to forget. Logic is isolated in `src/lib/logistics/stand-allocation.ts`.
-
-### 6. Receiving (`/driver` → Recepție)
-
-`Începe scanarea` requests the rear camera **and** unlocks the Web Audio context
-— that click is the user gesture browsers require before any sound can play
-later.
-
-The operator reads the **original supplier label**. On a confident match:
-
-1. the next expected `inventory_unit` on that line is claimed
-2. it becomes `received` — **not** `stored`
-3. an `inventory_scans` row is written
-4. a `print_jobs` row is queued
-5. the success screen shows a huge **stand letter**
-6. one confirmation beep
-
-All five writes happen in one transaction (`gorush_receive_unit`).
-
-**Uncertain matches never beep and never invent an order.** They show
-*"Nu am găsit o asociere sigură"* with manual search by order number, customer,
-brand, model, size or SKU. A manual choice is recorded as manually confirmed.
-
-### 7. Label printing
-
-The web app never prints. It queues a job; the **GoRush Print Agent** on the
-Windows PC claims and prints it. See [`print-agent/README.md`](../print-agent/README.md).
-
-### 8. Storage (`/warehouse`)
-
-After the label is attached, a handheld scanner (HID keyboard style,
-`TOKEN`+`ENTER`) confirms storage. The unit becomes `stored`.
-
-Re-scanning an already-stored item shows *"Obiect deja înregistrat ca
-depozitat"*, writes a harmless audit scan, and **does not** play the success
-sound.
-
-### 9. Loading (`/driver` → Încărcare)
-
-The driver sees only their own orders — filtered by `driver_id` in SQL, so
-another driver's deliveries never reach the device.
-
-Each scan verifies the unit exists, is currently `stored`, and belongs to an
-order assigned to **this** driver/van. A wrong-driver scan shows
-**"OBIECT GREȘIT / Acest produs aparține altei livrări"** in red with an error
-sound, is recorded as a rejected scan, and is **never** marked loaded.
-
-`Adaugă manual ca încărcat` exists for damaged labels and dead scanners. It
-requires the exact unit and a mandatory reason, and is stored as
-`scan_type = 'manual_loading'` with `manual = true` — never indistinguishable
-from a real scan.
-
-### 10. Stand QR codes
-
-Print once from `/admin/stands` and stick them on the racks. Each encodes a
-fixed `/stand/A` URL. The order currently on the stand is resolved server-side
-at scan time, so the sticker never needs replacing. A free stand reports
-*"Stativ A liber"*.
+A handful of now-unused `orders`/`inventory_units`/`inventory_scans` columns
+(e.g. `stand_code`) remain in the schema, deprecated and untyped from any
+active application logic, to avoid destroying historical order data — see
+the stand-removal migration for the exact classification of what was kept
+vs. dropped.
 
 ---
 
 ## Database
 
-Migrations in `supabase/migrations/`:
+Migrations live in `supabase/migrations/`, applied in order. `gorush_schema_health()`
+is a permanent RPC that checks the live schema against what the application
+code expects, for drift detection.
 
-| File | Contents |
-|---|---|
-| `20260817000000_logistics_phase1_schema.sql` | Additive schema: `drivers`, `vehicles`, new columns, widened CHECK vocabularies, guard indexes, storage bucket |
-| `20260817000100_logistics_phase1_functions.sql` | Transactional RPCs |
-
-Both were written against the **actual** live schema (the logistics tables
-already existed) and are purely additive — nothing is dropped, renamed or
-rewritten. Existing column names are used as-is:
-
-| Concept | Actual column |
-|---|---|
-| Unit token (Code128/QR) | `inventory_units.qr_token` |
-| Unit index within its item | `inventory_units.unit_sequence` |
-| Unit kind | `inventory_units.unit_type` |
-| Order number | `orders.order_number` — **bigint identity**; `GR-001` is a display form |
-| Delivery recipient | `orders.delivery_name` |
-| Payment on delivery | `orders.cash_on_delivery` |
-| PFU charge | `order_items.environmental_fee` |
-| Tax rate | `order_items.vat_percent` |
-| Status history | `order_status_history.old_status` / `new_status` |
-
-### Transactional RPCs
+### Transactional RPCs (current, active)
 
 | Function | Guarantees |
 |---|---|
-| `gorush_create_order` | Order + items + units + history + stand claim, atomically |
-| `gorush_receive_unit` | Unit claim (`SKIP LOCKED`) + scan + print job, atomically; idempotent by key |
-| `gorush_store_unit` | Storage confirmation; duplicate-safe |
-| `gorush_load_unit` | Wrong-driver protection; duplicate-safe |
-| `gorush_manual_load_unit` | Mandatory reason; audit-distinct |
+| `gorush_create_order` | Order + items + units + history, atomically |
 | `gorush_set_order_status` | Hold / reactivate / cancel with history |
-| `gorush_assign_stand` | Collision-checked manual assignment |
+| `gorush_mark_order_loaded` | Order-level load, idempotent |
+| `gorush_deliver_order` | Order-level delivery + optional COD, idempotent, driver-checked |
+| `gorush_mark_delivery_failed` | Delivery exception with mandatory reason |
 | `gorush_claim_print_job` | `FOR UPDATE SKIP LOCKED` single-consumer claim |
+| `gorush_retry_print_job` | Re-queues a failed print job |
 | `gorush_requeue_stale_print_jobs` | Crashed-agent recovery |
+| `gorush_remove_vehicle` | Removes a van; unassigns its active orders, preserves historical relationships |
 
-All are **SECURITY INVOKER** on purpose: Postgres grants `EXECUTE` to `PUBLIC`
-by default, so `SECURITY DEFINER` would have handed the anon key a write path
-straight through RLS.
+All are **SECURITY INVOKER** on purpose: Postgres grants `EXECUTE` to
+`PUBLIC` by default, so `SECURITY DEFINER` would have handed the anon key a
+write path straight through RLS.
 
 ### Deletion policy
 
-**"Șterge" in the Admin UI is a safe cancellation, never a SQL `DELETE`.** The
-order is marked `cancelled` and leaves the active dashboard; its items,
-inventory units, scan history and status history all survive. A true delete
-needs an explicit future decision.
+**"Anulează" in the Admin UI is a safe cancellation, never a SQL `DELETE`.**
+The order is marked `cancelled` and leaves the active dashboard; its items,
+inventory units, and status history all survive. A true delete needs an
+explicit future decision.
 
 ---
 
 ## Security
 
-- Row Level Security is **on with no policies** for every logistics table. The
-  anon key cannot read or write any of them.
+- Row Level Security is **on with no policies** for every logistics table.
+  The anon key cannot read or write any of them.
 - All privileged access goes through server-side code using the service-role
-  key (`src/lib/supabase/server-admin.ts`, `import "server-only"`), so importing
-  it from a client component is a build error.
-- Admin auth is a **signed, httpOnly, sameSite=lax** server-side cookie — not a
-  hidden button. Every API route re-checks independently; the layout guard alone
-  would not protect direct calls.
-- Driver identity for scans always comes from the signed session cookie, never
-  from the request body. That is what makes wrong-item protection real.
-- Public views (`/stand/[code]`, `/orders/[id]`, `/u/[token]`) expose a
-  hand-picked projection: no payment details, no addresses, and **no unit
-  tokens** (a token is effectively a bearer credential for marking an object
-  stored or loaded).
-- `label_data` is validated by `assertLabelDataIsSafe()` on every queueing path,
-  so a future refactor cannot leak payment or credential fields onto a label.
-- Every input is validated server-side with Zod even where the client validates.
+  key (`src/lib/supabase/server-admin.ts`, `import "server-only"`), so
+  importing it from a client component is a build error.
+- Admin auth is a Supabase Auth session managed by `@supabase/ssr`; every API
+  route re-checks independently — the layout guard alone would not protect
+  direct calls.
+- Driver identity for delivery/loading actions always comes from the signed
+  session cookie, never from the request body. That is what makes
+  "Driver A cannot touch Driver B's route" real rather than dependent on the
+  phone being honest.
+- Public views (`/orders/[id]`, `/u/[token]`) expose a hand-picked
+  projection: no payment details, no addresses, and no unit tokens.
+- Every input is validated server-side with Zod even where the client
+  validates.
 
 ### Admin authentication is Supabase Auth
 
 `/api/admin/login` calls `supabase.auth.signInWithPassword()` against real
 Supabase Auth users (Authentication → Users in the dashboard, or
 `/admin/bootstrap` — a one-time helper that creates/resets an account
-through the Admin API directly, bypassing the dashboard's "Invite user"
-flow and its email-deliverability checks).
-
-The session itself is managed by `@supabase/ssr`
-(`src/lib/supabase/server.ts`, `middleware.ts`): the access/refresh token
-pair lives in the standard `sb-*-auth-token` cookies, and `middleware.ts`
-revalidates and refreshes them on every `/admin/*` request — this is what
-lets a session survive navigation and refresh past Supabase's ~1 hour
-access-token TTL, not just within it.
+through the Admin API directly).
 
 Authentication (is this a real Supabase user?) and authorization (may they
 use the admin panel?) are separate: any confirmed Supabase user in the
 project can sign in, but `ADMIN_ALLOWED_EMAILS` (comma-separated, optional)
-restricts who is treated as an admin — see `src/lib/auth/admin-authorization.ts`.
-Unset, any confirmed user is an admin (the original Phase 1 single-tier
-default). `drivers.auth_user_id` already exists for eventually doing the
-same on the driver side, which still uses a simpler self-selected identity
-(no password) by Phase 1 design.
+restricts who is treated as an admin — see
+`src/lib/auth/admin-authorization.ts`. Unset, any confirmed user is an admin.
 
 ---
 
 ## Language
 
 Operational UI is Romanian; code and database identifiers stay English. Every
-user-facing string resolves through `src/lib/i18n/logistics.ts`. Adding Italian
-is a data change (one more entry in `DICTIONARIES`), not a code change.
+user-facing string resolves through `src/lib/i18n/logistics.ts`. Adding a
+second locale is a data change (one more entry in `DICTIONARIES`), not a
+code change.
 
 ---
 
 ## Testing
 
 ```bash
-npm test          # 110 unit tests
+npm test          # unit tests
 npm run typecheck
 npm run build
 ```
 
-Covers: customer/location matching decisions, stand allocation collision
-prevention, quantity → unit generation, duplicate barcode handling,
-wrong-driver loading protection, order progress calculation, print job
-idempotency + failure/recovery (mocked printer), hold/reactivate, label-data
-safety, and admin session forgery resistance.
+Covers: order-progress/status transitions, hold/reactivate rules, print job
+idempotency + failure/recovery (mocked printer), driver-day summary
+calculations, label-data safety, and admin session forgery resistance.
 
-Database-level end-to-end:
-
-```bash
-createdb gorush_test
-psql -d gorush_test -f supabase/migrations/20260817000000_logistics_phase1_schema.sql
-psql -d gorush_test -f supabase/migrations/20260817000100_logistics_phase1_functions.sql
-psql -d gorush_test -v ON_ERROR_STOP=1 -f supabase/tests/logistics_phase1_flow.sql
-```
-
-(The pre-existing logistics schema must be present first — the migrations are
-additive.)
-
----
-
-## Not in Phase 1
-
-Deliberately excluded: final-mile delivery-at-customer workflow, route
-optimisation, mapping stands A–E onto physical zones, accounting, the full
-returns workflow (the data model supports it; the UI does not), and manual order
-entry (shown in the UI as *În curând*).
+Database-level end-to-end tests live in `supabase/tests/`.

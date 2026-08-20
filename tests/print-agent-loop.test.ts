@@ -78,7 +78,6 @@ function labelData(token: string) {
     inventory_unit_id: "unit-1",
     unit_token: token,
     order_number: 1,
-    stand_code: "A",
     customer: "Rossi Gomme SRL",
     product: "Michelin Primacy 4",
     brand: "Michelin",

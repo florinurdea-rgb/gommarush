@@ -18,8 +18,8 @@ const MAX_SEARCH_USES = 5;
 
 /**
  * The honesty rules mirror the document analyzer's: "never invent" matters
- * even more here, because a fabricated brand/size would send an operator to
- * the wrong stand with the wrong tyre. The barcode-exactness rule exists
+ * even more here, because a fabricated brand/size would point someone at the
+ * wrong tyre entirely. The barcode-exactness rule exists
  * because two tyres one digit apart in EAN are different products, not a
  * fuzzy-match candidate.
  */

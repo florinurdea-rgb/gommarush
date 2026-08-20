@@ -1,13 +1,11 @@
 import { Logo } from "@/components/Logo";
-import { StandBadge } from "@/components/logistics/StandBadge";
 import { OrderStatusBadge } from "@/components/logistics/StatusBadge";
 import { formatOrderNumber } from "@/lib/logistics/order-number";
 import { itemTypeLabel, t } from "@/lib/i18n/logistics";
-import type { PublicStandView } from "@/lib/server/stands";
+import type { PublicOrderViewData } from "@/lib/server/public-order-view";
 
 /**
- * The read-only view anyone in the warehouse gets by scanning a stand QR or a
- * unit QR with their phone.
+ * The read-only view anyone gets from a public order link or a unit QR code.
  *
  * What it deliberately does NOT show: admin actions, edit/delete controls,
  * payment details, addresses, or unit tokens. A unit token is effectively a
@@ -18,7 +16,7 @@ export function PublicOrderView({
   view,
   highlightUnitId,
 }: {
-  view: PublicStandView;
+  view: PublicOrderViewData;
   highlightUnitId?: string;
 }) {
   const { order } = view;
@@ -35,26 +33,13 @@ export function PublicOrderView({
       </header>
 
       <main className="mx-auto w-full max-w-lg px-4 py-6">
-        <div className="flex items-center gap-4">
-          <StandBadge standCode={view.standCode} size="lg" />
-          <div className="min-w-0">
-            <div className="text-xs uppercase tracking-wide text-ink-soft">{t("stand")}</div>
-            <div className="text-3xl font-black text-ink">{view.standCode}</div>
-          </div>
-        </div>
-
         {!order ? (
-          <div className="mt-8 rounded-2xl border-2 border-dashed border-state-success/40 bg-state-success-soft px-6 py-16 text-center">
-            <p className="text-2xl font-extrabold text-state-success">
-              Stativ {view.standCode} {t("standFree")}
-            </p>
-            <p className="mt-2 text-sm text-state-success/80">
-              Nicio comandă activă pe acest stativ.
-            </p>
+          <div className="mt-8 rounded-2xl border-2 border-dashed border-ink/20 px-6 py-16 text-center">
+            <p className="text-lg font-semibold text-ink-soft">Comanda nu a fost găsită.</p>
           </div>
         ) : (
           <>
-            <section className="mt-6 rounded-2xl border border-ink/10 bg-white p-5 shadow-card">
+            <section className="rounded-2xl border border-ink/10 bg-white p-5 shadow-card">
               <div className="font-mono text-sm font-bold text-accent">
                 {formatOrderNumber(order.order_number)}
               </div>

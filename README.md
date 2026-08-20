@@ -7,11 +7,12 @@ the database and Resend for transactional email.
 Two things live here:
 
 1. **The public site** — landing page and the offer-request form (Italian).
-2. **GoRush Logistics (Phase 1)** — the internal warehouse and delivery system:
-   supplier order import, goods matching, temporary stands, label printing,
-   barcode storage confirmation and van loading (Romanian operational UI).
-   See **[docs/LOGISTICS.md](docs/LOGISTICS.md)** for the full guide, and
-   **[print-agent/README.md](print-agent/README.md)** for the Windows print agent.
+2. **GoRush Logistics** — the internal warehouse and delivery system: supplier
+   document (DDT) import, manual order preparation, label printing, van fleet
+   assignment, manual order-level loading and driver delivery (Romanian
+   operational UI). See **[docs/LOGISTICS.md](docs/LOGISTICS.md)** for the full
+   guide, and **[print-agent/README.md](print-agent/README.md)** for the
+   Windows print agent.
 
 ## Quick start for the logistics system
 
@@ -52,10 +53,8 @@ app/
   admin/login/                     Admin login (outside the guarded layout)
   admin/(secure)/                  All authenticated admin pages
   driver/                          Driver operational page
-  warehouse/                       Storage barcode scanning station
-  stand/[code]/                    Permanent stand QR resolver
   orders/[id]/, u/[token]/         Public read-only views
-  api/admin|driver|warehouse/      Server operations
+  api/admin|driver/                Server operations
 
 print-agent/                       Windows print agent (separate package)
 docs/LOGISTICS.md                  Logistics system guide

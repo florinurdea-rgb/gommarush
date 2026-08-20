@@ -54,12 +54,6 @@ module.exports = {
         content: "900px",
         admin: "1400px",
       },
-      fontSize: {
-        // The stand letter on the scan-success screen. Sized to be legible at
-        // arm's length on a phone held in a warehouse.
-        stand: ["11rem", { lineHeight: "1", letterSpacing: "-0.05em" }],
-        "stand-sm": ["7rem", { lineHeight: "1", letterSpacing: "-0.04em" }],
-      },
     },
   },
   plugins: [],

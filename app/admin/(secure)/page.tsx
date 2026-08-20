@@ -1,13 +1,11 @@
 import { listActiveOrders } from "@/lib/server/orders";
 import { listVehicles } from "@/lib/server/reference";
-import { listStandOverview } from "@/lib/server/stands";
 import { getDepotLocation } from "@/lib/server/settings";
 import { PageHeading } from "@/components/logistics/AdminShell";
 import { VehicleBoard } from "@/components/logistics/VehicleBoard";
 import type { VehicleColumnData } from "@/components/logistics/VehicleBoard";
 import { NewOrderLauncher } from "@/components/logistics/NewOrderLauncher";
 import { DashboardLiveRefresh } from "@/components/logistics/DashboardLiveRefresh";
-import { freeStands } from "@/lib/logistics/stand-allocation";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -19,18 +17,11 @@ export const metadata = { title: "Livrări" };
  * on other devices converged as warehouse/admin activity changes the data.
  */
 export default async function AdminDashboardPage() {
-  const [orders, stands, vehicles, depotLocation] = await Promise.all([
+  const [orders, vehicles, depotLocation] = await Promise.all([
     listActiveOrders(),
-    listStandOverview(),
     listVehicles(),
     getDepotLocation(),
   ]);
-
-  const available = freeStands(
-    stands
-      .filter((stand) => stand.orderId && stand.status)
-      .map((stand) => ({ id: stand.orderId!, stand_code: stand.standCode, status: stand.status! }))
-  );
 
   const vehicleColumns: VehicleColumnData[] = [
     {
@@ -56,12 +47,7 @@ export default async function AdminDashboardPage() {
   return (
     <>
       <DashboardLiveRefresh />
-      <PageHeading
-        title="Livrări"
-        action={
-          <NewOrderLauncher availableStands={available} />
-        }
-      />
+      <PageHeading title="Livrări" action={<NewOrderLauncher />} />
 
       <VehicleBoard columns={vehicleColumns} vehicles={vehicles} depotLocation={depotLocation} />
     </>

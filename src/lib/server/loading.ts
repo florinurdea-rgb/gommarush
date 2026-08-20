@@ -18,7 +18,6 @@ export interface DriverOrderSummary {
   id: string;
   order_number: number;
   status: OrderStatus;
-  stand_code: string | null;
   customer_name: string | null;
   customer_city: string | null;
   customer_address: string | null;
@@ -39,7 +38,7 @@ export interface DriverOrderSummary {
 }
 
 const DRIVER_ORDER_SELECT = `
-  id, order_number, status, stand_code, planned_delivery_date, delivery_sequence,
+  id, order_number, status, planned_delivery_date, delivery_sequence,
   vehicle_id, delivery_notes, cash_on_delivery, amount_to_collect, payment_method,
   payment_status, amount_collected, delivery_failure_reason,
   customers ( name ),
@@ -52,7 +51,6 @@ interface RawDriverOrder {
   id: string;
   order_number: number;
   status: OrderStatus;
-  stand_code: string | null;
   planned_delivery_date: string | null;
   delivery_sequence: number | null;
   vehicle_id: string | null;
@@ -107,7 +105,6 @@ export async function listDriverOrders(driverId: string): Promise<DriverOrderSum
     id: raw.id,
     order_number: raw.order_number,
     status: raw.status,
-    stand_code: raw.stand_code,
     customer_name: raw.customers?.name ?? null,
     customer_city: raw.customer_locations?.city ?? null,
     customer_address: raw.customer_locations?.address_line1 ?? null,

@@ -54,7 +54,6 @@ export async function prepareOrder(input: {
           unitToken: unit.qr_token,
           unitIndex: unit.unit_sequence,
           orderNumber: formatOrderNumber(detail.order.order_number),
-          standCode: detail.order.stand_code,
           customerName,
           item,
         });

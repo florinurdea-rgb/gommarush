@@ -6,15 +6,16 @@
  *   Driver 1 / Driver 2 / Driver 3
  *   Van 1 / Van 2 / Van 3
  *   one demo supplier and one demo customer with three delivery locations
- *   three active orders — GR-001 -> Driver 1 / Van 1 / Stand A
- *                         GR-002 -> Driver 2 / Van 2 / Stand B
- *                         GR-003 -> Driver 3 / Van 3 / Stand C
- *   with realistic tyre products. Stands D and E are left free.
+ *   three active orders — GR-001 -> Driver 1 / Van 1
+ *                         GR-002 -> Driver 2 / Van 2
+ *                         GR-003 -> Driver 3 / Van 3
+ *   with realistic tyre products.
  *
  * SAFETY
  * This script refuses to run unless you pass --confirm, and it refuses outright
  * when NODE_ENV=production unless you additionally pass --force. Seeding fake
- * orders into a live warehouse database would put phantom work on real stands.
+ * orders into a live warehouse database would put phantom work in the real
+ * warehouse queue.
  *
  * Everything it creates is tagged (see SEED_TAG) so `--clean` can remove it
  * again without touching anything real.
@@ -67,7 +68,7 @@ if (!confirmed) {
 if (process.env.NODE_ENV === "production" && !forced) {
   console.error(
     "\nRefusing to seed with NODE_ENV=production.\n" +
-      "  This creates fake orders that would occupy real warehouse stands.\n" +
+      "  This creates fake orders in the real warehouse queue.\n" +
       "  Pass --force only if you are certain this database is not live.\n"
   );
   process.exit(1);
@@ -150,7 +151,6 @@ const LOCATIONS = [
 /** Realistic tyre lines, plus the fee lines a real invoice carries. */
 const ORDERS = [
   {
-    stand: "A",
     document: "FT-2026-4471",
     reference: "ORD-88121",
     cash: false,
@@ -172,7 +172,6 @@ const ORDERS = [
     ],
   },
   {
-    stand: "B",
     document: "FT-2026-4472",
     reference: "ORD-88122",
     cash: true,
@@ -191,7 +190,6 @@ const ORDERS = [
     ],
   },
   {
-    stand: "C",
     document: "FT-2026-4473",
     reference: "ORD-88123",
     cash: false,
@@ -341,21 +339,19 @@ async function seed() {
   console.log(`  customer: ${CUSTOMER.name} (${locations.length} locations)`);
 
   // Orders — created through the real RPC, so they exercise exactly the same
-  // path the Admin UI uses, including stand allocation and unit generation.
+  // path the Admin UI uses, including item/unit generation.
   const today = new Date().toISOString().slice(0, 10);
   console.log("");
 
   for (const [index, spec] of ORDERS.entries()) {
     const { data: existing } = await supabase
       .from("orders")
-      .select("id, order_number, stand_code")
+      .select("id, order_number")
       .eq("supplier_document_number", spec.document)
       .maybeSingle();
 
     if (existing) {
-      console.log(
-        `  order GR-${String(existing.order_number).padStart(3, "0")} already exists (stand ${existing.stand_code ?? "—"})`
-      );
+      console.log(`  order GR-${String(existing.order_number).padStart(3, "0")} already exists`);
       continue;
     }
 
@@ -376,7 +372,6 @@ async function seed() {
         delivery_city: LOCATIONS[index % LOCATIONS.length].city,
         delivery_province: LOCATIONS[index % LOCATIONS.length].province,
         planned_delivery_date: today,
-        stand_code: spec.stand,
         driver_id: drivers[index].id,
         vehicle_id: vehicles[index].id,
         requires_payment_on_delivery: spec.cash,
@@ -399,14 +394,12 @@ async function seed() {
 
     const label = `GR-${String(data.order_number).padStart(3, "0")}`;
     console.log(
-      `  ${label} -> ${drivers[index].name} / ${vehicles[index].name} / Stand ${data.stand_code ?? "—"}` +
-        `  (${data.inventory_unit_count} obiecte fizice)` +
-        (data.stand_warning ? `  ⚠ ${data.stand_warning}` : "")
+      `  ${label} -> ${drivers[index].name} / ${vehicles[index].name}` +
+        `  (${data.inventory_unit_count} obiecte fizice)`
     );
   }
 
-  console.log("\n  Stands D and E left free.\n");
-  console.log("Done. Sign in at /admin with test / test.\n");
+  console.log("\nDone. Sign in at /admin with test / test.\n");
 }
 
 try {

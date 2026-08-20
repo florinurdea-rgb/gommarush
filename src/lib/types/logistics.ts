@@ -17,14 +17,14 @@
 //   Order          one supplier invoice/document, for one final customer
 //   OrderItem      one product line on that document
 //   InventoryUnit  one physical object (4 tyres => 4 InventoryUnits)
-//   StandCode      temporary sorting stand A–E — NOT a warehouse zone
-
-export const STAND_CODES = ["A", "B", "C", "D", "E"] as const;
-export type StandCode = (typeof STAND_CODES)[number];
-
-export function isStandCode(value: unknown): value is StandCode {
-  return typeof value === "string" && (STAND_CODES as readonly string[]).includes(value);
-}
+//
+// The A–E "stand" concept (temporary warehouse sorting slot) was removed by
+// product decision — the warehouse can hold too many simultaneous orders for
+// a 5-slot ceiling to stay useful, and Phase 1 doesn't replace it with any
+// other location abstraction (no zones/shelves/bins). `orders.stand_code`
+// and the sibling historical columns remain in the schema, deprecated, for
+// old records only — no active code reads or writes them. See
+// supabase/migrations/<date>_remove_stand_allocation.sql.
 
 /** Physical object kinds. The system must never assume everything is a tyre. */
 export const PHYSICAL_ITEM_TYPES = ["tyre", "tube", "wheel", "accessory", "other"] as const;
@@ -102,21 +102,6 @@ export const ACTIVE_ORDER_STATUSES: readonly OrderStatus[] = [
   "out_for_delivery",
   "partially_delivered",
   "on_hold",
-];
-
-/**
- * Statuses during which an order still physically occupies its stand. MUST stay
- * in sync with the partial unique index `orders_active_stand_key` and with
- * `gorush_stand_holding_statuses()`. A stand frees itself as soon as the order
- * leaves these — there is no release step to forget.
- */
-export const STAND_HOLDING_STATUSES: readonly OrderStatus[] = [
-  "expected",
-  "partially_received",
-  "received",
-  "sorting",
-  "stored",
-  "ready_for_loading",
 ];
 
 export const INVENTORY_UNIT_STATUSES = [
@@ -321,7 +306,8 @@ export interface OrderRow {
 
   planned_delivery_date: string | null;
   expected_at: string | null;
-  stand_code: StandCode | null;
+  /** @deprecated Stand allocation was removed. Historical value only — never read/written by active code. */
+  stand_code: string | null;
   driver_id: string | null;
   vehicle_id: string | null;
   /** Admin's manual delivery ordering within a vehicle's column. Null until the first drag-reorder. */
@@ -403,7 +389,8 @@ export interface InventoryUnitRow {
   stored_at: string | null;
   loaded_at: string | null;
   delivered_at: string | null;
-  last_stand_code: StandCode | null;
+  /** @deprecated Stand allocation was removed. Historical value only. */
+  last_stand_code: string | null;
   last_vehicle_id: string | null;
   matched_manually: boolean;
 }
@@ -419,7 +406,8 @@ export interface InventoryScanRow {
   driver_id: string | null;
   vehicle_id: string | null;
   operator_session: string | null;
-  stand_code: StandCode | null;
+  /** @deprecated Stand allocation was removed. Historical value only. */
+  stand_code: string | null;
   warehouse_zone_id: string | null;
   device_type: string | null;
   /** True for overrides. Never let a manual entry look like a real scan. */
@@ -474,7 +462,6 @@ export interface LabelData {
   unit_token: string;
   /** bigint from the database; rendered as "GR-001" on the label. */
   order_number: number | string;
-  stand_code: StandCode | null;
   customer: string;
   product: string;
   brand?: string;

@@ -1,26 +1,18 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/server-admin";
 import { calculateOrderProgress } from "@/lib/logistics/order-progress";
-import { STAND_CODES, STAND_HOLDING_STATUSES } from "@/lib/types/logistics";
-import type {
-  InventoryUnitStatus,
-  ItemType,
-  OrderStatus,
-  StandCode,
-} from "@/lib/types/logistics";
+import type { InventoryUnitStatus, ItemType, OrderStatus } from "@/lib/types/logistics";
 import type { OrderProgress } from "@/lib/logistics/order-progress";
 
 /**
- * Resolves the PERMANENT stand QR codes.
- *
- * The sticker on stand A encodes `/stand/A` forever. Which order is on that
- * stand is resolved here, at scan time, so the physical QR never needs
- * replacing when the order changes.
+ * The read-only order view reachable from a public QR code: `/orders/[id]`
+ * and the per-unit fallback `/u/[token]`. (The old `/stand/[code]` public
+ * view was removed along with the stand/stativ concept — see the Phase 1
+ * stand-removal change set.)
  */
 
-/** Read-only projection safe to show anyone standing in the warehouse. */
-export interface PublicStandView {
-  standCode: StandCode;
+/** Read-only projection safe to show anyone. */
+export interface PublicOrderViewData {
   order: {
     id: string;
     order_number: number;
@@ -80,9 +72,9 @@ interface RawPublicOrder {
   }[];
 }
 
-function toPublicView(standCode: StandCode, raw: RawPublicOrder | null): PublicStandView {
+function toPublicView(raw: RawPublicOrder | null): PublicOrderViewData {
   if (!raw) {
-    return { standCode, order: null, items: [], progress: calculateOrderProgress([]) };
+    return { order: null, items: [], progress: calculateOrderProgress([]) };
   }
 
   const unitsByItem = new Map<string, RawPublicOrder["inventory_units"]>();
@@ -105,7 +97,6 @@ function toPublicView(standCode: StandCode, raw: RawPublicOrder | null): PublicS
     }));
 
   return {
-    standCode,
     order: {
       id: raw.id,
       order_number: raw.order_number,
@@ -120,31 +111,8 @@ function toPublicView(standCode: StandCode, raw: RawPublicOrder | null): PublicS
   };
 }
 
-/**
- * The order currently on a stand — i.e. still in a warehouse stage. Once an
- * order is loaded or delivered the stand reads as free, which is exactly what
- * someone scanning the sticker needs to know.
- */
-export async function getCurrentStandOrder(standCode: StandCode): Promise<PublicStandView> {
-  const supabase = createSupabaseAdminClient();
-
-  const { data, error } = await supabase
-    .from("orders")
-    .select(PUBLIC_ORDER_SELECT)
-    .eq("stand_code", standCode)
-    .in("status", STAND_HOLDING_STATUSES as unknown as string[])
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) throw error;
-  return toPublicView(standCode, (data ?? null) as unknown as RawPublicOrder | null);
-}
-
 /** Read-only view of one order by id, for `/orders/[id]` and the unit QR. */
-export async function getPublicOrderView(
-  orderId: string
-): Promise<PublicStandView | null> {
+export async function getPublicOrderView(orderId: string): Promise<PublicOrderViewData | null> {
   const supabase = createSupabaseAdminClient();
 
   const { data, error } = await supabase
@@ -156,23 +124,13 @@ export async function getPublicOrderView(
   if (error) throw error;
   if (!data) return null;
 
-  const raw = data as unknown as RawPublicOrder;
-  // Stand code isn't in the public select, so read it separately — the view
-  // needs it for display but the projection above stays minimal.
-  const { data: standRow } = await supabase
-    .from("orders")
-    .select("stand_code")
-    .eq("id", orderId)
-    .maybeSingle();
-
-  const standCode = (standRow as { stand_code: StandCode | null } | null)?.stand_code;
-  return toPublicView(standCode ?? "A", raw);
+  return toPublicView(data as unknown as RawPublicOrder);
 }
 
 /** Resolves a scanned unit token to its order, for the QR phone fallback. */
 export async function getPublicOrderViewByUnitToken(
   unitToken: string
-): Promise<{ view: PublicStandView; unitId: string } | null> {
+): Promise<{ view: PublicOrderViewData; unitId: string } | null> {
   const supabase = createSupabaseAdminClient();
 
   const { data, error } = await supabase
@@ -188,53 +146,4 @@ export async function getPublicOrderViewByUnitToken(
   const view = await getPublicOrderView(unit.order_id);
   if (!view) return null;
   return { view, unitId: unit.id };
-}
-
-export interface StandOverview {
-  standCode: StandCode;
-  orderId: string | null;
-  orderNumber: number | null;
-  customerName: string | null;
-  status: OrderStatus | null;
-}
-
-/** All five stands and what is on them — the Admin stand board. */
-export async function listStandOverview(): Promise<StandOverview[]> {
-  const supabase = createSupabaseAdminClient();
-
-  const { data, error } = await supabase
-    .from("orders")
-    .select("id, order_number, stand_code, status, customers ( name )")
-    .not("stand_code", "is", null)
-    .in("status", STAND_HOLDING_STATUSES as unknown as string[]);
-
-  if (error) throw error;
-
-  const occupants = new Map<StandCode, StandOverview>();
-  for (const row of (data ?? []) as unknown as {
-    id: string;
-    order_number: number;
-    stand_code: StandCode;
-    status: OrderStatus;
-    customers: { name: string } | null;
-  }[]) {
-    occupants.set(row.stand_code, {
-      standCode: row.stand_code,
-      orderId: row.id,
-      orderNumber: row.order_number,
-      customerName: row.customers?.name ?? null,
-      status: row.status,
-    });
-  }
-
-  return STAND_CODES.map(
-    (code) =>
-      occupants.get(code) ?? {
-        standCode: code,
-        orderId: null,
-        orderNumber: null,
-        customerName: null,
-        status: null,
-      }
-  );
 }

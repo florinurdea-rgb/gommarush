@@ -12,11 +12,11 @@ import QRCode from "qrcode";
  * Layout (default 100 × 70 mm, configurable):
  *
  *   ┌──────────────────────────────────────┐
- *   │  GR-001            ┌──────────────┐  │
- *   │  ROSSI GOMME       │              │  │
- *   │  MICHELIN          │      A       │  │   <- stand letter, dominant
- *   │  225/55 R18 98V    │              │  │
- *   │                    └──────────────┘  │
+ *   │  GR-001                               │
+ *   │  ROSSI GOMME                          │
+ *   │  MICHELIN                              │
+ *   │  225/55 R18 98V                        │
+ *   │                                        │
  *   │  ││││││││││││││││││││││││    ┌────┐  │   <- Code128, full width
  *   │  GRU9F3A…                    │ QR │  │
  *   └──────────────────────────────────────┘
@@ -105,76 +105,43 @@ export async function renderLabelPdf(labelData, options = {}) {
   document.rect(0, 0, pageWidth, pageHeight).fill("#FFFFFF");
   document.fillColor("#000000");
 
-  // ---- Stand letter: the dominant element, boxed on the right -------------
-  const standBox = Math.min(mm(30), pageHeight * 0.42);
-  const standX = pageWidth - margin - standBox;
-  const standY = margin;
-
-  document.lineWidth(2).rect(standX, standY, standBox, standBox).stroke("#000000");
-
-  const standCode = String(labelData.stand_code ?? "").trim();
-  if (standCode) {
-    document
-      .font("Helvetica-Bold")
-      .fontSize(standBox * 0.72)
-      .text(standCode, standX, standY + standBox * 0.13, {
-        width: standBox,
-        align: "center",
-      });
-  } else {
-    // Never leave it blank: an unassigned stand must be visibly wrong on the
-    // physical label so someone resolves it.
-    document
-      .font("Helvetica-Bold")
-      .fontSize(standBox * 0.3)
-      .text("FĂRĂ\nSTATIV", standX, standY + standBox * 0.26, {
-        width: standBox,
-        align: "center",
-      });
-  }
-
-  document
-    .font("Helvetica")
-    .fontSize(6)
-    .text("STATIV", standX, standY + standBox + 2, { width: standBox, align: "center" });
-
-  // ---- Order / customer / product, left column ---------------------------
-  const textWidth = contentWidth - standBox - mm(3);
+  // ---- Order / customer / product, full width -----------------------------
+  const textWidth = contentWidth;
   let cursorY = margin;
 
   document
     .font("Helvetica-Bold")
-    .fontSize(15)
+    .fontSize(20)
     .text(formatOrderNumber(labelData.order_number), margin, cursorY, { width: textWidth });
-  cursorY += 18;
+  cursorY += 24;
 
   document
     .font("Helvetica-Bold")
-    .fontSize(12)
-    .text(truncate(labelData.customer, 28).toUpperCase(), margin, cursorY, { width: textWidth });
-  cursorY += 16;
+    .fontSize(15)
+    .text(truncate(labelData.customer, 40).toUpperCase(), margin, cursorY, { width: textWidth });
+  cursorY += 19;
 
   if (labelData.brand) {
     document
       .font("Helvetica-Bold")
-      .fontSize(13)
-      .text(truncate(labelData.brand, 20).toUpperCase(), margin, cursorY, { width: textWidth });
-    cursorY += 15;
+      .fontSize(16)
+      .text(truncate(labelData.brand, 30).toUpperCase(), margin, cursorY, { width: textWidth });
+    cursorY += 18;
   }
 
   const sizeLine = [labelData.size, labelData.load_speed].filter(Boolean).join(" ").trim();
   if (sizeLine) {
     document
       .font("Helvetica-Bold")
-      .fontSize(13)
-      .text(truncate(sizeLine, 22), margin, cursorY, { width: textWidth });
-    cursorY += 15;
+      .fontSize(16)
+      .text(truncate(sizeLine, 32), margin, cursorY, { width: textWidth });
+    cursorY += 18;
   } else if (labelData.product) {
     document
       .font("Helvetica")
-      .fontSize(9)
-      .text(truncate(labelData.product, 44), margin, cursorY, { width: textWidth });
-    cursorY += 12;
+      .fontSize(10)
+      .text(truncate(labelData.product, 60), margin, cursorY, { width: textWidth });
+    cursorY += 13;
   }
 
   if (labelData.unit_index && labelData.unit_total) {

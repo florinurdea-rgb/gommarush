@@ -11,7 +11,6 @@ const SAMPLE = {
   inventory_unit_id: "00000000-0000-0000-0000-000000000000",
   unit_token: "GRU9F3A21C4B87E0D6A5FC3E11",
   order_number: 1,
-  stand_code: "A",
   customer: "Rossi Gomme SRL",
   product: "Michelin Primacy 4",
   brand: "Michelin",

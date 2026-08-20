@@ -6,14 +6,7 @@ import { isMissingSchemaError } from "@/lib/server/schema-errors";
 import { getVehicle } from "@/lib/server/reference";
 import { isManuallySettableStatus } from "@/lib/logistics/order-status-rules";
 import { ACTIVE_ORDER_STATUSES } from "@/lib/types/logistics";
-import type {
-  InventoryUnitRow,
-  ItemType,
-  OrderItemRow,
-  OrderRow,
-  OrderStatus,
-  StandCode,
-} from "@/lib/types/logistics";
+import type { InventoryUnitRow, ItemType, OrderItemRow, OrderRow, OrderStatus } from "@/lib/types/logistics";
 import type { OrderProgress } from "@/lib/logistics/order-progress";
 
 /**
@@ -28,7 +21,6 @@ export interface OrderListRow {
   id: string;
   /** Numeric identity from the database; display via formatOrderNumber(). */
   order_number: number;
-  stand_code: StandCode | null;
   status: OrderStatus;
   planned_delivery_date: string | null;
   customer_name: string | null;
@@ -56,7 +48,7 @@ export interface OrderListRow {
  * of N+1 round trips per order.
  */
 const ORDER_LIST_SELECT = `
-  id, order_number, stand_code, status, planned_delivery_date, held_at,
+  id, order_number, status, planned_delivery_date, held_at,
   supplier_document_number, driver_id, vehicle_id, delivery_sequence,
   cash_on_delivery, amount_to_collect,
   customers ( name ),
@@ -76,7 +68,7 @@ const ORDER_LIST_SELECT = `
  * ordering — see the isMissingSchemaError() handling in listActiveOrders/listOrdersOnHold.
  */
 const ORDER_LIST_SELECT_LEGACY = `
-  id, order_number, stand_code, status, planned_delivery_date, held_at,
+  id, order_number, status, planned_delivery_date, held_at,
   supplier_document_number, driver_id, vehicle_id,
   customers ( name ),
   customer_locations ( city, address_line1 ),
@@ -89,7 +81,6 @@ const ORDER_LIST_SELECT_LEGACY = `
 interface RawOrderListRow {
   id: string;
   order_number: number;
-  stand_code: StandCode | null;
   status: OrderStatus;
   planned_delivery_date: string | null;
   held_at: string | null;
@@ -111,7 +102,6 @@ function toListRow(raw: RawOrderListRow): OrderListRow {
   return {
     id: raw.id,
     order_number: raw.order_number,
-    stand_code: raw.stand_code,
     status: raw.status,
     planned_delivery_date: raw.planned_delivery_date,
     customer_name: raw.customers?.name ?? null,
@@ -373,9 +363,6 @@ export interface CreateOrderInput {
   delivery_country?: string | null;
   delivery_notes?: string | null;
   planned_delivery_date?: string | null;
-  stand_code?: StandCode | null;
-  /** When no stand is requested, take the first free one. */
-  auto_allocate_stand?: boolean;
   driver_id?: string | null;
   vehicle_id?: string | null;
   requires_payment_on_delivery?: boolean;
@@ -391,16 +378,13 @@ export interface CreateOrderInput {
 export interface CreateOrderResult {
   orderId: string;
   orderNumber: string;
-  standCode: StandCode | null;
-  /** 'STAND_OCCUPIED' | 'NO_STAND_AVAILABLE' — surfaced to the Admin. */
-  standWarning: string | null;
   inventoryUnitCount: number;
 }
 
 /**
  * Creates the confirmed order. One RPC call, one transaction: order + items +
- * inventory units + status history + document link + stand claim all succeed or
- * all fail. There is no window where an order exists without its units.
+ * inventory units + status history + document link all succeed or all fail.
+ * There is no window where an order exists without its units.
  */
 export async function createOrder(
   input: CreateOrderInput,
@@ -443,24 +427,18 @@ export async function createOrder(
   const result = data as {
     order_id: string;
     order_number: string;
-    stand_code: StandCode | null;
-    stand_warning: string | null;
     inventory_unit_count: number;
   };
 
   logEvent("order_created", {
     orderId: result.order_id,
     orderNumber: result.order_number,
-    standCode: result.stand_code ?? "none",
     unitCount: result.inventory_unit_count,
-    standWarning: result.stand_warning ?? "none",
   });
 
   return {
     orderId: result.order_id,
     orderNumber: result.order_number,
-    standCode: result.stand_code,
-    standWarning: result.stand_warning,
     inventoryUnitCount: result.inventory_unit_count,
   };
 }
@@ -472,7 +450,7 @@ export async function createOrder(
 /**
  * Fields the Admin may edit directly. These are REAL column names, because this
  * goes straight into an `update()` — unlike CreateOrderInput, whose keys form
- * the RPC payload contract. Status and stand have their own paths.
+ * the RPC payload contract. Status has its own path.
  */
 export interface UpdateOrderInput {
   supplier_document_number?: string | null;
@@ -507,7 +485,6 @@ export async function updateOrder(orderId: string, input: UpdateOrderInput): Pro
 export interface StatusChangeResult {
   ok: boolean;
   code?: string;
-  standWarning?: string | null;
 }
 
 async function setStatus(
@@ -529,7 +506,7 @@ async function setStatus(
     throw error;
   }
 
-  const result = data as { ok: boolean; code?: string; stand_warning?: string | null };
+  const result = data as { ok: boolean; code?: string };
   logEvent("order_status_changed", {
     orderId,
     status,
@@ -537,7 +514,7 @@ async function setStatus(
     code: result.code ?? "",
   });
 
-  return { ok: result.ok, code: result.code, standWarning: result.stand_warning ?? null };
+  return { ok: result.ok, code: result.code };
 }
 
 /**
@@ -585,11 +562,7 @@ export async function setOrderStatusManually(
   return setStatus(orderId, status, { reason: "manual_override", changedBy });
 }
 
-/**
- * Brings an order back out of hold. The stand it used to hold may have been
- * taken meanwhile, so the RPC re-checks and reports a warning rather than
- * double-booking it.
- */
+/** Brings an order back out of hold, to the status it held before. */
 export async function reactivateOrder(
   orderId: string,
   options: { plannedDeliveryDate?: string | null; changedBy: string }
@@ -612,24 +585,6 @@ export async function reactivateOrder(
   });
 }
 
-export async function assignStand(
-  orderId: string,
-  standCode: StandCode | null,
-  changedBy: string
-): Promise<{ ok: boolean; code?: string }> {
-  const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase.rpc("gorush_assign_stand", {
-    p_order_id: orderId,
-    p_stand_code: standCode,
-    p_changed_by: changedBy,
-  });
-  if (error) throw error;
-
-  const result = data as { ok: boolean; code?: string };
-  logEvent("stand_assigned", { orderId, standCode: standCode ?? "none", ok: result.ok });
-  return result;
-}
-
 /**
  * The vehicle board's single write path: sets vehicle_id and a fresh
  * 1..N delivery_sequence for every order in `orderedOrderIds`, in the
@@ -645,7 +600,7 @@ export async function assignStand(
  *     are harmless for an ORDER BY, and re-numbering a column no one
  *     touched isn't needed for correctness.
  *
- * No RPC/locking needed here (unlike stand allocation): there is no
+ * No RPC/locking needed here: there is no
  * collision to prevent — two orders can validly share a vehicle and even,
  * transiently, a sequence number — so plain concurrent updates are enough.
  */
@@ -655,8 +610,7 @@ export async function reorderVehicleColumn(vehicleId: string | null, orderedOrde
   // Audit (§13): only orders whose vehicle_id is actually CHANGING get a
   // history row — a pure reorder within the same column is not a
   // meaningful event on its own. old_status/new_status are identical
-  // (this isn't a status change), matching gorush_assign_stand's pattern
-  // for a non-status audit entry.
+  // (this isn't a status change) — a non-status audit entry.
   const { data: before, error: beforeError } = await supabase
     .from("orders")
     .select("id, status, vehicle_id")
@@ -782,7 +736,8 @@ export async function getOrderScanHistory(orderId: string, limit = 50) {
     result: string;
     manual: boolean;
     reason: string | null;
-    stand_code: StandCode | null;
+    /** @deprecated Stand allocation was removed. Historical value only. */
+    stand_code: string | null;
     scanned_at: string;
     drivers: { name: string } | null;
     vehicles: { name: string } | null;

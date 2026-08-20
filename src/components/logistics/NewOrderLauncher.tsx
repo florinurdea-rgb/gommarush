@@ -2,10 +2,9 @@
 
 import { useState } from "react";
 import { NewOrderModal } from "@/components/logistics/NewOrderModal";
-import type { StandCode } from "@/lib/types/logistics";
 
 /** The dashboard's "+ Comandă nouă" button, plus the modal it opens. */
-export function NewOrderLauncher({ availableStands }: { availableStands: StandCode[] }) {
+export function NewOrderLauncher() {
   const [open, setOpen] = useState(false);
 
   return (
@@ -17,7 +16,7 @@ export function NewOrderLauncher({ availableStands }: { availableStands: StandCo
       >
         + Comandă nouă
       </button>
-      {open && <NewOrderModal availableStands={availableStands} onClose={() => setOpen(false)} />}
+      {open && <NewOrderModal onClose={() => setOpen(false)} />}
     </>
   );
 }

@@ -52,7 +52,6 @@ export function createJobLoop({ supabase, printer, config, logger = console }) {
         event: "print_job_claimed",
         jobId: job.id,
         unitToken: labelData.unit_token,
-        stand: labelData.stand_code ?? null,
         attempts: job.attempts,
       })
     );

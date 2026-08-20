@@ -7,7 +7,6 @@ import { uploadDocumentDirect } from "@/lib/client/document-upload";
 import { errorMessage, t } from "@/lib/i18n/logistics";
 import type { AnalysisResult } from "@/lib/documents/analyzer";
 import type { CustomerMatchResult } from "@/lib/logistics/customer-matching";
-import type { StandCode } from "@/lib/types/logistics";
 
 /**
  * The import flow, in the order the brief specifies:
@@ -28,7 +27,6 @@ export interface OptionRef {
 }
 
 interface NewOrderFlowProps {
-  availableStands: StandCode[];
   analysisConfigured: boolean;
 }
 
@@ -40,10 +38,7 @@ function isoDateOffset(days: number): string {
 
 const ACCEPTED = ".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.docx,application/pdf,image/*";
 
-export function NewOrderFlow({
-  availableStands,
-  analysisConfigured,
-}: NewOrderFlowProps) {
+export function NewOrderFlow({ analysisConfigured }: NewOrderFlowProps) {
   const router = useRouter();
   const [step, setStep] = useState<Step>("day");
   const [plannedDate, setPlannedDate] = useState<string>(isoDateOffset(0));
@@ -206,7 +201,6 @@ export function NewOrderFlow({
       documentId={documentId}
       sourceType={sourceType}
       plannedDate={plannedDate}
-      availableStands={availableStands}
       onBack={() => setStep("method")}
       onSaved={(orderId) => {
         router.push(`/admin?created=${orderId}`);

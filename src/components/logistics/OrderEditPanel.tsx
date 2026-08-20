@@ -3,19 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/Button";
-import { STAND_CODES } from "@/lib/types/logistics";
 import { errorMessage, t } from "@/lib/i18n/logistics";
-import type { StandCode } from "@/lib/types/logistics";
 import type { OptionRef } from "@/components/logistics/NewOrderFlow";
 
-/**
- * Assignment editor on the order detail page: stand, driver, van, delivery date,
- * plus the hold/reactivate/cancel controls.
- *
- * Stand assignment is the interesting one — it can legitimately fail
- * (STAND_OCCUPIED) because another order took the stand between page load and
- * save, so the result is always surfaced rather than assumed.
- */
+/** Assignment editor on the order detail page: driver, van, delivery date, plus hold/reactivate/cancel. */
 
 const inputClass =
   "h-11 w-full rounded-lg border border-ink/15 px-3 text-sm text-ink outline-none focus:border-accent";
@@ -23,8 +14,6 @@ const labelClass = "mb-1 block text-xs font-semibold uppercase tracking-wide tex
 
 interface OrderEditPanelProps {
   orderId: string;
-  standCode: StandCode | null;
-  availableStands: StandCode[];
   drivers: OptionRef[];
   vehicles: OptionRef[];
   driverId: string | null;
@@ -35,8 +24,6 @@ interface OrderEditPanelProps {
 
 export function OrderEditPanel({
   orderId,
-  standCode,
-  availableStands,
   drivers,
   vehicles,
   driverId,
@@ -45,7 +32,6 @@ export function OrderEditPanel({
   status,
 }: OrderEditPanelProps) {
   const router = useRouter();
-  const [stand, setStand] = useState<string>(standCode ?? "");
   const [driver, setDriver] = useState(driverId ?? "");
   const [vehicle, setVehicle] = useState(vehicleId ?? "");
   const [date, setDate] = useState(plannedDate ?? "");
@@ -62,21 +48,6 @@ export function OrderEditPanel({
     setNotice(null);
 
     try {
-      // The stand goes through its own endpoint because it can collide; the
-      // rest is a plain field update.
-      if ((stand || null) !== (standCode ?? null)) {
-        const response = await fetch(`/api/admin/orders/${orderId}`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ action: "assign_stand", stand_code: stand || null }),
-        });
-        const payload = (await response.json()) as { ok: boolean; code?: string };
-        if (!payload.ok) {
-          setError(errorMessage(payload.code));
-          return;
-        }
-      }
-
       const response = await fetch(`/api/admin/orders/${orderId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
@@ -116,16 +87,11 @@ export function OrderEditPanel({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ action, planned_delivery_date: date || null }),
       });
-      const payload = (await response.json()) as {
-        ok: boolean;
-        code?: string;
-        standWarning?: string | null;
-      };
+      const payload = (await response.json()) as { ok: boolean; code?: string };
       if (!payload.ok) {
         setError(errorMessage(payload.code));
         return;
       }
-      if (payload.standWarning) setNotice(errorMessage(payload.standWarning));
       router.refresh();
     } catch {
       setError(errorMessage("UNKNOWN"));
@@ -139,28 +105,6 @@ export function OrderEditPanel({
       <h2 className="text-base font-bold text-ink">{t("assignment")}</h2>
 
       <div className="mt-4 space-y-3">
-        <div>
-          <label className={labelClass} htmlFor="edit-stand">{t("stand")}</label>
-          <select
-            id="edit-stand"
-            className={inputClass}
-            value={stand}
-            disabled={cancelled}
-            onChange={(event) => setStand(event.target.value)}
-          >
-            <option value="">{t("unassigned")}</option>
-            {STAND_CODES.map((code) => {
-              const usable = availableStands.includes(code) || code === standCode;
-              return (
-                <option key={code} value={code} disabled={!usable}>
-                  {code}
-                  {usable ? "" : " — ocupat"}
-                </option>
-              );
-            })}
-          </select>
-        </div>
-
         <div>
           <label className={labelClass} htmlFor="edit-driver">{t("driver")}</label>
           <select id="edit-driver" className={inputClass} value={driver} disabled={cancelled}

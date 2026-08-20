@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   assertLabelDataIsSafe,
   buildLabelData,
-  standQrUrl,
   unitQrUrl,
   UnsafeLabelDataError,
 } from "@/lib/logistics/label";
@@ -33,12 +32,10 @@ describe("buildLabelData", () => {
       unitToken: "GRUABC123",
       unitIndex: 2,
       orderNumber: "1",
-      standCode: "A",
       customerName: "Rossi Gomme SRL",
       item,
     });
 
-    expect(label.stand_code).toBe("A");
     expect(label.unit_token).toBe("GRUABC123");
     expect(label.customer).toBe("Rossi Gomme SRL");
     expect(label.size).toBe("225/55 R18");
@@ -48,16 +45,14 @@ describe("buildLabelData", () => {
     expect(label.unit_total).toBe(4);
   });
 
-  it("keeps an unassigned stand explicit rather than blank-guessing", () => {
+  it("degrades gracefully when no customer name is known", () => {
     const label = buildLabelData({
       inventoryUnitId: "unit-1",
       unitToken: "GRUABC123",
       orderNumber: "1",
-      standCode: null,
       customerName: null,
       item,
     });
-    expect(label.stand_code).toBeNull();
     expect(label.customer).toBe("");
   });
 });
@@ -68,7 +63,6 @@ describe("assertLabelDataIsSafe", () => {
       assertLabelDataIsSafe({
         unit_token: "GRUABC",
         order_number: 1,
-        stand_code: "A",
         customer: "Rossi",
         product: "Michelin",
       })
@@ -89,11 +83,6 @@ describe("assertLabelDataIsSafe", () => {
 });
 
 describe("QR targets", () => {
-  it("builds the PERMANENT stand URL", () => {
-    // The physical sticker encodes this and never changes.
-    expect(standQrUrl("https://gorush.example/", "A")).toBe("https://gorush.example/stand/A");
-  });
-
   it("builds the unit fallback URL", () => {
     expect(unitQrUrl("https://gorush.example", "GRUABC")).toBe("https://gorush.example/u/GRUABC");
   });

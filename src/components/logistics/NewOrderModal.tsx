@@ -9,7 +9,6 @@ import { UploadOrderPanel } from "@/components/logistics/UploadOrderPanel";
 import { emptyResult } from "@/lib/documents/analyzer";
 import { ddtDocumentToAnalysisResult } from "@/lib/ddt-import/to-analysis-result";
 import type { ProcessedDocumentWithMatch } from "@/lib/ddt-import/client-helpers";
-import type { StandCode } from "@/lib/types/logistics";
 
 /**
  * "Comandă nouă" now opens here first: a choice between manual entry and
@@ -28,13 +27,7 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function NewOrderModal({
-  availableStands,
-  onClose,
-}: {
-  availableStands: StandCode[];
-  onClose: () => void;
-}) {
+export function NewOrderModal({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const { showToast } = useToast();
   const [step, setStep] = useState<Step>("choice");
@@ -75,7 +68,6 @@ export function NewOrderModal({
             documentId={null}
             sourceType="manual"
             plannedDate={todayIso()}
-            availableStands={availableStands}
             onBack={() => setStep("choice")}
             onSaved={(orderId) => {
               onClose();
@@ -121,7 +113,6 @@ export function NewOrderModal({
             documentId={editingDoc.sourceDocumentId}
             sourceType="pdf"
             plannedDate={todayIso()}
-            availableStands={availableStands}
             onBack={() => setStep("upload")}
             onSaved={(orderId) => {
               onClose();

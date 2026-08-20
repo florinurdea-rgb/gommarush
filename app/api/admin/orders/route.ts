@@ -15,7 +15,7 @@ export const runtime = "nodejs";
  * Order of operations matters:
  *   1. resolve the supplier (orders.supplier_id is NOT NULL)
  *   2. apply the Admin's explicit customer/location decision
- *   3. create order + items + inventory units + stand claim in ONE transaction
+ *   3. create order + items + inventory units in ONE transaction
  *
  * Steps 1–2 are individually meaningful and idempotent, so they sit outside the
  * transaction; step 3 is all-or-nothing inside `gorush_create_order`, which is
@@ -99,8 +99,6 @@ export async function POST(request: NextRequest) {
         delivery_country: resolved.addressSnapshot.country_code ?? null,
         delivery_notes: resolved.addressSnapshot.delivery_notes ?? null,
         planned_delivery_date: input.planned_delivery_date ?? null,
-        stand_code: input.stand_code ?? null,
-        auto_allocate_stand: input.auto_allocate_stand && !input.stand_code,
         driver_id: input.driver_id ?? null,
         vehicle_id: input.vehicle_id ?? null,
         requires_payment_on_delivery: input.requires_payment_on_delivery,
@@ -120,10 +118,6 @@ export async function POST(request: NextRequest) {
         orderId: result.orderId,
         orderNumber: result.orderNumber,
         orderNumberLabel: formatOrderNumber(result.orderNumber),
-        standCode: result.standCode,
-        // 'STAND_OCCUPIED' / 'NO_STAND_AVAILABLE' — the UI must show this, not
-        // pretend the order got a stand.
-        standWarning: result.standWarning,
         inventoryUnitCount: result.inventoryUnitCount,
       },
       201

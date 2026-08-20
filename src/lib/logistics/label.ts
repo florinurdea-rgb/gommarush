@@ -18,7 +18,7 @@
 // purpose-built `delivery_address`/`supplier` keys are allowed through.
 
 import { formatTyreSize } from "@/lib/logistics/product-normalise";
-import type { LabelData, OrderItemRow, StandCode } from "@/lib/types/logistics";
+import type { LabelData, OrderItemRow } from "@/lib/types/logistics";
 
 /** Keys that must never appear in label_data. */
 const FORBIDDEN_LABEL_KEYS = [
@@ -68,7 +68,6 @@ export interface BuildLabelDataInput {
   unitToken: string;
   unitIndex?: number;
   orderNumber: string;
-  standCode: StandCode | null;
   customerName: string | null;
   item: Pick<
     OrderItemRow,
@@ -101,7 +100,6 @@ export function buildLabelData(input: BuildLabelDataInput): LabelData {
     inventory_unit_id: input.inventoryUnitId,
     unit_token: input.unitToken,
     order_number: input.orderNumber,
-    stand_code: input.standCode,
     customer: input.customerName?.trim() || "",
     product,
     brand,
@@ -123,10 +121,4 @@ export function buildLabelData(input: BuildLabelDataInput): LabelData {
 export function unitQrUrl(baseUrl: string, unitToken: string): string {
   const trimmed = baseUrl.replace(/\/+$/, "");
   return `${trimmed}/u/${encodeURIComponent(unitToken)}`;
-}
-
-/** The URL encoded in the PERMANENT sticker on a physical stand. */
-export function standQrUrl(baseUrl: string, standCode: StandCode): string {
-  const trimmed = baseUrl.replace(/\/+$/, "");
-  return `${trimmed}/stand/${standCode}`;
 }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ITEM_TYPES, ORDER_STATUSES, STAND_CODES } from "@/lib/types/logistics";
+import { ITEM_TYPES, ORDER_STATUSES } from "@/lib/types/logistics";
 
 /**
  * Server-side validation for every logistics route.
@@ -9,7 +9,6 @@ import { ITEM_TYPES, ORDER_STATUSES, STAND_CODES } from "@/lib/types/logistics";
  * is treated as untrusted.
  */
 
-export const standCodeSchema = z.enum(STAND_CODES);
 export const itemTypeSchema = z.enum(ITEM_TYPES);
 
 const uuid = z.string().uuid();
@@ -131,8 +130,6 @@ export const createOrderSchema = z
     address: addressSchema.default({}),
 
     planned_delivery_date: isoDate.nullish(),
-    stand_code: standCodeSchema.nullish(),
-    auto_allocate_stand: z.boolean().default(true),
     driver_id: uuid.nullish(),
     vehicle_id: uuid.nullish(),
 
@@ -185,18 +182,8 @@ export const updateOrderSchema = z
 
 export const orderActionSchema = z
   .object({
-    action: z.enum([
-      "cancel",
-      "hold",
-      "reactivate",
-      "assign_stand",
-      "set_status",
-      "mark_loaded",
-      "deliver",
-      "delivery_failed",
-    ]),
+    action: z.enum(["cancel", "hold", "reactivate", "set_status", "mark_loaded", "deliver", "delivery_failed"]),
     reason: longText.nullish(),
-    stand_code: standCodeSchema.nullish(),
     planned_delivery_date: isoDate.nullish(),
     status: z.string().trim().max(40).nullish(),
     vehicle_id: uuid.nullish(),

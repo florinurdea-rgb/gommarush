@@ -1,13 +1,6 @@
 import { NextRequest } from "next/server";
 import { orderActionSchema, updateOrderSchema } from "@/lib/validation/logistics";
-import {
-  assignStand,
-  cancelOrder,
-  holdOrder,
-  reactivateOrder,
-  setOrderStatusManually,
-  updateOrder,
-} from "@/lib/server/orders";
+import { cancelOrder, holdOrder, reactivateOrder, setOrderStatusManually, updateOrder } from "@/lib/server/orders";
 import { deliverOrder, markDeliveryFailed, markOrderLoaded } from "@/lib/server/loading";
 import { ORDER_STATUSES } from "@/lib/types/logistics";
 import { fail, ok, readJsonBody, runAdminRoute, zodDetails } from "@/lib/server/route-helpers";
@@ -34,7 +27,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 }
 
 /**
- * POST — lifecycle actions: hold, reactivate, cancel, assign stand.
+ * POST — lifecycle actions: hold, reactivate, cancel, status/dispatch changes.
  *
  * These are separate from PATCH because each one is a state transition with its
  * own rules and its own history entry, not a field edit.
@@ -47,7 +40,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const parsed = orderActionSchema.safeParse(body);
     if (!parsed.success) return fail(400, "VALIDATION_FAILED", zodDetails(parsed.error));
-    const { action, reason, stand_code, planned_delivery_date, status, vehicle_id, amount_collected, payment_method } =
+    const { action, reason, planned_delivery_date, status, vehicle_id, amount_collected, payment_method } =
       parsed.data;
 
     switch (action) {
@@ -62,18 +55,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
           changedBy: session.subject,
         });
         if (!result.ok) return fail(400, result.code ?? "UNKNOWN");
-        // A reactivated order may not get its old stand back — say so.
-        return ok({ orderId: id, standWarning: result.standWarning ?? null });
+        return ok({ orderId: id });
       }
       case "cancel": {
         const result = await cancelOrder(id, reason ?? null, session.subject);
         if (!result.ok) return fail(400, result.code ?? "UNKNOWN");
         return ok({ orderId: id, status: "cancelled" });
-      }
-      case "assign_stand": {
-        const result = await assignStand(id, stand_code ?? null, session.subject);
-        if (!result.ok) return fail(409, result.code ?? "STAND_OCCUPIED");
-        return ok({ orderId: id, standCode: stand_code ?? null });
       }
       case "set_status": {
         if (!status || !(ORDER_STATUSES as readonly string[]).includes(status)) {

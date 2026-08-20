@@ -54,19 +54,11 @@ export function OrderActionsMenu({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ action, reason: reason ?? null }),
       });
-      const payload = (await response.json()) as {
-        ok: boolean;
-        code?: string;
-        standWarning?: string | null;
-      };
+      const payload = (await response.json()) as { ok: boolean; code?: string };
 
       if (!payload.ok) {
         setError(errorMessage(payload.code));
         return;
-      }
-      // A reactivated order may not have got its old stand back.
-      if (payload.standWarning) {
-        window.alert(errorMessage(payload.standWarning));
       }
       setOpen(false);
       setConfirmingDelete(false);

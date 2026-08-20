@@ -62,7 +62,6 @@ export type UiKey =
   | "manualEntry"
   | "comingSoon"
   | "orderNumber"
-  | "stand"
   | "customer"
   | "itemCount"
   | "driverVehicle"
@@ -108,7 +107,6 @@ export type UiKey =
   | "addManuallyAsLoaded"
   | "reason"
   | "reasonRequired"
-  | "standFree"
   | "readOnlyView"
   | "totals"
   | "received"
@@ -123,7 +121,6 @@ export type UiKey =
   | "useAddressForThisOrderOnly"
   | "addAsNewLocation"
   | "updateExistingLocation"
-  | "standUnavailable"
   | "unassigned"
   | "printQueue"
   | "retry"
@@ -148,7 +145,6 @@ export type UiKey =
   | "amountToCollect"
   | "collectionMethod"
   | "requiresPaymentOnDelivery"
-  | "standQrCodes"
   | "print";
 
 const ro: Dictionary = {
@@ -253,7 +249,6 @@ const ro: Dictionary = {
     manualEntry: "Introducere manuală",
     comingSoon: "În curând",
     orderNumber: "Nr. comandă",
-    stand: "Stativ",
     customer: "Client",
     itemCount: "Nr. obiecte",
     driverVehicle: "Șofer / Mașină",
@@ -299,7 +294,6 @@ const ro: Dictionary = {
     addManuallyAsLoaded: "Adaugă manual ca încărcat",
     reason: "Motiv",
     reasonRequired: "Motivul este obligatoriu",
-    standFree: "liber",
     readOnlyView: "Vizualizare (doar citire)",
     totals: "Total",
     received: "recepționate",
@@ -314,7 +308,6 @@ const ro: Dictionary = {
     useAddressForThisOrderOnly: "Folosește adresa doar pentru această comandă",
     addAsNewLocation: "Adaugă ca locație nouă a clientului",
     updateExistingLocation: "Actualizează o locație existentă",
-    standUnavailable: "Stativ indisponibil",
     unassigned: "Nealocat",
     printQueue: "Coadă de printare",
     retry: "Reîncearcă",
@@ -339,7 +332,6 @@ const ro: Dictionary = {
     amountToCollect: "Sumă de încasat",
     collectionMethod: "Metodă de încasare",
     requiresPaymentOnDelivery: "Necesită plată la livrare",
-    standQrCodes: "Coduri QR stative",
     print: "Printează",
   },
   errors: {
@@ -351,9 +343,6 @@ const ro: Dictionary = {
     NO_UNIT_EXPECTED: "Toate obiectele de pe această linie au fost deja recepționate",
     LABEL_UNREADABLE: "Eticheta nu a putut fi citită",
     POSSIBLE_CUSTOMER_MATCH: "Client posibil găsit — verifică adresa",
-    STAND_OCCUPIED: "Stativ indisponibil",
-    NO_STAND_AVAILABLE: "Niciun stativ liber — alocă manual",
-    INVALID_STAND: "Stativ invalid",
     ALREADY_SCANNED: "Acest produs a fost deja scanat",
     ALREADY_STORED: "Obiect deja înregistrat ca depozitat",
     ALREADY_LOADED: "Obiect deja înregistrat ca încărcat",
