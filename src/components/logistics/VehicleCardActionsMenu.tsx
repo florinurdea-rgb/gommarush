@@ -17,20 +17,20 @@ export interface MoveTarget {
  * The compact per-card menu on a vehicle-board order card: Editează,
  * "Asignează în ruta recomandată", "Mută în..." (a tap-friendly alternative
  * to drag-and-drop — the brief calls for it explicitly since native HTML5
- * drag is unreliable on touch), "Schimbă statusul" (manual override — the
- * admin needs to be able to correct or advance a status directly, any time
- * before the order closes, without walking every intermediate scan step),
- * and Șterge. Deliberately lighter than OrderActionsMenu (no hold/reactivate
- * — cards on this board are always active) and takes the route-suggestion/
+ * drag is unreliable on touch), Marchează încărcată / Marchează livrată /
+ * Livrare eșuată (the Phase 1 order-level dispatch actions — no tyre
+ * scanning), "Schimbă statusul" (manual override for everything else), and
+ * Șterge. Deliberately lighter than OrderActionsMenu (no hold/reactivate —
+ * cards on this board are always active) and takes the route-suggestion/
  * move actions as callbacks since only the board knows about every
  * vehicle's current load and columns.
  *
- * "Schimbă statusul" is restricted to ACTIVE_ORDER_STATUSES (open/
- * in-progress statuses) — 'delivered' has its own confirmation flow
- * (updates inventory_units too, which this can't) and 'cancelled' already
- * has Șterge below; setOrderStatusManually() on the server enforces the
- * same restriction independently, so this is a UI convenience, not the
- * only gate.
+ * "Schimbă statusul" only lists MANUALLY_SETTABLE_STATUSES (see
+ * src/lib/logistics/order-status-rules.ts, shared with the server-side
+ * gate in setOrderStatusManually()) — 'loaded'/'delivered'/
+ * 'partially_delivered' have their own dedicated actions above instead,
+ * since each carries a required side effect (vehicle assignment + loaded_at,
+ * or delivered_at + payment recording) a plain status write would skip.
  */
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cash: "Numerar",
