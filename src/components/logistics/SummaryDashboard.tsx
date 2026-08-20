@@ -160,6 +160,57 @@ export function SummaryDashboard({
         <KpiCard value={formatEuro(summary.profit)} label="Profit transport" icon={<ProfitIcon />} tone="purple" />
       </div>
 
+      {/* ------------------------------------------------ Needs attention */}
+      {(summary.deliveryFailedCount > 0 || summary.unassignedCount > 0 || summary.codExpected > 0) && (
+        <section className="mt-6">
+          <h2 className="text-sm font-bold uppercase tracking-wide text-ink-soft">Necesită atenție</h2>
+          <div className="mt-2 grid gap-3 sm:grid-cols-3">
+            {summary.deliveryFailedCount > 0 && (
+              <div className="rounded-xl border border-state-danger/30 bg-state-danger-soft p-4">
+                <div className="text-2xl font-black tabular-nums text-state-danger">
+                  {summary.deliveryFailedCount}
+                </div>
+                <div className="text-sm font-semibold text-state-danger">
+                  {summary.deliveryFailedCount === 1 ? "livrare eșuată" : "livrări eșuate"}
+                </div>
+              </div>
+            )}
+            {summary.unassignedCount > 0 && (
+              <div className="rounded-xl border border-state-waiting/30 bg-state-waiting-soft p-4">
+                <div className="text-2xl font-black tabular-nums text-state-waiting">
+                  {summary.unassignedCount}
+                </div>
+                <div className="text-sm font-semibold text-state-waiting">
+                  {summary.unassignedCount === 1 ? "comandă neasignată" : "comenzi neasignate"}
+                </div>
+              </div>
+            )}
+            {summary.codExpected > 0 && (
+              <div className="rounded-xl border border-ink/10 bg-white p-4 shadow-card">
+                <div className="flex items-baseline justify-between text-sm">
+                  <span className="text-ink-soft">COD așteptat</span>
+                  <span className="font-bold tabular-nums text-ink">{formatEuro(summary.codExpected)}</span>
+                </div>
+                <div className="mt-1 flex items-baseline justify-between text-sm">
+                  <span className="text-ink-soft">Încasat</span>
+                  <span className="font-bold tabular-nums text-ink">{formatEuro(summary.codCollected)}</span>
+                </div>
+                <div className="mt-1 flex items-baseline justify-between text-sm">
+                  <span className="text-ink-soft">Diferență</span>
+                  <span
+                    className={`font-bold tabular-nums ${
+                      summary.codExpected - summary.codCollected > 0 ? "text-state-danger" : "text-state-success"
+                    }`}
+                  >
+                    {formatEuro(summary.codExpected - summary.codCollected)}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
       {/* ---------------------------------------------------- Insights */}
       {insights.length > 0 && (
         <section className="mt-6">

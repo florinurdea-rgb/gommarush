@@ -16,10 +16,14 @@ import { logError } from "@/lib/logger";
  *   - "Ridicări"  -> orders RECEIVED at the warehouse in the period
  *                    (orders.received_at) — one row per actual pickup
  *                    event, not per tyre or per line item
- *   - "Livrări"   -> individual tyre UNITS marked delivered in the period
- *                    (inventory_units.delivered_at) — unit-granular so a
- *                    partially-delivered order only counts what actually
- *                    went out, never the order's full tyre count
+ *   - "Livrări"   -> orders DELIVERED in the period (orders.delivered_at,
+ *                    the order-level Phase 1 delivery confirmation — see
+ *                    gorush_deliver_order), with tyre count as
+ *                    SUM(order_items.quantity) for physical lines. Phase 1
+ *                    stabilisation §23: this is deliberately ORDER-level,
+ *                    not unit-level — inventory_units is no longer written
+ *                    by the active delivery flow, so a query grounded in
+ *                    it would silently show zero deliveries.
  *
  * One shared query set per period, reused by every KPI/breakdown/insight
  * on the page — never a separate fetch per card (see the brief's
@@ -65,28 +69,32 @@ export interface OperationalSummary {
   vehicles: VehicleSummaryRow[];
   /** Live snapshot, independent of the period: orders currently waiting for goods to arrive. */
   waitingGoodsCount: number;
+  /** Live snapshot: orders flagged on_hold with a delivery_failure_reason ("needs attention"). */
+  deliveryFailedCount: number;
+  /** Live snapshot: active orders with no vehicle assigned yet. */
+  unassignedCount: number;
+  codExpected: number;
+  codCollected: number;
 }
 
 function endOfDayIso(dateIso: string): string {
   return `${dateIso}T23:59:59.999`;
 }
 
-const UNITS_DELIVERED_SELECT =
-  "id, order_id, delivered_at, orders!inner ( order_number, status, customer_id, supplier_id, vehicle_id, customers ( name ), suppliers ( name ), vehicles ( name, color_key ) )";
-const UNITS_DELIVERED_SELECT_LEGACY =
-  "id, order_id, delivered_at, orders!inner ( order_number, status, customer_id, supplier_id, vehicle_id, customers ( name ), suppliers ( name ), vehicles ( name ) )";
+const ORDERS_DELIVERED_SELECT =
+  "id, order_number, status, delivered_at, customer_id, supplier_id, vehicle_id, amount_to_collect, amount_collected, cash_on_delivery, customers ( name ), suppliers ( name ), vehicles ( name, color_key ), order_items ( quantity, is_physical )";
+const ORDERS_DELIVERED_SELECT_LEGACY =
+  "id, order_number, status, delivered_at, customer_id, supplier_id, vehicle_id, amount_to_collect, amount_collected, cash_on_delivery, customers ( name ), suppliers ( name ), vehicles ( name ), order_items ( quantity, is_physical )";
 
 /** Falls back to a select without vehicles.color_key if the fleet-management migration hasn't run yet — Sumar just can't tint its vehicle tabs until it does. */
-async function queryDeliveredUnits(
+async function queryDeliveredOrders(
   supabase: ReturnType<typeof createSupabaseAdminClient>,
   rangeStart: string,
   rangeEnd: string
 ) {
   const primary = await supabase
-    .from("inventory_units")
-    .select(UNITS_DELIVERED_SELECT)
-    .eq("unit_type", "tyre")
-    .eq("status", "delivered")
+    .from("orders")
+    .select(ORDERS_DELIVERED_SELECT)
     .not("delivered_at", "is", null)
     .gte("delivered_at", rangeStart)
     .lte("delivered_at", rangeEnd);
@@ -94,10 +102,8 @@ async function queryDeliveredUnits(
   if (isMissingSchemaError(primary.error)) {
     logError("vehicles_color_key_column_missing_summary", primary.error);
     return supabase
-      .from("inventory_units")
-      .select(UNITS_DELIVERED_SELECT_LEGACY)
-      .eq("unit_type", "tyre")
-      .eq("status", "delivered")
+      .from("orders")
+      .select(ORDERS_DELIVERED_SELECT_LEGACY)
       .not("delivered_at", "is", null)
       .gte("delivered_at", rangeStart)
       .lte("delivered_at", rangeEnd);
@@ -111,7 +117,7 @@ export async function getOperationalSummary(startDate: string, endDate: string):
   const rangeStart = `${startDate}T00:00:00`;
   const rangeEnd = endOfDayIso(endDate);
 
-  const [ordersCreatedResult, ordersReceivedResult, unitsDeliveredResult, activeOrders] = await Promise.all([
+  const [ordersCreatedResult, ordersReceivedResult, deliveredOrdersResult, activeOrders] = await Promise.all([
     supabase
       .from("orders")
       .select("id", { count: "exact", head: true })
@@ -125,13 +131,13 @@ export async function getOperationalSummary(startDate: string, endDate: string):
       .not("received_at", "is", null)
       .gte("received_at", rangeStart)
       .lte("received_at", rangeEnd),
-    queryDeliveredUnits(supabase, rangeStart, rangeEnd),
+    queryDeliveredOrders(supabase, rangeStart, rangeEnd),
     listActiveOrders(),
   ]);
 
   if (ordersCreatedResult.error) throw ordersCreatedResult.error;
   if (ordersReceivedResult.error) throw ordersReceivedResult.error;
-  if (unitsDeliveredResult.error) throw unitsDeliveredResult.error;
+  if (deliveredOrdersResult.error) throw deliveredOrdersResult.error;
 
   // Pickups: one row per received order, tyre quantity from a second pass
   // over inventory_units (unit_type='tyre', any status — a pickup counts
@@ -170,54 +176,52 @@ export async function getOperationalSummary(startDate: string, endDate: string):
   }
   const supplierPickups = [...supplierAgg.values()].sort((a, b) => b.pickups - a.pickups);
 
-  // Deliveries: one row per DELIVERED UNIT collapsed into one row per order
-  // (the unit-level granularity already correctly excluded undelivered
-  // tyres from the query — grouping by order here is just for display).
-  type RawDeliveredUnit = {
+  // Deliveries: one row per DELIVERED ORDER (orders.delivered_at — the
+  // order-level Phase 1 confirmation), tyre count as SUM(order_items.
+  // quantity) for physical lines. See gorush_deliver_order: Phase 1 never
+  // does a "partial" delivery — either the whole order is confirmed
+  // delivered, or it isn't — so there is exactly one qualifying quantity
+  // per order, not a unit-by-unit accumulation.
+  type RawDeliveredOrder = {
     id: string;
-    order_id: string;
+    order_number: number;
+    status: string;
     delivered_at: string;
-    orders: {
-      order_number: number;
-      status: string;
-      customer_id: string | null;
-      supplier_id: string | null;
-      vehicle_id: string | null;
-      customers: { name: string } | null;
-      suppliers: { name: string } | null;
-      vehicles: { name: string; color_key?: string | null } | null;
-    } | null;
+    customer_id: string | null;
+    supplier_id: string | null;
+    vehicle_id: string | null;
+    amount_to_collect: number | null;
+    amount_collected: number | null;
+    cash_on_delivery: boolean | null;
+    customers: { name: string } | null;
+    suppliers: { name: string } | null;
+    vehicles: { name: string; color_key?: string | null } | null;
+    order_items: { quantity: number; is_physical: boolean }[];
   };
-  const deliveredUnits = ((unitsDeliveredResult.data ?? []) as unknown as RawDeliveredUnit[]).filter(
-    (unit) => unit.orders !== null
-  );
+  const deliveredOrders = (deliveredOrdersResult.data ?? []) as unknown as RawDeliveredOrder[];
 
-  const deliveryByOrder = new Map<string, DeliveryRow>();
   const vehicleColorById = new Map<string, string | null>();
-  for (const unit of deliveredUnits) {
-    const order = unit.orders!;
-    if (order.vehicle_id) vehicleColorById.set(order.vehicle_id, order.vehicles?.color_key ?? null);
-    const existing = deliveryByOrder.get(unit.order_id);
-    if (existing) {
-      existing.tyreCount += 1;
-      if (unit.delivered_at > existing.deliveredAt) existing.deliveredAt = unit.delivered_at;
-    } else {
-      deliveryByOrder.set(unit.order_id, {
-        orderId: unit.order_id,
+  const deliveries: DeliveryRow[] = deliveredOrders
+    .map((order) => {
+      if (order.vehicle_id) vehicleColorById.set(order.vehicle_id, order.vehicles?.color_key ?? null);
+      const tyreCount = order.order_items
+        .filter((item) => item.is_physical)
+        .reduce((sum, item) => sum + item.quantity, 0);
+      return {
+        orderId: order.id,
         orderNumber: order.order_number,
-        deliveredAt: unit.delivered_at,
+        deliveredAt: order.delivered_at,
         customerName: order.customers?.name ?? null,
         supplierName: order.suppliers?.name ?? null,
         vehicleId: order.vehicle_id,
         vehicleName: order.vehicles?.name ?? null,
-        tyreCount: 1,
+        tyreCount,
         status: order.status,
-      });
-    }
-  }
-  const deliveries = [...deliveryByOrder.values()].sort((a, b) => (a.deliveredAt < b.deliveredAt ? 1 : -1));
+      };
+    })
+    .sort((a, b) => (a.deliveredAt < b.deliveredAt ? 1 : -1));
 
-  const deliveredTyreCount = deliveredUnits.length;
+  const deliveredTyreCount = deliveries.reduce((sum, delivery) => sum + delivery.tyreCount, 0);
   const profit = deliveredTyreCount * PROFIT_PER_DELIVERED_TYRE_EUR;
 
   const vehicleAgg = new Map<string, VehicleSummaryRow>();
@@ -238,9 +242,31 @@ export async function getOperationalSummary(startDate: string, endDate: string):
   }
   const vehicles = [...vehicleAgg.values()].sort((a, b) => b.tyres - a.tyres);
 
+  // COD (§20): expected vs. collected across orders delivered in this
+  // period — the same "Mario / Expected €1,860 / Collected €1,860 /
+  // Difference €0" reconciliation the brief asks for, at the whole-period
+  // level (per-driver breakdown is a UI concern, not a query one).
+  const codOrders = deliveredOrders.filter((order) => order.cash_on_delivery);
+  const codExpected = codOrders.reduce((sum, order) => sum + (order.amount_to_collect ?? 0), 0);
+  const codCollected = codOrders.reduce((sum, order) => sum + (order.amount_collected ?? 0), 0);
+
   const waitingGoodsCount = activeOrders.filter(
     (order) => operationalStatus(order.status, order.progress.problem > 0).bucket === "waiting_goods"
   ).length;
+  const unassignedCount = activeOrders.filter(
+    (order) => !order.vehicle_id && operationalStatus(order.status, false).bucket !== "waiting_goods"
+  ).length;
+
+  // "Needs attention": orders currently on_hold specifically because of a
+  // failed delivery attempt (gorush_mark_delivery_failed), not every
+  // on_hold reason — a live snapshot, independent of the selected period.
+  const { count: deliveryFailedCountRaw, error: deliveryFailedError } = await supabase
+    .from("orders")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "on_hold")
+    .not("delivery_failure_reason", "is", null);
+  if (deliveryFailedError && !isMissingSchemaError(deliveryFailedError)) throw deliveryFailedError;
+  const deliveryFailedCount = deliveryFailedCountRaw ?? 0;
 
   return {
     period: { start: startDate, end: endDate },
@@ -252,5 +278,9 @@ export async function getOperationalSummary(startDate: string, endDate: string):
     deliveries,
     vehicles,
     waitingGoodsCount,
+    deliveryFailedCount,
+    unassignedCount,
+    codExpected,
+    codCollected,
   };
 }
