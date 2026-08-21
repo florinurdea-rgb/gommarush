@@ -18,12 +18,8 @@ export default function Landing() {
         />
 
         {/* Entry points to the internal tools. The page itself stays the
-            public marketing site; the admin panel is gated server-side, and
-            the barcode lookup is deliberately public/standalone. */}
+            public marketing site; both panels are gated server-side. */}
         <div className="flex flex-none items-center gap-2">
-          <LinkButton href="/cauta-cauciuc" variant="secondary" className="flex-none">
-            Caută cauciuc
-          </LinkButton>
           <LinkButton href="/driver" variant="secondary" className="flex-none">
             Logare șofer
           </LinkButton>
