@@ -5,6 +5,45 @@ Analysis-only. No code was changed while producing this document. Every claim is
 
 ---
 
+## §0. DEPLOYMENT REALITY — READ THIS FIRST
+
+**The operator has confirmed: only `OPENAI_API_KEY` is set in production. There is no Anthropic account and no `ANTHROPIC_API_KEY`.**
+
+The codebase was written Anthropic-first, with OpenAI added later as a secondary option in one pipeline only. Under an OpenAI-only configuration, large parts of what's documented below are **dead code that never executes in production**, and — more importantly — **two user-facing features are silently degraded or entirely non-functional.** Every section that follows describes the code as written; this section says which of it is actually live.
+
+### What actually runs, with only OPENAI_API_KEY set
+
+| Feature | Entry point | Status in this deployment |
+|---|---|---|
+| **Multi-DDT import** (Flow A) | "Comandă nouă" → Încarcă document; `/admin/orders/import` | ✅ **FULLY WORKING** — OpenAI (`gpt-4.1`) is the sole AI provider |
+| **Single-document import** (Flow B) | `/admin/orders/new` | ⚠️ **NO AI AT ALL** — permanently falls back to text-layer parsing or a blank manual form |
+| **"Caută cauciuc" barcode lookup** | `/cauta-cauciuc` (public, linked from homepage) | ❌ **ENTIRELY NON-FUNCTIONAL** — every scan returns "Căutarea automată nu este configurată" |
+
+**VERIFIED IN CODE**, the three decisive lines:
+
+1. `src/lib/ddt-import/extractor.ts:72-73` — reads both keys; with no Anthropic key, `extractViaAnthropic()` is skipped entirely and **OpenAI becomes the first and only AI provider**. Flow A is unaffected in capability.
+2. `src/lib/documents/index.ts:31-33` — `availableAnalyzers()` returns **`[new AnthropicDocumentAnalyzer()]` and nothing else**. There is no OpenAI analyzer in Flow B; one was never written. With no Anthropic key, `configuredAnalyzer()` returns `null` and `isAnalysisConfigured()` is permanently `false`.
+3. `src/lib/tyre-lookup/anthropic-lookup.ts:211` — `AnthropicTyreLookup.isConfigured()` is the only lookup provider that exists; `app/api/tyre-lookup/route.ts:14` instantiates it directly with no alternative. Every barcode scan returns `status: "unconfigured"`.
+
+### Consequences that change conclusions elsewhere in this document
+
+- **§10's headline finding is INVERTED in your favour.** I documented at length that Anthropic is tried first and accepts a syntactically-valid-but-empty extraction without falling back, making OpenAI's stricter `OPENAI_NO_DOCUMENTS` check "effectively unreachable." **With no Anthropic key, that gap does not exist in your deployment** — OpenAI runs first, and its zero-documents-is-a-failure check (`openai-provider.ts:110-118`) is the live behaviour. Flow A's fallback logic is *stricter* in your configuration than the code's default posture suggests.
+- **§14's decimal-comma numeric corruption bug is NOT live for you.** That bug lives in `anthropic-analyzer.ts`'s permissive `asNumber()` (Flow B's AI path). Flow A's `coerce.ts:asNumber()` is strict-typed and never coerces strings. Since Flow B's AI path never executes here, the corruption path is unreachable. The tradeoff stands, though: Flow A *silently drops* any numeric value the model returns as a string rather than a number.
+- **§11's Flow B prompt is dead code.** Only `DDT_EXTRACTION_SYSTEM_PROMPT` (`src/lib/ddt-import/prompt.ts`) is ever sent to a model. The single-document `SYSTEM_PROMPT` in `anthropic-analyzer.ts:35-58` never executes — as do the prompt contradictions catalogued in §11, which cannot manifest because only one of the two prompts is live.
+- **§37's worst-case latency shortens.** No 90 s (Flow B) or 170 s (Flow A Anthropic) attempt ever happens. Effective worst case for Flow A is OpenAI's 60 s timeout + the local text-layer fallback, well inside the route's `maxDuration = 170`.
+- **§42's privacy surface narrows to one vendor.** Only OpenAI ever receives customer names, addresses, VAT numbers and prices. Anthropic receives nothing.
+- **§48's "duplicated implementations" reframes.** Flow B is not a competing AI implementation in your reality — it is a **manual-entry page with a text-layer assist**. That is a much weaker justification for its continued existence (see §50, CRITICAL-2).
+
+### Two findings that are specific to this configuration and need a decision
+
+**FINDING A — `/admin/orders/new` is an AI-less trap.** The page still presents "Încarcă document" as a primary action and still accepts PDFs/images. A scanned or photographed DDT uploaded there produces **no extraction whatsoever** (no text layer in a scan → `emptyResult("unconfigured")`), landing the admin on a completely blank manual form after a pointless upload-and-wait. A *digital* PDF fares slightly better via the hand-rolled text parser, but with the capped ≤0.6 confidence and regex-guesswork quality documented in §16/§17. Meanwhile the modal's "Încarcă document" path (Flow A) does full OpenAI extraction on the same file. **Two upload buttons in the same admin, one of which silently does far less work than the other, with nothing in the UI signalling the difference.**
+
+**FINDING B — `/cauta-cauciuc` is a dead public feature.** This is customer-facing, linked from the homepage, rate-limited as a public endpoint, and returns "Căutarea automată nu este configurată" for every single scan. Confirmed dead by code, not inferred. It is not mentioned in the Phase 1 stabilisation report because that audit scoped to the logistics workflow. **UNKNOWN** whether this is a known/accepted state or an unnoticed regression — it needs an explicit product decision: port it to OpenAI, or remove the entry point.
+
+> Note on the Anthropic-first architecture: it is not an accident of taste. `anthropic-lookup.ts` uses the Messages API's **native `web_search_20250305` server-side tool** (line 240) to identify a tyre from a barcode against live web sources, with citation extraction. That has no drop-in OpenAI equivalent — porting `/cauta-cauciuc` means re-architecting around a different search mechanism, not swapping a base URL. Flow B's document analyzer, by contrast, would port straightforwardly.
+
+---
+
 ## 1. User flow — every way an order can be created from a document
 
 The audit's suspicion is **confirmed**: there are **two separate, fully live, parallel single/multi-document import implementations**, not one.
@@ -289,6 +328,8 @@ Searched for: Tesseract, Google Vision, AWS Textract, Azure Document Intelligenc
 
 ### Provider 1 — Anthropic, Flow B (single-document)
 
+> **DEAD IN THIS DEPLOYMENT (§0).** No `ANTHROPIC_API_KEY` → `isConfigured()` is false → this analyzer never runs, and since it is the *only* entry in `availableAnalyzers()`, Flow B has no AI provider at all. Documented below as written, for redesign reference.
+
 | Field | Value |
 |---|---|
 | File | `src/lib/documents/anthropic-analyzer.ts` |
@@ -314,6 +355,8 @@ Searched for: Tesseract, Google Vision, AWS Textract, Azure Document Intelligenc
 
 ### Provider 2 — Anthropic, Flow A (multi-document)
 
+> **DEAD IN THIS DEPLOYMENT (§0).** Skipped at `extractor.ts:72` when `ANTHROPIC_API_KEY` is absent; OpenAI (Provider 3) takes its place as the first and only AI attempt.
+
 | Field | Value |
 |---|---|
 | File | `src/lib/ddt-import/anthropic-provider.ts` |
@@ -335,6 +378,8 @@ Searched for: Tesseract, Google Vision, AWS Textract, Azure Document Intelligenc
 | Logged | `logEvent("ddt_extraction_completed", { provider: "anthropic", documentCount })` — no token/latency/cost |
 
 ### Provider 3 — OpenAI, Flow A only (no OpenAI provider exists for Flow B)
+
+> **THIS IS THE ONLY LIVE AI PROVIDER IN THIS DEPLOYMENT (§0).** Every AI-extracted field in production comes from here. Note the consequence: the *entire* AI extraction capability of the system rests on one 60-second, zero-retry call to `gpt-4.1` — the shortest timeout and the only provider without a retry or a same-provider second attempt (§38).
 
 | Field | Value |
 |---|---|
@@ -364,7 +409,7 @@ Searched for: Tesseract, Google Vision, AWS Textract, Azure Document Intelligenc
 
 ## 10. Provider order / fallback chain
 
-**Flow A** (`extractor.ts:67-89`), exact order:
+**Flow A** (`extractor.ts:67-89`), exact order as written. **In this deployment the first branch never fires (§0) — the live chain is effectively `OpenAI → text fallback`:**
 
 ```
 ANTHROPIC_API_KEY set?
@@ -419,7 +464,9 @@ Note the asymmetry already flagged in §6: Flow B tries text first and only call
 - Low confidence — **never** checked as a fallback trigger anywhere, by either provider or either flow. A document/line with `confidence: 0.05` is treated identically to one with `confidence: 0.95` for the purpose of deciding whether extraction "succeeded" — confidence only affects downstream review-flagging (`ExtractedProductLine.reviewFields`), never provider retry/fallback logic.
 - Provider SDK/network exception — yes, always triggers fallback (caught in each provider's own `try/catch`).
 
-**Direct answer to the brief's key question**: the system accepts the first *syntactically valid* JSON response as success for both Anthropic call sites (both flows), regardless of extraction quality — a technically valid but empty/poor Anthropic response is **never** retried against another provider. Only OpenAI, and only in Flow A, and only for the specific case of zero documents parsed, treats a poor-but-valid result as a failure worth falling back from. This is inconsistent across providers and flows, and because Anthropic is always tried first in Flow A, this gap is the one that matters most in practice (OpenAI's stricter check is effectively unreachable whenever Anthropic is configured and returns anything parseable).
+**Direct answer to the brief's key question — as the code is written**: the system accepts the first *syntactically valid* JSON response as success for both Anthropic call sites (both flows), regardless of extraction quality — a technically valid but empty/poor Anthropic response is **never** retried against another provider. Only OpenAI, and only in Flow A, and only for the specific case of zero documents parsed, treats a poor-but-valid result as a failure worth falling back from.
+
+**Direct answer for THIS deployment (OpenAI-only, §0)**: the gap above **does not apply to you**. With no Anthropic key, OpenAI is the first and only AI attempt, so its stricter `OPENAI_NO_DOCUMENTS` check is the live behaviour — a zero-document extraction *does* fall through to the text layer rather than being accepted. What remains true and does affect you: a response containing documents whose *lines* are empty or largely null still counts as success (`documents.length > 0` is the only quality gate), and low confidence never triggers a retry or fallback anywhere. So "poor but non-empty" is still accepted silently; only "completely empty" is caught.
 
 ---
 
