@@ -1,0 +1,4 @@
+{
+  "extends": "next/core-web-vitals",
+  "ignorePatterns": ["print-agent/node_modules", "print-agent/output", ".next", "node_modules"]
+}
