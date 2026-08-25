@@ -27,10 +27,26 @@ const it = {
   back: "Indietro",
 
   // --- hero -----------------------------------------------------------
-  heroTitle: "Pneumatici per gommisti nell'area di Firenze, quando servono e al giusto prezzo.",
+  heroTitle:
+    "Pneumatici per gommisti in tutta la provincia di Vicenza, quando servono e al giusto prezzo.",
   heroSubtitle:
     "Rifornisci la tua officina senza pensieri: ti troviamo gli pneumatici che ti servono e te li consegniamo in tempo.",
   heroCta: "Richiedi un'offerta",
+
+  // --- area di consegna ------------------------------------------------
+  // La versione compatta per badge e mobile.
+  coverageBadge: "Vicenza • Tutta la provincia • +50 km",
+  coverageEyebrow: "Area di consegna",
+  coverageTitle: "Consegniamo in tutta la provincia di Vicenza e fino a 50 km oltre.",
+  coverageBody:
+    "Servizio rapido e affidabile per gommisti, officine e professionisti in tutta la provincia di Vicenza e nelle zone limitrofe, fino a 50 km oltre i confini provinciali.",
+  // Il punto che il disegno da solo non può garantire: non un raggio.
+  coverageClarify:
+    "Non un raggio di 50 km dal centro di Vicenza: copriamo l'intera provincia e altri 50 km oltre i suoi confini.",
+  coverageAreaLabel: "Tutta la provincia di Vicenza",
+  coverageBufferLabel: "+50 km oltre i confini provinciali",
+  coverageDiagramAlt:
+    "Schema dell'area servita: la provincia di Vicenza per intero, circondata da una fascia di 50 km che ne segue i confini.",
 
   // --- why ------------------------------------------------------------
   whyTitle: "Perché GommaRush?",
@@ -143,10 +159,23 @@ const en: SiteCopy = {
   backToHome: "Back to home",
   back: "Back",
 
-  heroTitle: "Tyres for tyre shops around Florence — when you need them, at the right price.",
+  heroTitle:
+    "Tyres for tyre shops across the province of Vicenza — when you need them, at the right price.",
   heroSubtitle:
     "Keep your workshop stocked without the hassle: we source the tyres you need and deliver them on time.",
   heroCta: "Request an offer",
+
+  coverageBadge: "Vicenza • Whole province • +50 km",
+  coverageEyebrow: "Delivery area",
+  coverageTitle: "We deliver across the whole province of Vicenza and up to 50 km beyond.",
+  coverageBody:
+    "Fast, dependable service for tyre shops, garages and trade professionals across the entire province of Vicenza and the surrounding areas, up to 50 km beyond the provincial borders.",
+  coverageClarify:
+    "Not a 50 km radius from Vicenza city centre: we cover the entire province, plus another 50 km beyond its borders.",
+  coverageAreaLabel: "The whole province of Vicenza",
+  coverageBufferLabel: "+50 km beyond the provincial borders",
+  coverageDiagramAlt:
+    "Diagram of the area served: the whole province of Vicenza, surrounded by a 50 km band that follows its borders.",
 
   whyTitle: "Why GommaRush?",
   whyReliableTitle: "A partner you can rely on",

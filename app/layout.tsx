@@ -6,11 +6,13 @@ import { LOCALE_COOKIE, normaliseLocale } from "@/lib/i18n/locale";
 
 export const metadata: Metadata = {
   title: {
-    default: "GommaRush | Fornitore di pneumatici per aziende a Verona",
+    default: "GommaRush | Pneumatici per aziende in provincia di Vicenza",
     template: "%s | GommaRush",
   },
+  // Formulata come "tutta la provincia + 50 km oltre i confini", mai come un
+  // raggio da un centro: è la stessa distinzione che fa la homepage.
   description:
-    "GommaRush fornisce pneumatici ad autofficine, gomme e aziende del settore automotive entro 50 km da Verona, con consegna in 24-48 ore.",
+    "GommaRush fornisce pneumatici a gommisti, officine e aziende del settore automotive in tutta la provincia di Vicenza e fino a 50 km oltre i confini provinciali, con consegna in 24 ore o entro 7 giorni.",
   icons: {
     icon: "/images/logo.jpg",
   },
