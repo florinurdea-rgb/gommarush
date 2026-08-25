@@ -6,11 +6,9 @@ import { formatTyreSize, type QuoteRequestItemRow, type QuoteRequestRow } from "
 /**
  * Internal sales notification for a new quote request.
  *
- * Reuses the project's existing Resend integration (see
- * src/lib/email/send-offer-request.ts) rather than introducing a second mail
- * provider. Never throws: the request row is already committed by the time
- * this runs, and a mail outage must not turn a saved request into an error
- * for the customer.
+ * Uses the project's Resend account. Never throws: the request row is
+ * already committed by the time this runs, and a mail outage must not turn a
+ * saved request into an error for the customer.
  */
 
 export type SendResult = { success: true; messageId?: string } | { success: false; error: string };
@@ -159,8 +157,10 @@ export async function sendQuoteRequestEmail(input: {
   const from = process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL;
   const to = process.env.SALES_NOTIFICATION_EMAIL || process.env.OFFER_NOTIFICATION_EMAIL;
 
-  // Not configured is a a operational state, not a crash — the request is
-  // already saved and visible in the admin either way.
+  // Not being configured is an operational state, not a crash — the request
+  // is already saved and visible in the admin either way. OFFER_NOTIFICATION_
+  // EMAIL is the legacy name kept as a fallback so existing deployments keep
+  // working without new configuration.
   if (!apiKey || !from || !to) {
     return { success: false, error: "EMAIL_NOT_CONFIGURED" };
   }

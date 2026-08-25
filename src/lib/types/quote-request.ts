@@ -4,9 +4,9 @@
 // in supabase/migrations/20260826000000_quote_requests.sql exactly — keep
 // the two in sync if either changes.
 //
-// Distinct from src/lib/types/offer-request.ts, which belongs to the older
-// /get-offer flow and its client_offer_requests table. Both exist on
-// purpose; see the migration header for why.
+// This is the only customer-facing quote path. The older /get-offer flow and
+// its offer-request types were removed; see
+// supabase/migrations/20260826000100_retire_client_offer_requests.sql.
 
 export type ProductType = "tyre" | "other";
 export type PreferenceType = "best_price" | "specific_brand";
