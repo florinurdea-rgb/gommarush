@@ -34,6 +34,10 @@ const it = {
     "Consegne rapide per gommisti e officine in tutta la provincia di Vicenza e fino a 50 km oltre. Esperienza, affidabilità e un servizio costruito per creare partnership solide e durature.",
   heroCta: "Richiedi un'offerta",
 
+  // --- marche -----------------------------------------------------------
+  brandsTitle: "Le marche che forniamo",
+  brandsAriaLabel: "Marche di pneumatici fornite",
+
   // --- why ------------------------------------------------------------
   whyTitle: "Perché GommaRush?",
   whyReliableTitle: "Un partner affidabile",
@@ -149,6 +153,9 @@ const en: SiteCopy = {
   heroSubtitle:
     "Fast delivery for tyre shops and garages across the whole province of Vicenza and up to 50 km beyond. Experience, reliability and a service built for solid, lasting partnerships.",
   heroCta: "Request an offer",
+
+  brandsTitle: "The brands we supply",
+  brandsAriaLabel: "Tyre brands supplied",
 
   whyTitle: "Why GommaRush?",
   whyReliableTitle: "A partner you can rely on",

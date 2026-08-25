@@ -1,4 +1,7 @@
+"use client";
+
 import { useId } from "react";
+import { useLocale } from "@/components/site/LocaleProvider";
 
 /**
  * The tyre brands GommaRush supplies, as continuously scrolling rows.
@@ -79,10 +82,12 @@ function Row({
   brands,
   reverse,
   seconds,
+  ariaLabel,
 }: {
   brands: Brand[];
   reverse: boolean;
   seconds: number;
+  ariaLabel: string;
 }) {
   const id = useId();
 
@@ -92,7 +97,7 @@ function Row({
         className={`gr-marquee-track ${reverse ? "gr-marquee-track--reverse" : ""}`}
         // The second copy is decorative repetition; without aria-hidden a
         // screen reader would read all 27 brands twice.
-        aria-label="Marche di pneumatici fornite"
+        aria-label={ariaLabel}
       >
         {brands.map((brand) => (
           <Logo key={`${id}-a-${brand.slug}`} brand={brand} />
@@ -108,6 +113,7 @@ function Row({
 }
 
 export function BrandMarquee() {
+  const { copy } = useLocale();
   const twoRows = chunk(BRANDS, 2);
   const fourRows = chunk(BRANDS, 4);
 
@@ -118,7 +124,7 @@ export function BrandMarquee() {
           id="brands-title"
           className="text-center text-xs font-bold uppercase tracking-[0.16em] text-ink-soft"
         >
-          Le marche che forniamo
+          {copy.brandsTitle}
         </h2>
       </div>
 
@@ -128,14 +134,26 @@ export function BrandMarquee() {
         {/* Mobile: four rows, so each logo keeps a usable size. */}
         <div className="space-y-5 sm:hidden">
           {fourRows.map((brands, index) => (
-            <Row key={`m-${index}`} brands={brands} reverse={index % 2 === 1} seconds={38 + index * 5} />
+            <Row
+              key={`m-${index}`}
+              brands={brands}
+              reverse={index % 2 === 1}
+              seconds={38 + index * 5}
+              ariaLabel={copy.brandsAriaLabel}
+            />
           ))}
         </div>
 
         {/* Tablet and desktop: two rows, twice as many logos each. */}
         <div className="hidden space-y-7 sm:block">
           {twoRows.map((brands, index) => (
-            <Row key={`d-${index}`} brands={brands} reverse={index % 2 === 1} seconds={58 + index * 8} />
+            <Row
+              key={`d-${index}`}
+              brands={brands}
+              reverse={index % 2 === 1}
+              seconds={58 + index * 8}
+              ariaLabel={copy.brandsAriaLabel}
+            />
           ))}
         </div>
       </div>
