@@ -11,6 +11,7 @@ import {
 import type { ProcessedDocumentWithMatch } from "@/lib/ddt-import/client-helpers";
 import { uploadDocumentDirect } from "@/lib/client/document-upload";
 import { DuplicateImportDialog } from "@/components/logistics/DuplicateImportDialog";
+import { useTr } from "@/lib/i18n/tr";
 
 /**
  * The "Carica documento" step of the "Nuovo ordine" modal: upload -> a
@@ -55,6 +56,7 @@ export function UploadOrderPanel({
   /** "Modifica și finalizează" — opens the manual form pre-filled with whatever this document DID extract. */
   onEditDocument: (doc: ProcessedDocumentWithMatch, sourceDocumentId: string) => void;
 }) {
+  const tr = useTr();
   const inputRef = useRef<HTMLInputElement>(null);
   const [phase, setPhase] = useState<Phase>("pick");
   const [error, setError] = useState<string | null>(null);
@@ -80,7 +82,7 @@ export function UploadOrderPanel({
       const payload = (await response.json()) as AnalyzeResponse;
 
       if (!payload.ok) {
-        setError(`Analisi non riuscita (${payload.code ?? "errore sconosciuto"}).`);
+        setError(`Analisi non riuscita (${payload.code ?? tr("errore sconosciuto")}).`);
         setPhase("pick");
         return;
       }
@@ -95,7 +97,7 @@ export function UploadOrderPanel({
       setPhase(payload.documents && payload.documents.length > 0 ? "review" : "pick");
       if (payload.unconfigured) setPhase("review"); // still show the disclosure message
     } catch {
-      setError("Errore di rete. Riprova.");
+      setError(tr("Errore di rete. Riprova."));
       setPhase("pick");
     }
   }
@@ -170,10 +172,10 @@ export function UploadOrderPanel({
           droppedLineTotal += payload.droppedLineCount ?? 0;
         } else {
           const detail = [payload.code, ...(payload.details ?? [])].filter(Boolean).join(" — ");
-          errors.push(`${doc.extracted.document.documentNumber ?? "DDT sconosciuto"}: ${detail || "eroare"}`);
+          errors.push(`${doc.extracted.document.documentNumber ?? tr("DDT sconosciuto")}: ${detail || "eroare"}`);
         }
       } catch {
-        errors.push(`${doc.extracted.document.documentNumber ?? "DDT sconosciuto"}: errore di rete`);
+        errors.push(`${doc.extracted.document.documentNumber ?? tr("DDT sconosciuto")}: errore di rete`);
       }
 
       setImportProgress((current) => (current ? { ...current, done: current.done + 1 } : current));
@@ -220,7 +222,7 @@ export function UploadOrderPanel({
             >
               Carica documento
             </button>
-            <p className="mt-2 text-sm text-ink-soft">PDF o immagine — può contenere uno o più DDT.</p>
+            <p className="mt-2 text-sm text-ink-soft">{tr("PDF o immagine — può contenere uno o più DDT.")}</p>
           </div>
 
           {error && (
@@ -233,7 +235,7 @@ export function UploadOrderPanel({
 
       {phase === "analyzing" && (
         <div className="py-10 text-center">
-          <p className="text-sm font-semibold text-ink">Analisi del documento…</p>
+          <p className="text-sm font-semibold text-ink">{tr("Analisi del documento…")}</p>
           <div className="mx-auto mt-4 h-2 w-full max-w-xs overflow-hidden rounded-full bg-surface-soft">
             <div className="h-full w-1/3 animate-[loading-bar_1.1s_ease-in-out_infinite] rounded-full bg-accent" />
           </div>
@@ -250,7 +252,7 @@ export function UploadOrderPanel({
         <>
           {result.unconfigured && (
             <div className="rounded-xl border border-state-warning/30 bg-state-warning-soft p-5">
-              <h3 className="text-base font-bold text-state-warning">Analisi automatica non configurata</h3>
+              <h3 className="text-base font-bold text-state-warning">{tr("Analisi automatica non configurata")}</h3>
               <p className="mt-2 text-sm text-ink">
                 Il documento verrà salvato e il testo verrà letto direttamente dal file, dove possibile.
                 I dati non leggibili vanno inseriti manualmente — il sistema non inventa valori.
@@ -282,7 +284,7 @@ export function UploadOrderPanel({
 
           {importErrors.length > 0 && (
             <div className="rounded-lg bg-state-danger-soft p-3 text-sm text-state-danger">
-              <p className="font-semibold">Alcuni ordini non sono stati aggiunti:</p>
+              <p className="font-semibold">{tr("Alcuni ordini non sono stati aggiunti:")}</p>
               <ul className="mt-1 list-inside list-disc">
                 {importErrors.map((message) => (
                   <li key={message}>{message}</li>
@@ -329,14 +331,14 @@ export function UploadOrderPanel({
                           {DDT_STATUS_LABEL[doc.status]}
                         </span>
                         <span className="font-mono text-xs font-semibold text-ink-soft">
-                          {doc.extracted.document.documentNumber ?? "DDT sconosciuto"}
+                          {doc.extracted.document.documentNumber ?? tr("DDT sconosciuto")}
                         </span>
                       </div>
                       <div className="mt-1 truncate text-base font-bold text-ink">
-                        {doc.extracted.customer.companyName ?? "Cliente sconosciuto"}
+                        {doc.extracted.customer.companyName ?? tr("Cliente sconosciuto")}
                       </div>
                       <div className="truncate text-xs text-ink-soft">
-                        {doc.extracted.supplier.name ?? "Fornitore sconosciuto"}
+                        {doc.extracted.supplier.name ?? tr("Fornitore sconosciuto")}
                         {doc.extracted.customer.city ? ` · ${doc.extracted.customer.city}` : ""}
                       </div>
                     </button>
@@ -368,8 +370,8 @@ export function UploadOrderPanel({
                   {!confirmable && forceConfirmable && (
                     <div className="mt-3 border-t border-ink/10 pt-3 pl-7 text-xs text-ink-soft">
                       {selected.has(index)
-                        ? "Verrà aggiunto di nuovo all'importazione."
-                        : "Sembra che lo stesso ordine sia già stato inserito — spunta per aggiungerlo comunque."}
+                        ? tr("Verrà aggiunto di nuovo all'importazione.")
+                        : tr("Sembra che lo stesso ordine sia già stato inserito — spunta per aggiungerlo comunque.")}
                     </div>
                   )}
 

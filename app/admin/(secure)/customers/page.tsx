@@ -3,6 +3,7 @@ import { listCustomers } from "@/lib/server/customers";
 import { PageHeading } from "@/components/logistics/AdminShell";
 import { t } from "@/lib/i18n/logistics";
 import { getOpsLocale } from "@/lib/i18n/ops-server";
+import { getTr } from "@/lib/i18n/tr-server";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Elenco clienti" };
@@ -16,6 +17,7 @@ export default async function CustomersPage({
 }: {
   searchParams: Promise<{ q?: string }>;
 }) {
+  const tr = getTr();
   const locale = getOpsLocale();
   const { q } = await searchParams;
   const customers = await listCustomers(q);
@@ -24,14 +26,14 @@ export default async function CustomersPage({
     <>
       <PageHeading
         title={t("customerList", locale)}
-        description="Aziende clienti. Un'azienda può avere più luoghi di consegna."
+        description={tr("Aziende clienti. Un'azienda può avere più luoghi di consegna.")}
       />
 
       <form className="mb-5 flex max-w-md gap-2" action="/admin/customers">
         <input
           name="q"
           defaultValue={q ?? ""}
-          placeholder="Cerca per ragione sociale o codice fiscale…"
+          placeholder={tr("Cerca per ragione sociale o codice fiscale…")}
           className="h-11 flex-1 rounded-lg border border-ink/15 px-3 text-sm outline-none focus:border-accent"
         />
         <button type="submit" className="h-11 rounded-lg bg-accent px-4 text-sm font-semibold text-white">

@@ -9,6 +9,7 @@ import {
   QUOTE_REQUEST_STATUSES,
   QUOTE_STATUS_LABELS,
 } from "@/lib/types/quote-request";
+import { useTr } from "@/lib/i18n/tr";
 
 /**
  * Filter bar for the request list.
@@ -25,6 +26,7 @@ import {
 const DEBOUNCE_MS = 350;
 
 export function QuoteRequestFilters({ total }: { total: number }) {
+  const tr = useTr();
   const router = useRouter();
   const params = useSearchParams();
 
@@ -83,19 +85,19 @@ export function QuoteRequestFilters({ total }: { total: number }) {
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Cerca riferimento, cliente o email…"
+            placeholder={tr("Cerca riferimento, cliente o email…")}
             className="min-h-11 w-full rounded-lg border border-ink/15 bg-white px-3 text-sm text-ink placeholder:text-ink-soft/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           />
         </div>
 
         <label className="contents">
-          <span className="sr-only">Filtra per stato</span>
+          <span className="sr-only">{tr("Filtra per stato")}</span>
           <select
             value={params.get("status") ?? ""}
             onChange={(event) => apply({ status: event.target.value || null })}
             className={selectClass}
           >
-            <option value="">Tutti gli stati</option>
+            <option value="">{tr("Tutti gli stati")}</option>
             {QUOTE_REQUEST_STATUSES.map((status) => (
               <option key={status} value={status}>
                 {QUOTE_STATUS_LABELS[status]}
@@ -105,13 +107,13 @@ export function QuoteRequestFilters({ total }: { total: number }) {
         </label>
 
         <label className="contents">
-          <span className="sr-only">Filtra per stato notifica</span>
+          <span className="sr-only">{tr("Filtra per stato notifica")}</span>
           <select
             value={params.get("notification") ?? ""}
             onChange={(event) => apply({ notification: event.target.value || null })}
             className={selectClass}
           >
-            <option value="">Tutte le notifiche</option>
+            <option value="">{tr("Tutte le notifiche")}</option>
             {NOTIFICATION_STATUSES.map((status) => (
               <option key={status} value={status}>
                 {NOTIFICATION_STATUS_LABELS[status]}
@@ -121,13 +123,13 @@ export function QuoteRequestFilters({ total }: { total: number }) {
         </label>
 
         <label className="contents">
-          <span className="sr-only">Filtra per consegna</span>
+          <span className="sr-only">{tr("Filtra per consegna")}</span>
           <select
             value={params.get("delivery") ?? ""}
             onChange={(event) => apply({ delivery: event.target.value || null })}
             className={selectClass}
           >
-            <option value="">Tutte le consegne</option>
+            <option value="">{tr("Tutte le consegne")}</option>
             <option value="24h">{DELIVERY_LABELS["24h"]}</option>
             <option value="7d">{DELIVERY_LABELS["7d"]}</option>
           </select>

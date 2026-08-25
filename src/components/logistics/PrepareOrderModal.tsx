@@ -6,6 +6,7 @@ import { useToast } from "@/components/ui/Toast";
 import { formatOrderNumber } from "@/lib/logistics/order-number";
 import { useOps } from "@/lib/i18n/ops";
 import type { OrderDetail } from "@/lib/server/orders";
+import { useTr } from "@/lib/i18n/tr";
 
 function escapeHtml(value: string): string {
   return value.replace(
@@ -34,6 +35,7 @@ export function PrepareOrderModal({
   onClose: () => void;
   onPrepared: () => void;
 }) {
+  const tr = useTr();
   const ops = useOps();
   const { showToast } = useToast();
   const [detail, setDetail] = useState<OrderDetail | null>(null);
@@ -94,7 +96,7 @@ export function PrepareOrderModal({
       </style></head><body>
       <h1>Ordine ${escapeHtml(formatOrderNumber(detail.order.order_number))}</h1>
       <p class="sub">
-        ${escapeHtml(detail.customer?.name ?? detail.order.delivery_name ?? "Cliente sconosciuto")}<br/>
+        ${escapeHtml(detail.customer?.name ?? detail.order.delivery_name ?? tr("Cliente sconosciuto"))}<br/>
         ${escapeHtml(address || "—")}<br/>
         Fornitore: ${escapeHtml(detail.supplier?.name ?? "—")}
       </p>
@@ -129,11 +131,11 @@ export function PrepareOrderModal({
         return;
       }
 
-      showToast("Ordine preparato e pronto per il carico.", "success");
+      showToast(tr("Ordine preparato e pronto per il carico."), "success");
       onPrepared();
       onClose();
     } catch {
-      showToast("Errore di rete. Riprova.", "error");
+      showToast(tr("Errore di rete. Riprova."), "error");
     } finally {
       setBusy(null);
     }
@@ -146,12 +148,12 @@ export function PrepareOrderModal({
     : "";
 
   return (
-    <Modal onClose={onClose} size="lg" label="Prepara l'ordine">
-      <ModalHeader title="Prepara l'ordine" onClose={onClose} />
+    <Modal onClose={onClose} size="lg" label={tr("Prepara l'ordine")}>
+      <ModalHeader title={tr("Prepara l'ordine")} onClose={onClose} />
       <div className="p-6">
-        {loading && <div className="py-16 text-center text-sm text-ink-soft">Caricamento…</div>}
+        {loading && <div className="py-16 text-center text-sm text-ink-soft">{tr("Caricamento…")}</div>}
         {!loading && error && (
-          <div className="py-16 text-center text-sm text-state-danger">Non è stato possibile caricare l&apos;ordine.</div>
+          <div className="py-16 text-center text-sm text-state-danger">{tr("Non è stato possibile caricare l&apos;ordine.")}</div>
         )}
 
         {!loading && detail && (
@@ -161,9 +163,9 @@ export function PrepareOrderModal({
                 {formatOrderNumber(detail.order.order_number)}
               </div>
               <div className="text-lg font-bold text-ink">
-                {detail.customer?.name ?? detail.order.delivery_name ?? "Cliente sconosciuto"}
+                {detail.customer?.name ?? detail.order.delivery_name ?? tr("Cliente sconosciuto")}
               </div>
-              <div className="text-sm text-ink-soft">{address || "Indirizzo sconosciuto"}</div>
+              <div className="text-sm text-ink-soft">{address || tr("Indirizzo sconosciuto")}</div>
               <div className="mt-1 text-xs text-ink-soft">Fornitore: {detail.supplier?.name ?? "—"}</div>
             </div>
 
@@ -201,7 +203,7 @@ export function PrepareOrderModal({
                 onClick={() => void submit(true)}
                 className="h-11 flex-1 rounded-xl bg-accent px-5 text-sm font-bold text-white disabled:opacity-50"
               >
-                {busy === "print" ? "Preparazione…" : "Stampa riepilogo e prepara"}
+                {busy === "print" ? "Preparazione…" : tr("Stampa riepilogo e prepara")}
               </button>
               <button
                 type="button"
@@ -209,7 +211,7 @@ export function PrepareOrderModal({
                 onClick={() => void submit(false)}
                 className="h-11 flex-1 rounded-xl border border-ink/15 bg-white px-5 text-sm font-bold text-ink disabled:opacity-50"
               >
-                {busy === "skip" ? "Preparazione…" : "Prepara senza stampare"}
+                {busy === "skip" ? "Preparazione…" : tr("Prepara senza stampare")}
               </button>
             </div>
           </>

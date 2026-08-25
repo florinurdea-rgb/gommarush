@@ -8,6 +8,7 @@ import { OrderEditPanel } from "@/components/logistics/OrderEditPanel";
 import { formatOrderNumber } from "@/lib/logistics/order-number";
 import { itemTypeLabel, orderStatusMeta, t } from "@/lib/i18n/logistics";
 import { getOpsLocale } from "@/lib/i18n/ops-server";
+import { getTr } from "@/lib/i18n/tr-server";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,7 @@ export default async function OrderDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const tr = getTr();
   const locale = getOpsLocale();
   const { id } = await params;
   const detail = await getOrderDetail(id);
@@ -38,7 +40,7 @@ export default async function OrderDetailPage({
     <>
       <PageHeading
         title={formatOrderNumber(detail.order.order_number)}
-        description={detail.customer?.name ?? "Cliente non specificato"}
+        description={detail.customer?.name ?? tr("Cliente non specificato")}
         back
         action={<OrderStatusBadge status={detail.order.status} />}
       />
@@ -102,7 +104,7 @@ export default async function OrderDetailPage({
           <section className="rounded-xl border border-ink/10 bg-white p-5 shadow-card">
             <h2 className="text-base font-bold text-ink">Istoric</h2>
             {history.length === 0 ? (
-              <p className="mt-3 text-sm text-ink-soft">Nessun evento finora.</p>
+              <p className="mt-3 text-sm text-ink-soft">{tr("Nessun evento finora.")}</p>
             ) : (
               <ul className="mt-3 divide-y divide-ink/5 text-sm">
                 {history.map((event) => (

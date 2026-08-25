@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Logo } from "@/components/Logo";
 import { useOps } from "@/lib/i18n/ops";
 import type { OptionRef } from "@/components/logistics/NewOrderFlow";
+import { useTr } from "@/lib/i18n/tr";
 
 /**
  * "Alege mașina" — today's van, for an already-authenticated driver.
@@ -14,6 +15,7 @@ import type { OptionRef } from "@/components/logistics/NewOrderFlow";
  * lower-stakes operational preference, never an identity claim.
  */
 export function DriverSessionPicker({ driverName, vehicles }: { driverName: string; vehicles: OptionRef[] }) {
+  const tr = useTr();
   const ops = useOps();
   const router = useRouter();
   const [vehicleId, setVehicleId] = useState<string | null>(null);
@@ -49,7 +51,7 @@ export function DriverSessionPicker({ driverName, vehicles }: { driverName: stri
         <Logo iconClassName="h-12 w-12" textClassName="text-2xl [&>span]:!text-white" />
 
         <h1 className="mt-8 text-2xl font-extrabold">Salut, {driverName}</h1>
-        <p className="mt-1 text-sm text-white/60">Scegli il veicolo con cui parti oggi.</p>
+        <p className="mt-1 text-sm text-white/60">{tr("Scegli il veicolo con cui parti oggi.")}</p>
 
         <section className="mt-6">
           <div className="grid gap-2">
@@ -68,7 +70,7 @@ export function DriverSessionPicker({ driverName, vehicles }: { driverName: stri
               </button>
             ))}
             {vehicles.length === 0 && (
-              <p className="text-sm text-white/60">Nessun veicolo configurato.</p>
+              <p className="text-sm text-white/60">{tr("Nessun veicolo configurato.")}</p>
             )}
           </div>
         </section>
@@ -85,7 +87,7 @@ export function DriverSessionPicker({ driverName, vehicles }: { driverName: stri
           onClick={start}
           className="mt-8 min-h-16 w-full rounded-xl bg-accent text-xl font-extrabold text-white disabled:opacity-40"
         >
-          {busy ? ops.t("loading") : "Inizia il turno"}
+          {busy ? ops.t("loading") : tr("Inizia il turno")}
         </button>
       </div>
     </div>

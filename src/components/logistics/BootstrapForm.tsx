@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { Button } from "@/components/Button";
+import { useTr } from "@/lib/i18n/tr";
 
 export function BootstrapForm() {
+  const tr = useTr();
   const [secret, setSecret] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -32,11 +34,11 @@ export function BootstrapForm() {
         kind: "success",
         text:
           payload.action === "password_reset"
-            ? "Password reimpostata. Ora puoi accedere con la nuova password."
-            : "Account creato. Ora puoi accedere.",
+            ? tr("Password reimpostata. Ora puoi accedere con la nuova password.")
+            : tr("Account creato. Ora puoi accedere."),
       });
     } catch {
-      setMessage({ kind: "error", text: "Errore di rete — riprova." });
+      setMessage({ kind: "error", text: tr("Errore di rete — riprova.") });
     } finally {
       setBusy(false);
     }
@@ -104,7 +106,7 @@ export function BootstrapForm() {
       )}
 
       <Button type="submit" size="lg" disabled={busy} className="w-full">
-        {busy ? "Elaborazione…" : "Crea / reimposta l'account"}
+        {busy ? "Elaborazione…" : tr("Crea / reimposta l'account")}
       </Button>
     </form>
   );

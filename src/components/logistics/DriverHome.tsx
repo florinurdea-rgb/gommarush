@@ -8,6 +8,7 @@ import type { DriverRouteStop } from "@/components/logistics/DriverRouteMapModal
 import { formatOrderNumber } from "@/lib/logistics/order-number";
 import { useOps } from "@/lib/i18n/ops";
 import type { DriverOrderSummary } from "@/lib/server/loading";
+import { useTr } from "@/lib/i18n/tr";
 
 /**
  * The driver's home screen — Phase 1, order-level, no tyre scanning.
@@ -46,6 +47,7 @@ export function DriverHome({
   stops: DriverRouteStop[];
   depotLocation: { lat: number; lng: number } | null;
 }) {
+  const tr = useTr();
   const ops = useOps();
   const router = useRouter();
   const sounds = useFeedbackSounds();
@@ -117,7 +119,7 @@ export function DriverHome({
   const confirmFailed = useCallback(
     async (order: DriverOrderSummary) => {
       if (reason.trim().length < 3) {
-        setError("Il motivo è obbligatorio.");
+        setError(tr("Il motivo è obbligatorio."));
         return;
       }
       const done = await runAction(
@@ -141,7 +143,7 @@ export function DriverHome({
         <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="truncate text-lg font-extrabold">{driverName}</div>
-            <div className="truncate text-sm text-white/60">{vehicleName ?? "Senza veicolo"}</div>
+            <div className="truncate text-sm text-white/60">{vehicleName ?? tr("Senza veicolo")}</div>
           </div>
           <div className="flex flex-none items-center gap-2">
             <button
@@ -171,11 +173,11 @@ export function DriverHome({
         <section className="grid grid-cols-3 gap-2 rounded-2xl bg-white/5 p-4 text-center">
           <div>
             <div className="font-mono text-2xl font-black tabular-nums">{summary.orderCount}</div>
-            <div className="text-[11px] uppercase tracking-wide text-white/50">Consegne</div>
+            <div className="text-[11px] uppercase tracking-wide text-white/50">{tr("Consegne")}</div>
           </div>
           <div>
             <div className="font-mono text-2xl font-black tabular-nums">{summary.tyreCount}</div>
-            <div className="text-[11px] uppercase tracking-wide text-white/50">Pneumatici</div>
+            <div className="text-[11px] uppercase tracking-wide text-white/50">{tr("Pneumatici")}</div>
           </div>
           <div>
             <div className="font-mono text-2xl font-black tabular-nums">
@@ -194,7 +196,7 @@ export function DriverHome({
         {/* NEXT STOP */}
         {nextStop && (
           <section className="mt-4">
-            <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-white/50">Prossima fermata</h2>
+            <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-white/50">{tr("Prossima fermata")}</h2>
             <OrderCard
               order={nextStop}
               stopNumber={orders.indexOf(nextStop) + 1}
@@ -235,7 +237,7 @@ export function DriverHome({
             Comenzile tale de azi ({orders.length})
           </h2>
           {orders.length === 0 && (
-            <p className="rounded-xl bg-white/5 p-6 text-center text-white/60">Nessuna consegna assegnata.</p>
+            <p className="rounded-xl bg-white/5 p-6 text-center text-white/60">{tr("Nessuna consegna assegnata.")}</p>
           )}
           <ul className="space-y-2">
             {orders.map((order, index) => (
@@ -279,7 +281,7 @@ export function DriverHome({
 
       {mapOpen && (
         <DriverRouteMapModal
-          vehicleName={vehicleName ?? "Il mio percorso"}
+          vehicleName={vehicleName ?? tr("Il mio percorso")}
           stops={stops}
           depotLocation={depotLocation}
           onClose={() => setMapOpen(false)}
@@ -340,6 +342,7 @@ function OrderCard({
   onMethodChange: (value: string) => void;
   onReasonChange: (value: string) => void;
 }) {
+  const tr = useTr();
   const ops = useOps();
   const canMarkLoaded = order.status === "stored" || order.status === "ready_for_loading";
   const canDeliver = order.status === "loaded" || order.status === "out_for_delivery";
@@ -427,7 +430,7 @@ function OrderCard({
             onClick={onMarkLoaded}
             className="h-12 flex-1 rounded-xl bg-state-warning text-sm font-bold text-ink disabled:opacity-50"
           >
-            {busy ? "…" : "Segna come caricato"}
+            {busy ? "…" : tr("Segna come caricato")}
           </button>
         )}
 
@@ -488,7 +491,7 @@ function OrderCard({
               onClick={onConfirmDeliver}
               className="h-12 flex-1 rounded-xl bg-state-success text-sm font-bold text-white disabled:opacity-50"
             >
-              {busy ? "…" : "Conferma la consegna"}
+              {busy ? "…" : tr("Conferma la consegna")}
             </button>
             <button
               type="button"
@@ -506,7 +509,7 @@ function OrderCard({
           <textarea
             value={reason}
             onChange={(event) => onReasonChange(event.target.value)}
-            placeholder="Motivo: cliente chiuso, merce rifiutata…"
+            placeholder={tr("Motivo: cliente chiuso, merce rifiutata…")}
             rows={2}
             className="w-full rounded-lg border border-ink/15 bg-white px-2 py-2 text-base text-ink"
           />
@@ -517,7 +520,7 @@ function OrderCard({
               onClick={onConfirmFailed}
               className="h-12 flex-1 rounded-xl bg-state-danger text-sm font-bold text-white disabled:opacity-50"
             >
-              {busy ? "…" : "Conferma il mancato esito"}
+              {busy ? "…" : tr("Conferma il mancato esito")}
             </button>
             <button
               type="button"

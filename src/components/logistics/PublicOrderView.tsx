@@ -4,6 +4,7 @@ import { formatOrderNumber } from "@/lib/logistics/order-number";
 import { itemTypeLabel, t } from "@/lib/i18n/logistics";
 import { getOpsLocale } from "@/lib/i18n/ops-server";
 import type { PublicOrderViewData } from "@/lib/server/public-order-view";
+import { getTr } from "@/lib/i18n/tr-server";
 
 /**
  * The read-only view anyone gets from a public order link or a unit QR code.
@@ -20,6 +21,7 @@ export function PublicOrderView({
   view: PublicOrderViewData;
   highlightUnitId?: string;
 }) {
+  const tr = getTr();
   const locale = getOpsLocale();
   const { order } = view;
 
@@ -37,7 +39,7 @@ export function PublicOrderView({
       <main className="mx-auto w-full max-w-lg px-4 py-6">
         {!order ? (
           <div className="mt-8 rounded-2xl border-2 border-dashed border-ink/20 px-6 py-16 text-center">
-            <p className="text-lg font-semibold text-ink-soft">Ordine non trovato.</p>
+            <p className="text-lg font-semibold text-ink-soft">{tr("Ordine non trovato.")}</p>
           </div>
         ) : (
           <>

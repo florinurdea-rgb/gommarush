@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Button } from "@/components/Button";
 import { useOps } from "@/lib/i18n/ops";
 import type { CustomerLocationRow, CustomerRow } from "@/lib/types/logistics";
+import { useTr } from "@/lib/i18n/tr";
 
 /**
  * Company + delivery locations editor.
@@ -66,6 +67,7 @@ export function CustomerEditor({
   customer: CustomerRow;
   locations: CustomerLocationRow[];
 }) {
+  const tr = useTr();
   const ops = useOps();
   const router = useRouter();
   const [company, setCompany] = useState({
@@ -141,7 +143,7 @@ export function CustomerEditor({
     return (
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <div>
-          <label className={labelClass}>Nome del luogo</label>
+          <label className={labelClass}>{tr("Nome del luogo")}</label>
           <input className={inputClass} value={draft.location_name}
             onChange={(event) => onChange({ location_name: event.target.value })} />
         </div>
@@ -176,7 +178,7 @@ export function CustomerEditor({
             onChange={(event) => onChange({ phone: event.target.value })} />
         </div>
         <div>
-          <label className={labelClass}>Email</label>
+          <label className={labelClass}>{tr("Email")}</label>
           <input className={inputClass} value={draft.email}
             onChange={(event) => onChange({ email: event.target.value })} />
         </div>
@@ -203,7 +205,7 @@ export function CustomerEditor({
       )}
 
       <section className="rounded-xl border border-ink/10 bg-white p-5 shadow-card">
-        <h2 className="text-base font-bold text-ink">Dati azienda</h2>
+        <h2 className="text-base font-bold text-ink">{tr("Dati azienda")}</h2>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div>
             <label className={labelClass}>{ops.t("companyName")}</label>
@@ -211,7 +213,7 @@ export function CustomerEditor({
               onChange={(event) => setCompany({ ...company, name: event.target.value })} />
           </div>
           <div>
-            <label className={labelClass}>Ragione sociale</label>
+            <label className={labelClass}>{tr("Ragione sociale")}</label>
             <input className={inputClass} value={company.legal_name}
               onChange={(event) => setCompany({ ...company, legal_name: event.target.value })} />
           </div>
@@ -221,12 +223,12 @@ export function CustomerEditor({
               onChange={(event) => setCompany({ ...company, vat_number: event.target.value })} />
           </div>
           <div>
-            <label className={labelClass}>Codice fiscale</label>
+            <label className={labelClass}>{tr("Codice fiscale")}</label>
             <input className={inputClass} value={company.fiscal_code}
               onChange={(event) => setCompany({ ...company, fiscal_code: event.target.value })} />
           </div>
           <div>
-            <label className={labelClass}>Email</label>
+            <label className={labelClass}>{tr("Email")}</label>
             <input className={inputClass} value={company.email}
               onChange={(event) => setCompany({ ...company, email: event.target.value })} />
           </div>
@@ -290,13 +292,13 @@ export function CustomerEditor({
               {ops.t("save")}
             </Button>
             {/* address_line1 and city are NOT NULL in the database. */}
-            <p className="mt-2 text-xs text-ink-soft">Indirizzo e città sono obbligatori.</p>
+            <p className="mt-2 text-xs text-ink-soft">{tr("Indirizzo e città sono obbligatori.")}</p>
           </div>
         )}
 
         <div className="mt-4 space-y-4">
           {locations.length === 0 && !newLocation && (
-            <p className="text-sm text-ink-soft">Nessun luogo di consegna registrato.</p>
+            <p className="text-sm text-ink-soft">{tr("Nessun luogo di consegna registrato.")}</p>
           )}
 
           {locations.map((location) => {

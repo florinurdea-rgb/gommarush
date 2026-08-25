@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { CustomerRow } from "@/lib/types/logistics";
+import { useTr } from "@/lib/i18n/tr";
 
 /**
  * Searchable customer combobox for manual order entry — the brief: a
@@ -30,6 +31,7 @@ export function CustomerPickerField({
   onSelectNew: () => void;
   disabled?: boolean;
 }) {
+  const tr = useTr();
   const [open, setOpen] = useState(false);
   const [results, setResults] = useState<CustomerRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -78,7 +80,7 @@ export function CustomerPickerField({
         className={inputClass}
         value={value}
         disabled={disabled}
-        placeholder="Cerca o scegli un cliente…"
+        placeholder={tr("Cerca o scegli un cliente…")}
         autoComplete="off"
         onFocus={() => {
           setOpen(true);
@@ -107,9 +109,9 @@ export function CustomerPickerField({
           >
             + Client nou
           </button>
-          {loading && <div className="px-3 py-2 text-xs text-ink-soft">Ricerca…</div>}
+          {loading && <div className="px-3 py-2 text-xs text-ink-soft">{tr("Ricerca…")}</div>}
           {!loading && results.length === 0 && (
-            <div className="px-3 py-2 text-xs text-ink-soft">Nessun cliente trovato.</div>
+            <div className="px-3 py-2 text-xs text-ink-soft">{tr("Nessun cliente trovato.")}</div>
           )}
           {!loading &&
             results.map((customer) => (

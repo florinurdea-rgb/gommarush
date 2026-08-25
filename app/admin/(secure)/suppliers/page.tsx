@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { listSuppliersWithCounts } from "@/lib/server/suppliers";
 import { PageHeading } from "@/components/logistics/AdminShell";
+import { getTr } from "@/lib/i18n/tr-server";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Fornitori" };
@@ -16,18 +17,19 @@ export default async function SuppliersPage({
 }: {
   searchParams: Promise<{ q?: string }>;
 }) {
+  const tr = getTr();
   const { q } = await searchParams;
   const suppliers = await listSuppliersWithCounts(q);
 
   return (
     <>
-      <PageHeading title="Fornitori" description="La scheda di ogni fornitore di pneumatici." />
+      <PageHeading title={tr("Fornitori")} description={tr("La scheda di ogni fornitore di pneumatici.")} />
 
       <form className="mb-5 flex max-w-md gap-2" action="/admin/suppliers">
         <input
           name="q"
           defaultValue={q ?? ""}
-          placeholder="Cerca per ragione sociale o codice fiscale…"
+          placeholder={tr("Cerca per ragione sociale o codice fiscale…")}
           className="h-11 flex-1 rounded-lg border border-ink/15 px-3 text-sm outline-none focus:border-accent"
         />
         <button type="submit" className="h-11 rounded-lg bg-accent px-4 text-sm font-semibold text-white">

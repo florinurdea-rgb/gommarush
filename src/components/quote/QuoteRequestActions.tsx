@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { QUOTE_STATUS_LABELS, type QuoteRequestStatus } from "@/lib/types/quote-request";
+import { useTr } from "@/lib/i18n/tr";
 
 /**
  * Status transitions + Excel export for one request.
@@ -49,6 +50,7 @@ export function QuoteRequestActions({
   requestId: string;
   status: QuoteRequestStatus;
 }) {
+  const tr = useTr();
   const router = useRouter();
   const [pending, setPending] = useState<QuoteRequestStatus | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -69,12 +71,12 @@ export function QuoteRequestActions({
       });
       const payload = (await response.json()) as { ok: boolean };
       if (!payload.ok) {
-        setError("Aggiornamento non riuscito. Riprova.");
+        setError(tr("Aggiornamento non riuscito. Riprova."));
         return;
       }
       router.refresh();
     } catch {
-      setError("Aggiornamento non riuscito. Riprova.");
+      setError(tr("Aggiornamento non riuscito. Riprova."));
     } finally {
       setPending(null);
     }
@@ -92,7 +94,7 @@ export function QuoteRequestActions({
     try {
       const response = await fetch(`/api/admin/quote-requests/${requestId}/export`);
       if (!response.ok) {
-        setError("Esportazione non riuscita. Riprova.");
+        setError(tr("Esportazione non riuscita. Riprova."));
         return;
       }
 
@@ -109,7 +111,7 @@ export function QuoteRequestActions({
       anchor.remove();
       URL.revokeObjectURL(url);
     } catch {
-      setError("Esportazione non riuscita. Riprova.");
+      setError(tr("Esportazione non riuscita. Riprova."));
     } finally {
       setExporting(false);
     }
@@ -124,7 +126,7 @@ export function QuoteRequestActions({
           disabled={exporting}
           className="inline-flex min-h-11 items-center justify-center rounded-lg bg-accent px-5 text-sm font-bold text-white transition-colors hover:bg-accent-dark disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
         >
-          {exporting ? "Generazione…" : "Apri in Excel"}
+          {exporting ? "Generazione…" : tr("Apri in Excel")}
         </button>
 
         {nextStatus && (
@@ -135,13 +137,13 @@ export function QuoteRequestActions({
             className="inline-flex min-h-11 items-center justify-center rounded-lg border border-ink/15 px-5 text-sm font-semibold text-ink transition-colors hover:border-accent hover:text-accent disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             {pending === nextStatus
-              ? "Aggiornamento…"
+              ? tr("Aggiornamento…")
               : `Segna: ${QUOTE_STATUS_LABELS[nextStatus]}`}
           </button>
         )}
 
         <label className="inline-flex items-center gap-2 text-sm text-ink-soft">
-          <span className="sr-only">Cambia stato richiesta</span>
+          <span className="sr-only">{tr("Cambia stato richiesta")}</span>
           <select
             value={status}
             disabled={pending !== null}

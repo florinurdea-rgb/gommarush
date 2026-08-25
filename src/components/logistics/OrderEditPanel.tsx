@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Button } from "@/components/Button";
 import { useOps } from "@/lib/i18n/ops";
 import type { OptionRef } from "@/components/logistics/NewOrderFlow";
+import { useTr } from "@/lib/i18n/tr";
 
 /** Assignment editor on the order detail page: driver, van, delivery date, plus hold/reactivate/cancel. */
 
@@ -31,6 +32,7 @@ export function OrderEditPanel({
   plannedDate,
   status,
 }: OrderEditPanelProps) {
+  const tr = useTr();
   const ops = useOps();
   const router = useRouter();
   const [driver, setDriver] = useState(driverId ?? "");
@@ -75,7 +77,7 @@ export function OrderEditPanel({
 
   async function lifecycle(action: "hold" | "reactivate" | "cancel") {
     if (action === "cancel" && !window.confirm(
-      "Vuoi annullare l'ordine? Uscirà dalla lista attiva, ma prodotti, articoli fisici e storico vengono conservati."
+      tr("Vuoi annullare l'ordine? Uscirà dalla lista attiva, ma prodotti, articoli fisici e storico vengono conservati.")
     )) {
       return;
     }

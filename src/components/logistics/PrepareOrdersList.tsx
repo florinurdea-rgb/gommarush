@@ -7,8 +7,10 @@ import { PrepareOrderModal } from "@/components/logistics/PrepareOrderModal";
 import { TyreIcon } from "@/components/logistics/TyreIcon";
 import { formatOrderNumber } from "@/lib/logistics/order-number";
 import type { OrderListRow } from "@/lib/server/orders";
+import { useTr } from "@/lib/i18n/tr";
 
 export function PrepareOrdersList({ orders }: { orders: OrderListRow[] }) {
+  const tr = useTr();
   const router = useRouter();
   const [openOrderId, setOpenOrderId] = useState<string | null>(null);
 
@@ -37,7 +39,7 @@ export function PrepareOrdersList({ orders }: { orders: OrderListRow[] }) {
               </div>
               <div className="truncate text-sm font-bold text-ink">{order.customer_name ?? "—"}</div>
               <div className="truncate text-xs text-ink-soft">
-                {order.customer_address ?? "Indirizzo sconosciuto"}
+                {order.customer_address ?? tr("Indirizzo sconosciuto")}
                 {order.supplier_name ? ` · ${order.supplier_name}` : ""}
               </div>
             </div>

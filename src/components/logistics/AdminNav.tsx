@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useTr } from "@/lib/i18n/tr";
 
 /**
  * Two nav levels: Consegne and Sumar are the two screens someone reaches for
@@ -52,6 +53,7 @@ function NavLink({
   /** Announced by screen readers; defaults to a generic "N new" for this tab. */
   badgeLabel?: string;
 }) {
+  const tr = useTr();
   const active = isActive(pathname, item.href);
   return (
     <Link
@@ -61,11 +63,11 @@ function NavLink({
         active ? "bg-accent-light text-accent-dark" : "text-ink-soft hover:bg-surface-soft hover:text-ink"
       }`}
     >
-      {item.label}
+      {tr(item.label)}
       {!!badgeCount && badgeCount > 0 && (
         <span
           className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold leading-none text-white"
-          aria-label={badgeLabel ?? `${badgeCount} nuovi elementi in ${item.label}`}
+          aria-label={badgeLabel ?? `${badgeCount} nuovi elementi in ${tr(item.label)}`}
         >
           {badgeCount > 99 ? "99+" : badgeCount}
         </span>

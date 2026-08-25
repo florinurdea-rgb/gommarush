@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import { Modal, ModalHeader } from "@/components/ui/Modal";
 import { formatOrderNumber } from "@/lib/logistics/order-number";
 import type { Map as LeafletMap } from "leaflet";
+import { useTr } from "@/lib/i18n/tr";
 
 export interface DriverRouteStop {
   orderId: string;
@@ -33,6 +34,7 @@ export function DriverRouteMapModal({
   depotLocation: { lat: number; lng: number } | null;
   onClose: () => void;
 }) {
+  const tr = useTr();
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
 
@@ -81,7 +83,7 @@ export function DriverRouteMapModal({
         });
         L.marker([depotLocation.lat, depotLocation.lng], { icon: depotIcon })
           .addTo(map)
-          .bindPopup("<strong>Partenza — Magazzino GommaRush</strong>");
+          .bindPopup(`<strong>${tr("Partenza — Magazzino GommaRush")}</strong>`);
       }
 
       for (const entry of located) {
@@ -116,7 +118,7 @@ export function DriverRouteMapModal({
       <ModalHeader title={`Traseu — ${vehicleName}`} onClose={onClose} />
       <div className="p-6">
         {stops.length === 0 && !depotLocation ? (
-          <p className="py-6 text-center text-sm text-ink-soft">Nessun ordine oggi su questo veicolo.</p>
+          <p className="py-6 text-center text-sm text-ink-soft">{tr("Nessun ordine oggi su questo veicolo.")}</p>
         ) : (
           <>
             <div ref={mapContainerRef} className="mb-4 h-72 w-full overflow-hidden rounded-xl border border-ink/10" />
@@ -137,7 +139,7 @@ export function DriverRouteMapModal({
                     </svg>
                   </span>
                   <div className="min-w-0">
-                    <div className="text-sm font-bold text-ink">Partenza — Magazzino GommaRush</div>
+                    <div className="text-sm font-bold text-ink">{tr("Partenza — Magazzino GommaRush")}</div>
                     <div className="mt-0.5 text-xs text-ink-soft">
                       {depotLocation.lat.toFixed(6)}, {depotLocation.lng.toFixed(6)}
                     </div>

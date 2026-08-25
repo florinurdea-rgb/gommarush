@@ -4,6 +4,7 @@ import { SummaryDashboard } from "@/components/logistics/SummaryDashboard";
 import { getOperationalSummary } from "@/lib/server/summary";
 import { resolvePeriod, PERIOD_OPTIONS } from "@/lib/logistics/summary-period";
 import type { PeriodKey } from "@/lib/logistics/summary-period";
+import { getTr } from "@/lib/i18n/tr-server";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Riepilogo" };
@@ -27,6 +28,7 @@ export default async function SummaryPage({
 }: {
   searchParams: Promise<{ period?: string; start?: string; end?: string }>;
 }) {
+  const tr = getTr();
   const params = await searchParams;
   const periodKey: PeriodKey = VALID_PERIODS.has(params.period as PeriodKey) ? (params.period as PeriodKey) : "7d";
   const range = resolvePeriod(periodKey, new Date(), { start: params.start, end: params.end });
@@ -38,7 +40,7 @@ export default async function SummaryPage({
 
   return (
     <>
-      <PageHeading title="Riepilogo" description={periodLabel} />
+      <PageHeading title={tr("Riepilogo")} description={periodLabel} />
 
       <div className="mb-5">
         <SummaryPeriodSelector activePeriod={periodKey} />

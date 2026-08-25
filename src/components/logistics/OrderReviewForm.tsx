@@ -10,6 +10,7 @@ import { CustomerPickerField } from "@/components/logistics/CustomerPickerField"
 import type { AnalysisResult, ExtractedProductLine } from "@/lib/documents/analyzer";
 import type { CustomerMatchResult, LocationResolution } from "@/lib/logistics/customer-matching";
 import type { CustomerLocationRow, CustomerRow, ItemType } from "@/lib/types/logistics";
+import { useTr } from "@/lib/i18n/tr";
 
 /**
  * The review screen: everything extracted, fully editable, before anything is
@@ -82,6 +83,7 @@ export function OrderReviewForm({
   onBack,
   onSaved,
 }: OrderReviewFormProps) {
+  const tr = useTr();
   const ops = useOps();
   // --- Supplier ---------------------------------------------------------
   const [supplierName, setSupplierName] = useState(analysis.supplier.name ?? "");
@@ -248,7 +250,7 @@ export function OrderReviewForm({
 
     try {
       const payload = {
-        supplier_name: supplierName.trim() || "Fornitore sconosciuto",
+        supplier_name: supplierName.trim() || tr("Fornitore sconosciuto"),
         supplier_vat_number: supplierVat.trim() || null,
         supplier_document_number: documentNumber.trim() || null,
         supplier_document_date: documentDate.trim() || null,
@@ -388,15 +390,15 @@ export function OrderReviewForm({
       )}
 
       {/* ---------------------------------------------------------- Supplier */}
-      <Section title={ops.t("supplier")} description="Il fornitore e il riferimento del documento.">
+      <Section title={ops.t("supplier")} description={tr("Il fornitore e il riferimento del documento.")}>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div>
-            <label className={labelClass} htmlFor="supplier-name">Nome fornitore</label>
+            <label className={labelClass} htmlFor="supplier-name">{tr("Nome fornitore")}</label>
             <input id="supplier-name" className={inputClass} value={supplierName}
               onChange={(event) => setSupplierName(event.target.value)} />
           </div>
           <div>
-            <label className={labelClass} htmlFor="supplier-vat">P.IVA / Codice fiscale</label>
+            <label className={labelClass} htmlFor="supplier-vat">{tr("P.IVA / Codice fiscale")}</label>
             <input id="supplier-vat" className={inputClass} value={supplierVat}
               onChange={(event) => setSupplierVat(event.target.value)} />
           </div>
@@ -406,12 +408,12 @@ export function OrderReviewForm({
               onChange={(event) => setDocumentNumber(event.target.value)} />
           </div>
           <div>
-            <label className={labelClass} htmlFor="doc-date">Data del documento</label>
+            <label className={labelClass} htmlFor="doc-date">{tr("Data del documento")}</label>
             <input id="doc-date" type="date" className={inputClass} value={documentDate}
               onChange={(event) => setDocumentDate(event.target.value)} />
           </div>
           <div>
-            <label className={labelClass} htmlFor="supplier-ref">Riferimento ordine fornitore</label>
+            <label className={labelClass} htmlFor="supplier-ref">{tr("Riferimento ordine fornitore")}</label>
             <input id="supplier-ref" className={inputClass} value={supplierReference}
               onChange={(event) => setSupplierReference(event.target.value)} />
           </div>
@@ -421,7 +423,7 @@ export function OrderReviewForm({
       {/* ---------------------------------------------------------- Customer */}
       <Section
         title={ops.t("customer")}
-        description="Il cliente finale dell'ordine."
+        description={tr("Il cliente finale dell'ordine.")}
         tone={customerMatch?.requiresReview ? "warning" : undefined}
       >
         {customerMatch && (
@@ -472,7 +474,7 @@ export function OrderReviewForm({
           <div>
             <label className={labelClass} htmlFor="customer-name">{ops.t("companyName")}</label>
             {/* Manual entry (no document match): a searchable dropdown of
-                every customer, "+ Nuovo cliente" pinned at the top — the
+                every customer, tr("+ Nuovo cliente") pinned at the top — the
                 whole point being to pick a real customer instead of
                 free-typing a name that might already exist under a
                 slightly different spelling. */}
@@ -500,7 +502,7 @@ export function OrderReviewForm({
               onChange={(event) => setCustomerVat(event.target.value)} />
           </div>
           <div>
-            <label className={labelClass} htmlFor="customer-code">Codice cliente presso il fornitore</label>
+            <label className={labelClass} htmlFor="customer-code">{tr("Codice cliente presso il fornitore")}</label>
             <input id="customer-code" className={inputClass} value={supplierCustomerCode}
               onChange={(event) => setSupplierCustomerCode(event.target.value)} />
           </div>
@@ -510,15 +512,15 @@ export function OrderReviewForm({
       {/* ------------------------------------------------- Delivery location */}
       <Section
         title={ops.t("deliveryLocation")}
-        description="L'indirizzo a cui viene consegnato questo ordine."
+        description={tr("L'indirizzo a cui viene consegnato questo ordine.")}
       >
         {loadingCustomerLocations && (
-          <p className="mb-4 text-sm text-ink-soft">Caricamento indirizzo cliente…</p>
+          <p className="mb-4 text-sm text-ink-soft">{tr("Caricamento indirizzo cliente…")}</p>
         )}
 
         {matchedLocation && (
           <div className="mb-4 rounded-lg border border-ink/10 bg-surface-soft p-3 text-sm">
-            <div className="font-semibold text-ink">Luogo già presente nel database</div>
+            <div className="font-semibold text-ink">{tr("Luogo già presente nel database")}</div>
             <div className="text-ink-soft">
               {matchedLocation.location_name ? `${matchedLocation.location_name} — ` : ""}
               {matchedLocation.address_line1}, {matchedLocation.postal_code} {matchedLocation.city}
@@ -529,7 +531,7 @@ export function OrderReviewForm({
 
         {/* Never silently overwrite master data — this is an explicit choice. */}
         <fieldset className="mb-4">
-          <legend className={labelClass}>Cosa facciamo con l&apos;indirizzo {customerMatch ? "del documento" : "del cliente"}?</legend>
+          <legend className={labelClass}>Cosa facciamo con l&apos;indirizzo {customerMatch ? "del documento" : tr("del cliente")}?</legend>
           <div className="space-y-2">
             {(
               customerMatch?.allowedResolutions ??
@@ -546,7 +548,7 @@ export function OrderReviewForm({
                   onChange={() => setResolution(option)}
                 />
                 <span>
-                  {option === "use_existing" && "Usa il luogo esistente"}
+                  {option === "use_existing" && tr("Usa il luogo esistente")}
                   {option === "use_for_this_order_only" && ops.t("useAddressForThisOrderOnly")}
                   {option === "add_as_new_location" && ops.t("addAsNewLocation")}
                   {option === "update_existing_location" && ops.t("updateExistingLocation")}
@@ -612,7 +614,7 @@ export function OrderReviewForm({
               onChange={(event) => setCollectionMethod(event.target.value)} />
           </div>
           <div>
-            <label className={labelClass} htmlFor="payment-method">Metodo di pagamento</label>
+            <label className={labelClass} htmlFor="payment-method">{tr("Metodo di pagamento")}</label>
             <input id="payment-method" className={inputClass} value={paymentMethod}
               onChange={(event) => setPaymentMethod(event.target.value)} />
           </div>
@@ -621,8 +623,8 @@ export function OrderReviewForm({
 
       {/* -------------------------------------------------------- Assignment */}
       {/* Driver/vehicle on purpose NOT here: that assignment happens after
-          the order exists, on the Consegne board (drag from "Non assegnati" or
-          "Ottimizza le rotte") — asking for it again at creation time would
+          the order exists, on the Consegne board (drag from tr("Non assegnati") or
+          tr("Ottimizza le rotte")) — asking for it again at creation time would
           just duplicate that flow with a second, easier-to-forget place to
           set it. */}
       <Section title={ops.t("assignment")}>

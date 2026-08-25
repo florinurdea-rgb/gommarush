@@ -1,5 +1,6 @@
 import { PageHeading } from "@/components/logistics/AdminShell";
 import { DdtImportFlow } from "@/components/logistics/DdtImportFlow";
+import { getTr } from "@/lib/i18n/tr-server";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Import DDT" };
@@ -15,11 +16,12 @@ export const metadata = { title: "Import DDT" };
  * (one upload = one order) don't hold here.
  */
 export default function DdtImportPage() {
+  const tr = getTr();
   return (
     <>
       <PageHeading
-        title="Import DDT"
-        description="Carica un documento che può contenere uno o più DDT."
+        title={tr("Import DDT")}
+        description={tr("Carica un documento che può contenere uno o più DDT.")}
         back
       />
       <DdtImportFlow />

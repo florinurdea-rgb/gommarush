@@ -6,6 +6,7 @@ import { OrderStatusBadge, UnitStatusBadge } from "@/components/logistics/Status
 import { formatOrderNumber } from "@/lib/logistics/order-number";
 import { useOps } from "@/lib/i18n/ops";
 import type { OrderDetail } from "@/lib/server/orders";
+import { useTr } from "@/lib/i18n/tr";
 
 /**
  * The board card's "quick look": fetches the same data as the full order
@@ -16,6 +17,7 @@ import type { OrderDetail } from "@/lib/server/orders";
  * the full page, reached via the footer link.
  */
 export function OrderDetailModal({ orderId, onClose }: { orderId: string; onClose: () => void }) {
+  const tr = useTr();
   const ops = useOps();
   const [detail, setDetail] = useState<OrderDetail | null>(null);
   const [error, setError] = useState(false);
@@ -64,12 +66,12 @@ export function OrderDetailModal({ orderId, onClose }: { orderId: string; onClos
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={detail ? formatOrderNumber(detail.order.order_number) : "Dettagli ordine"}
+        aria-label={detail ? formatOrderNumber(detail.order.order_number) : tr("Dettagli ordine")}
         onClick={(event) => event.stopPropagation()}
         className="fixed inset-y-0 right-0 flex h-full w-full max-w-md flex-col overflow-y-auto bg-white shadow-modal"
       >
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-ink/10 bg-white/95 px-5 py-3 backdrop-blur">
-          <span className="text-sm font-bold text-ink">Dettagli ordine</span>
+          <span className="text-sm font-bold text-ink">{tr("Dettagli ordine")}</span>
           <button
             type="button"
             onClick={onClose}
@@ -83,10 +85,10 @@ export function OrderDetailModal({ orderId, onClose }: { orderId: string; onClos
         </div>
 
         <div className="flex-1 p-5 sm:p-6">
-          {loading && <div className="py-16 text-center text-sm text-ink-soft">Caricamento…</div>}
+          {loading && <div className="py-16 text-center text-sm text-ink-soft">{tr("Caricamento…")}</div>}
 
           {!loading && error && (
-            <div className="py-16 text-center text-sm text-state-danger">Non è stato possibile caricare l&apos;ordine.</div>
+            <div className="py-16 text-center text-sm text-state-danger">{tr("Non è stato possibile caricare l&apos;ordine.")}</div>
           )}
 
           {!loading && detail && (
@@ -97,7 +99,7 @@ export function OrderDetailModal({ orderId, onClose }: { orderId: string; onClos
                     {formatOrderNumber(detail.order.order_number)}
                   </div>
                   <h2 className="truncate text-xl font-extrabold tracking-tight text-ink">
-                    {detail.customer?.name ?? "Cliente non specificato"}
+                    {detail.customer?.name ?? tr("Cliente non specificato")}
                   </h2>
                   <div className="mt-1">
                     <OrderStatusBadge status={detail.order.status} size="sm" />
@@ -118,7 +120,7 @@ export function OrderDetailModal({ orderId, onClose }: { orderId: string; onClos
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-ink-soft">Posizione di consegna</dt>
+                  <dt className="text-xs text-ink-soft">{tr("Posizione di consegna")}</dt>
                   <dd className="font-medium text-ink">
                     {detail.order.delivery_sequence ? `#${detail.order.delivery_sequence}` : "—"}
                   </dd>

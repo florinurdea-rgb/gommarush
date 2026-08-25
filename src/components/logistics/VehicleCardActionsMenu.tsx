@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/Toast";
 import { useOps } from "@/lib/i18n/ops";
 import { MANUALLY_SETTABLE_STATUSES } from "@/lib/logistics/order-status-rules";
 import type { OrderStatus } from "@/lib/types/logistics";
+import { useTr } from "@/lib/i18n/tr";
 
 export interface MoveTarget {
   key: string;
@@ -63,6 +64,7 @@ export function VehicleCardActionsMenu({
   onAssignRecommended: () => void;
   onMoveTo: (targetKey: string) => void;
 }) {
+  const tr = useTr();
   const ops = useOps();
   const { showToast } = useToast();
   const router = useRouter();
@@ -129,7 +131,7 @@ export function VehicleCardActionsMenu({
         showToast(`Statusul nu a putut fi salvat.${detail ? ` (${detail})` : ""}`, "error");
       }
     } catch {
-      showToast("Errore di rete.", "error");
+      showToast(tr("Errore di rete."), "error");
     } finally {
       setBusy(false);
     }
@@ -155,7 +157,7 @@ export function VehicleCardActionsMenu({
       showToast(`Azione non salvata.${payload.code ? ` (${payload.code})` : ""}`, "error");
       return false;
     } catch {
-      showToast("Errore di rete.", "error");
+      showToast(tr("Errore di rete."), "error");
       return false;
     } finally {
       setBusy(false);
@@ -186,7 +188,7 @@ export function VehicleCardActionsMenu({
 
   async function confirmDeliveryFailed() {
     if (failureReason.trim().length < 3) {
-      showToast("Il motivo è obbligatorio.", "error");
+      showToast(tr("Il motivo è obbligatorio."), "error");
       return;
     }
     const ok = await runDispatchAction(
@@ -213,10 +215,10 @@ export function VehicleCardActionsMenu({
         showToast(`Ordine annullato — ${orderLabel}.`, "success");
         router.refresh();
       } else {
-        showToast("Eliminazione non salvata.", "error");
+        showToast(tr("Eliminazione non salvata."), "error");
       }
     } catch {
-      showToast("Errore di rete.", "error");
+      showToast(tr("Errore di rete."), "error");
     } finally {
       setBusy(false);
       setOpen(false);
@@ -400,7 +402,7 @@ export function VehicleCardActionsMenu({
               <textarea
                 value={failureReason}
                 onChange={(event) => setFailureReason(event.target.value)}
-                placeholder="es. cliente chiuso, merce rifiutata…"
+                placeholder={tr("es. cliente chiuso, merce rifiutata…")}
                 rows={2}
                 className="w-full rounded-lg border border-ink/15 px-2 py-1.5 text-sm"
               />

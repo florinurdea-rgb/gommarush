@@ -4,6 +4,7 @@ import { describeEmailConfig } from "@/lib/email/send-quote-request";
 import { checkQuoteSchema } from "@/lib/server/quote-schema-check";
 import { SchemaStatusPanel } from "@/components/quote/SchemaStatusPanel";
 import Link from "next/link";
+import { getTr } from "@/lib/i18n/tr-server";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -61,6 +62,7 @@ export default async function SystemPage({
 }: {
   searchParams: { period?: string };
 }) {
+  const tr = getTr();
   const period: MetricPeriod = PERIODS.includes(searchParams.period as MetricPeriod)
     ? (searchParams.period as MetricPeriod)
     : "7d";
@@ -76,8 +78,8 @@ export default async function SystemPage({
   return (
     <>
       <PageHeading
-        title="Sistema"
-        description="Salute operativa del flusso richieste di offerta."
+        title={tr("Sistema")}
+        description={tr("Salute operativa del flusso richieste di offerta.")}
       />
 
       {/* First, and before anything derived from the schema: if the tables
@@ -105,7 +107,7 @@ export default async function SystemPage({
       {/* Configuration first: every other number below is meaningless if the
           deployment cannot send mail at all. */}
       <section className="mb-6">
-        <h2 className="mb-2 text-sm font-bold text-ink">Configurazione email</h2>
+        <h2 className="mb-2 text-sm font-bold text-ink">{tr("Configurazione email")}</h2>
         <div
           className={`rounded-xl border p-4 text-sm ${
             emailConfig.configured
@@ -115,27 +117,27 @@ export default async function SystemPage({
         >
           <dl className="grid gap-x-8 gap-y-2 sm:grid-cols-2">
             <div className="flex gap-2">
-              <dt className="w-28 flex-none text-ink-soft">Stato</dt>
+              <dt className="w-28 flex-none text-ink-soft">{tr("Stato")}</dt>
               <dd className="font-semibold">
-                {emailConfig.configured ? "Configurata" : "Non configurata"}
+                {emailConfig.configured ? "Configurata" : tr("Non configurata")}
               </dd>
             </div>
             <div className="flex gap-2">
-              <dt className="w-28 flex-none text-ink-soft">Chiave API</dt>
+              <dt className="w-28 flex-none text-ink-soft">{tr("Chiave API")}</dt>
               <dd className="font-semibold">
                 {!emailConfig.apiKeyPresent
                   ? "assente"
                   : emailConfig.apiKeyLooksValid
                     ? "presente"
-                    : "presente, formato inatteso"}
+                    : tr("presente, formato inatteso")}
               </dd>
             </div>
             <div className="flex gap-2">
-              <dt className="w-28 flex-none text-ink-soft">Mittente</dt>
+              <dt className="w-28 flex-none text-ink-soft">{tr("Mittente")}</dt>
               <dd className="min-w-0 break-all font-semibold">{emailConfig.from ?? "—"}</dd>
             </div>
             <div className="flex gap-2">
-              <dt className="w-28 flex-none text-ink-soft">Destinatario</dt>
+              <dt className="w-28 flex-none text-ink-soft">{tr("Destinatario")}</dt>
               <dd className="min-w-0 break-all font-semibold">{emailConfig.to ?? "—"}</dd>
             </div>
           </dl>
@@ -149,20 +151,20 @@ export default async function SystemPage({
       </section>
 
       <section className="mb-6">
-        <h2 className="mb-2 text-sm font-bold text-ink">Affidabilità invii</h2>
+        <h2 className="mb-2 text-sm font-bold text-ink">{tr("Affidabilità invii")}</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           <Stat label="Tentativi" value={submissions.attempted} />
           <Stat label="Salvate" value={submissions.persisted} tone="good" />
           <Stat
-            label="Salvataggi falliti"
+            label={tr("Salvataggi falliti")}
             value={submissions.persistFailed}
             tone={submissions.persistFailed > 0 ? "bad" : "neutral"}
           />
-          <Stat label="Validazioni fallite" value={submissions.validationFailed} />
+          <Stat label={tr("Validazioni fallite")} value={submissions.validationFailed} />
           <Stat
-            label="Duplicati evitati"
+            label={tr("Duplicati evitati")}
             value={submissions.duplicatesPrevented}
-            hint="doppi invii bloccati"
+            hint={tr("doppi invii bloccati")}
           />
         </div>
         <p className="mt-2 text-sm text-ink-soft">
@@ -174,9 +176,9 @@ export default async function SystemPage({
       </section>
 
       <section className="mb-6">
-        <h2 className="mb-2 text-sm font-bold text-ink">Notifiche email</h2>
+        <h2 className="mb-2 text-sm font-bold text-ink">{tr("Notifiche email")}</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-          <Stat label="In attesa" value={notifications.pending} />
+          <Stat label={tr("In attesa")} value={notifications.pending} />
           <Stat label="Inviate" value={notifications.sent} />
           <Stat label="Consegnate" value={notifications.delivered} tone="good" />
           <Stat
@@ -184,7 +186,7 @@ export default async function SystemPage({
             value={notifications.failed}
             tone={notifications.failed > 0 ? "bad" : "neutral"}
           />
-          <Stat label="Tentativi totali" value={notifications.totalAttempts} />
+          <Stat label={tr("Tentativi totali")} value={notifications.totalAttempts} />
         </div>
         <p className="mt-2 text-sm text-ink-soft">
           Tasso di consegna:{" "}
@@ -229,9 +231,9 @@ export default async function SystemPage({
             </thead>
             <tbody className="divide-y divide-ink/5">
               {[
-                { label: "Salvataggio richiesta", value: timings.persist },
-                { label: "Invio email", value: timings.email },
-                { label: "Totale richiesta", value: timings.total },
+                { label: tr("Salvataggio richiesta"), value: timings.persist },
+                { label: tr("Invio email"), value: timings.email },
+                { label: tr("Totale richiesta"), value: timings.total },
               ].map((row) => (
                 <tr key={row.label}>
                   <td className="px-4 py-2 font-semibold text-ink">{row.label}</td>

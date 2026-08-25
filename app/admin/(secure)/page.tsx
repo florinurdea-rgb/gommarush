@@ -6,6 +6,7 @@ import { VehicleBoard } from "@/components/logistics/VehicleBoard";
 import type { VehicleColumnData } from "@/components/logistics/VehicleBoard";
 import { NewOrderLauncher } from "@/components/logistics/NewOrderLauncher";
 import { DashboardLiveRefresh } from "@/components/logistics/DashboardLiveRefresh";
+import { getTr } from "@/lib/i18n/tr-server";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -17,6 +18,7 @@ export const metadata = { title: "Consegne" };
  * on other devices converged as warehouse/admin activity changes the data.
  */
 export default async function AdminDashboardPage() {
+  const tr = getTr();
   const [orders, vehicles, depotLocation] = await Promise.all([
     listActiveOrders(),
     listVehicles(),
@@ -27,7 +29,7 @@ export default async function AdminDashboardPage() {
     {
       key: "unassigned",
       vehicleId: null,
-      name: "Non assegnati",
+      name: tr("Non assegnati"),
       number: null,
       capacityUnits: null,
       colorKey: null,
@@ -47,7 +49,7 @@ export default async function AdminDashboardPage() {
   return (
     <>
       <DashboardLiveRefresh />
-      <PageHeading title="Consegne" action={<NewOrderLauncher />} />
+      <PageHeading title={tr("Consegne")} action={<NewOrderLauncher />} />
 
       <VehicleBoard columns={vehicleColumns} vehicles={vehicles} depotLocation={depotLocation} />
     </>

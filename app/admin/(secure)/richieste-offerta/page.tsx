@@ -14,6 +14,7 @@ import { DELIVERY_LABELS } from "@/lib/types/quote-request";
 import { checkQuoteSchema } from "@/lib/server/quote-schema-check";
 import { SchemaStatusPanel } from "@/components/quote/SchemaStatusPanel";
 import { logError } from "@/lib/logger";
+import { getTr } from "@/lib/i18n/tr-server";
 
 // Always fresh: a request submitted seconds ago must appear on the next
 // load, never a cached page from before it existed.
@@ -62,6 +63,7 @@ export default async function QuoteRequestsPage({
 }: {
   searchParams: Record<string, string | string[] | undefined>;
 }) {
+  const tr = getTr();
   // Hand-editable URL: anything unparseable falls back to defaults rather
   // than erroring the page.
   const parsed = listQuoteRequestsQuerySchema.safeParse(searchParams);
@@ -112,15 +114,15 @@ export default async function QuoteRequestsPage({
       <DashboardLiveRefresh />
 
       <PageHeading
-        title="Richieste di offerta"
-        description="Richieste inviate dal sito pubblico."
+        title={tr("Richieste di offerta")}
+        description={tr("Richieste inviate dal sito pubblico.")}
       />
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Metric label="Nuove (30gg)" value={metrics.newRequests} />
-        <Metric label="Da elaborare" value={metrics.toProcess} />
-        <Metric label="Offerte inviate" value={metrics.offersSent} />
-        <Metric label="Accettate" value={metrics.accepted} />
+        <Metric label={tr("Nuove (30gg)")} value={metrics.newRequests} />
+        <Metric label={tr("Da elaborare")} value={metrics.toProcess} />
+        <Metric label={tr("Offerte inviate")} value={metrics.offersSent} />
+        <Metric label={tr("Accettate")} value={metrics.accepted} />
       </div>
 
       {schema && <SchemaStatusPanel report={schema} />}
@@ -156,11 +158,11 @@ export default async function QuoteRequestsPage({
 
       {rows.length === 0 ? (
         <div className="rounded-xl border border-dashed border-ink/20 bg-white px-6 py-16 text-center">
-          <p className="text-base font-semibold text-ink">Nessuna richiesta trovata</p>
+          <p className="text-base font-semibold text-ink">{tr("Nessuna richiesta trovata")}</p>
           <p className="mt-1 text-sm text-ink-soft">
             {total === 0
-              ? "Le nuove richieste inviate dal sito appariranno qui."
-              : "Nessun risultato per questi filtri. Prova ad azzerarli."}
+              ? tr("Le nuove richieste inviate dal sito appariranno qui.")
+              : tr("Nessun risultato per questi filtri. Prova ad azzerarli.")}
           </p>
         </div>
       ) : (
@@ -169,14 +171,14 @@ export default async function QuoteRequestsPage({
             <table className="w-full border-collapse text-left text-sm">
               <thead>
                 <tr className="border-b border-ink/10 bg-surface-soft text-xs uppercase tracking-wide text-ink-soft">
-                  <th scope="col" className="px-4 py-3 font-semibold">Riferimento</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Data</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Cliente</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Email</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Articoli</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Consegna</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Stato</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">Email</th>
+                  <th scope="col" className="px-4 py-3 font-semibold">{tr("Riferimento")}</th>
+                  <th scope="col" className="px-4 py-3 font-semibold">{tr("Data")}</th>
+                  <th scope="col" className="px-4 py-3 font-semibold">{tr("Cliente")}</th>
+                  <th scope="col" className="px-4 py-3 font-semibold">{tr("Email")}</th>
+                  <th scope="col" className="px-4 py-3 font-semibold">{tr("Articoli")}</th>
+                  <th scope="col" className="px-4 py-3 font-semibold">{tr("Consegna")}</th>
+                  <th scope="col" className="px-4 py-3 font-semibold">{tr("Stato")}</th>
+                  <th scope="col" className="px-4 py-3 font-semibold">{tr("Email")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-ink/5">
@@ -232,7 +234,7 @@ export default async function QuoteRequestsPage({
 
           {pageCount > 1 && (
             <nav
-              aria-label="Paginazione richieste"
+              aria-label={tr("Paginazione richieste")}
               className="mt-4 flex items-center justify-between gap-3 text-sm"
             >
               {page > 1 ? (

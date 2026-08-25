@@ -8,6 +8,7 @@ import { VAN_BORDER_CLASS, VAN_DOT_CLASS } from "@/lib/logistics/vehicle-colors"
 import { TyreIcon } from "@/components/logistics/TyreIcon";
 import { OrdersIcon, PickupIcon, ProfitIcon, TrophyIcon, BuildingIcon, ClockIcon } from "@/components/logistics/SummaryIcons";
 import type { OperationalSummary } from "@/lib/server/summary";
+import { useTr } from "@/lib/i18n/tr";
 
 /**
  * "Sumar" is the visual/analytics dashboard (Consegne is the dense
@@ -68,6 +69,7 @@ export function SummaryDashboard({
   summary: OperationalSummary;
   periodLabel: string;
 }) {
+  const tr = useTr();
   const router = useRouter();
   const [activeVehicle, setActiveVehicle] = useState<string>("total");
   const [deliveriesOpen, setDeliveriesOpen] = useState(false);
@@ -140,7 +142,7 @@ export function SummaryDashboard({
     if (summary.waitingGoodsCount > 0) {
       list.push({
         title: `${summary.waitingGoodsCount} ordini sono ancora in attesa`,
-        detail: "Ordini attivi in attesa della merce dal fornitore, alla data odierna.",
+        detail: tr("Ordini attivi in attesa della merce dal fornitore, alla data odierna."),
         icon: <ClockIcon className="h-5 w-5" />,
         tone: "amber",
       });
@@ -155,15 +157,15 @@ export function SummaryDashboard({
       {/* --------------------------------------------------------- KPIs */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <KpiCard value={summary.orderCount} label="Comenzi" icon={<OrdersIcon />} tone="blue" />
-        <KpiCard value={summary.pickupCount} label="Ritiri fornitore" icon={<PickupIcon />} tone="amber" />
-        <KpiCard value={summary.deliveredTyreCount} label="Pneumatici consegnati" icon={<TyreIcon className="h-5 w-5" />} tone="green" />
-        <KpiCard value={formatEuro(summary.profit)} label="Margine trasporto" icon={<ProfitIcon />} tone="purple" />
+        <KpiCard value={summary.pickupCount} label={tr("Ritiri fornitore")} icon={<PickupIcon />} tone="amber" />
+        <KpiCard value={summary.deliveredTyreCount} label={tr("Pneumatici consegnati")} icon={<TyreIcon className="h-5 w-5" />} tone="green" />
+        <KpiCard value={formatEuro(summary.profit)} label={tr("Margine trasporto")} icon={<ProfitIcon />} tone="purple" />
       </div>
 
       {/* ------------------------------------------------ Needs attention */}
       {(summary.deliveryFailedCount > 0 || summary.unassignedCount > 0 || summary.codExpected > 0) && (
         <section className="mt-6">
-          <h2 className="text-sm font-bold uppercase tracking-wide text-ink-soft">Richiede attenzione</h2>
+          <h2 className="text-sm font-bold uppercase tracking-wide text-ink-soft">{tr("Richiede attenzione")}</h2>
           <div className="mt-2 grid gap-3 sm:grid-cols-3">
             {summary.deliveryFailedCount > 0 && (
               <div className="rounded-xl border border-state-danger/30 bg-state-danger-soft p-4">
@@ -171,7 +173,7 @@ export function SummaryDashboard({
                   {summary.deliveryFailedCount}
                 </div>
                 <div className="text-sm font-semibold text-state-danger">
-                  {summary.deliveryFailedCount === 1 ? "consegna non riuscita" : "consegne non riuscite"}
+                  {summary.deliveryFailedCount === 1 ? "consegna non riuscita" : tr("consegne non riuscite")}
                 </div>
               </div>
             )}
@@ -181,14 +183,14 @@ export function SummaryDashboard({
                   {summary.unassignedCount}
                 </div>
                 <div className="text-sm font-semibold text-state-waiting">
-                  {summary.unassignedCount === 1 ? "ordine non assegnato" : "ordini non assegnati"}
+                  {summary.unassignedCount === 1 ? "ordine non assegnato" : tr("ordini non assegnati")}
                 </div>
               </div>
             )}
             {summary.codExpected > 0 && (
               <div className="rounded-xl border border-ink/10 bg-white p-4 shadow-card">
                 <div className="flex items-baseline justify-between text-sm">
-                  <span className="text-ink-soft">Contrassegno previsto</span>
+                  <span className="text-ink-soft">{tr("Contrassegno previsto")}</span>
                   <span className="font-bold tabular-nums text-ink">{formatEuro(summary.codExpected)}</span>
                 </div>
                 <div className="mt-1 flex items-baseline justify-between text-sm">
@@ -236,7 +238,7 @@ export function SummaryDashboard({
 
       {/* ------------------------------------------------ Supplier pickups */}
       <section className="mt-6">
-        <h2 className="text-sm font-bold uppercase tracking-wide text-ink-soft">Ritiri dai fornitori</h2>
+        <h2 className="text-sm font-bold uppercase tracking-wide text-ink-soft">{tr("Ritiri dai fornitori")}</h2>
         {summary.supplierPickups.length === 0 ? (
           <p className="mt-2 rounded-xl border border-ink/10 bg-white p-4 text-sm text-ink-soft">
             Nessun ritiro nel periodo selezionato.
@@ -266,7 +268,7 @@ export function SummaryDashboard({
       {/* ----------------------------------------------------- Deliveries */}
       <section className="mt-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold uppercase tracking-wide text-ink-soft">Consegne</h2>
+          <h2 className="text-sm font-bold uppercase tracking-wide text-ink-soft">{tr("Consegne")}</h2>
           <button
             type="button"
             onClick={() => setDeliveriesOpen(true)}
@@ -287,7 +289,7 @@ export function SummaryDashboard({
             </div>
             <div className="rounded-xl border border-ink/10 bg-white p-3 text-center shadow-card">
               <div className="text-xl font-black tabular-nums text-accent">{summary.deliveries.length}</div>
-              <div className="text-xs text-ink-soft">ordini</div>
+              <div className="text-xs text-ink-soft">{tr("ordini")}</div>
             </div>
             <div className="rounded-xl border border-ink/10 bg-white p-3 text-center shadow-card">
               <div className="text-xl font-black tabular-nums text-purple-600">{formatEuro(summary.profit)}</div>
@@ -300,7 +302,7 @@ export function SummaryDashboard({
       {/* ------------------------------------------------------ Vehicles */}
       {vehicleTabs.length > 0 && (
         <section className="mt-6">
-          <h2 className="text-sm font-bold uppercase tracking-wide text-ink-soft">Per veicolo</h2>
+          <h2 className="text-sm font-bold uppercase tracking-wide text-ink-soft">{tr("Per veicolo")}</h2>
           <div className="mt-2 flex flex-wrap gap-1.5 overflow-x-auto">
             <button
               type="button"
@@ -342,7 +344,7 @@ export function SummaryDashboard({
             <div className="mt-2 grid grid-cols-3 gap-3">
               <div className="text-center">
                 <div className="text-lg font-black tabular-nums text-accent">{scoped.orders}</div>
-                <div className="text-[11px] text-ink-soft">{scoped.orders === 1 ? "ordine" : "ordini"}</div>
+                <div className="text-[11px] text-ink-soft">{scoped.orders === 1 ? "ordine" : tr("ordini")}</div>
               </div>
               <div className="text-center">
                 <div className="text-lg font-black tabular-nums text-state-success">{scoped.tyres}</div>

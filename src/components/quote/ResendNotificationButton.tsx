@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useTr } from "@/lib/i18n/tr";
 
 /**
  * Retries the internal sales notification for one request.
@@ -22,6 +23,7 @@ export function ResendNotificationButton({
   /** Quieter styling for the operational section, where nothing is wrong. */
   subdued?: boolean;
 }) {
+  const tr = useTr();
   const router = useRouter();
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<{ sent: boolean; error: string | null } | null>(null);
@@ -44,7 +46,7 @@ export function ResendNotificationButton({
       };
 
       if (!payload.ok) {
-        setResult({ sent: false, error: payload.code ?? "Richiesta non riuscita" });
+        setResult({ sent: false, error: payload.code ?? tr("Richiesta non riuscita") });
         return;
       }
 
@@ -52,7 +54,7 @@ export function ResendNotificationButton({
       // Refresh so the banner and the "Email KO" badge reflect the new state.
       if (payload.sent) router.refresh();
     } catch {
-      setResult({ sent: false, error: "Rete non raggiungibile" });
+      setResult({ sent: false, error: tr("Rete non raggiungibile") });
     } finally {
       setSending(false);
     }
@@ -70,7 +72,7 @@ export function ResendNotificationButton({
             : "inline-flex min-h-11 items-center justify-center rounded-lg border border-state-danger/40 bg-white px-5 text-sm font-bold text-state-danger transition-colors hover:bg-state-danger hover:text-white disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-state-danger focus-visible:ring-offset-2"
         }
       >
-        {sending ? "Invio in corso…" : "Reinvia notifica email"}
+        {sending ? "Invio in corso…" : tr("Reinvia notifica email")}
       </button>
 
       {result && (
@@ -80,7 +82,7 @@ export function ResendNotificationButton({
             result.sent ? "text-state-success" : "text-state-danger"
           }`}
         >
-          {result.sent ? "Email inviata." : `Invio non riuscito: ${result.error ?? "motivo sconosciuto"}`}
+          {result.sent ? "Email inviata." : `Invio non riuscito: ${result.error ?? tr("motivo sconosciuto")}`}
         </p>
       )}
     </div>

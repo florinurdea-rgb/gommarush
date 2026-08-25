@@ -1,4 +1,5 @@
 "use client";
+import { useTr } from "@/lib/i18n/tr";
 
 /**
  * Replaces the old hard-stop duplicate error with an informational choice.
@@ -17,6 +18,7 @@ export function DuplicateImportDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const tr = useTr();
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
@@ -28,7 +30,7 @@ export function DuplicateImportDialog({
         <h3 id="duplicate-import-dialog-title" className="text-base font-bold text-ink">
           Ordine forse già esistente
         </h3>
-        <p className="mt-2 text-sm text-ink-soft">Sembra che lo stesso ordine sia già stato inserito.</p>
+        <p className="mt-2 text-sm text-ink-soft">{tr("Sembra che lo stesso ordine sia già stato inserito.")}</p>
         <p className="mt-1 text-sm italic text-ink-soft">
           Sembra che lo stesso ordine sia già stato inserito nel sistema.
         </p>
@@ -47,7 +49,7 @@ export function DuplicateImportDialog({
             disabled={busy}
             className="flex-1 rounded-xl bg-accent px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"
           >
-            {busy ? "Aggiunta…" : "Aggiungi di nuovo"}
+            {busy ? "Aggiunta…" : tr("Aggiungi di nuovo")}
           </button>
         </div>
       </div>

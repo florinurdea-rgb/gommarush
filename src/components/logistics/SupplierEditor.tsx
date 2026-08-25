@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/Button";
 import type { SupplierRow } from "@/lib/types/logistics";
+import { useTr } from "@/lib/i18n/tr";
 
 /**
  * Supplier profile editor — a flat form (no locations, unlike customers):
@@ -20,6 +21,7 @@ function nullable(value: string): string | null {
 }
 
 export function SupplierEditor({ supplier }: { supplier: SupplierRow }) {
+  const tr = useTr();
   const router = useRouter();
   const [fields, setFields] = useState({
     name: supplier.name,
@@ -56,13 +58,13 @@ export function SupplierEditor({ supplier }: { supplier: SupplierRow }) {
       });
       const payload = (await response.json()) as { ok: boolean; code?: string };
       if (payload.ok) {
-        setNotice("Fornitore salvato.");
+        setNotice(tr("Fornitore salvato."));
         router.refresh();
       } else {
-        setError(`Salvataggio non completato (${payload.code ?? "errore sconosciuto"}).`);
+        setError(`Salvataggio non completato (${payload.code ?? tr("errore sconosciuto")}).`);
       }
     } catch {
-      setError("Errore di rete. Riprova.");
+      setError(tr("Errore di rete. Riprova."));
     } finally {
       setBusy(false);
     }
@@ -82,7 +84,7 @@ export function SupplierEditor({ supplier }: { supplier: SupplierRow }) {
       )}
 
       <section className="rounded-xl border border-ink/10 bg-white p-5 shadow-card">
-        <h2 className="text-base font-bold text-ink">Dati fornitore</h2>
+        <h2 className="text-base font-bold text-ink">{tr("Dati fornitore")}</h2>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div>
             <label className={labelClass}>Denumire</label>
@@ -93,7 +95,7 @@ export function SupplierEditor({ supplier }: { supplier: SupplierRow }) {
             />
           </div>
           <div>
-            <label className={labelClass}>Ragione sociale</label>
+            <label className={labelClass}>{tr("Ragione sociale")}</label>
             <input
               className={inputClass}
               value={fields.legal_name}
@@ -109,7 +111,7 @@ export function SupplierEditor({ supplier }: { supplier: SupplierRow }) {
             />
           </div>
           <div>
-            <label className={labelClass}>Codice fiscale</label>
+            <label className={labelClass}>{tr("Codice fiscale")}</label>
             <input
               className={inputClass}
               value={fields.fiscal_code}
@@ -125,7 +127,7 @@ export function SupplierEditor({ supplier }: { supplier: SupplierRow }) {
             />
           </div>
           <div>
-            <label className={labelClass}>Email</label>
+            <label className={labelClass}>{tr("Email")}</label>
             <input
               className={inputClass}
               value={fields.email}
@@ -151,7 +153,7 @@ export function SupplierEditor({ supplier }: { supplier: SupplierRow }) {
         </div>
 
         <Button className="mt-4" disabled={busy} onClick={() => void save()}>
-          {busy ? "Salvataggio…" : "Salva"}
+          {busy ? "Salvataggio…" : tr("Salva")}
         </Button>
       </section>
     </div>

@@ -13,6 +13,7 @@ import {
 } from "@/lib/ddt-import/client-helpers";
 import type { ProcessedDocumentWithMatch } from "@/lib/ddt-import/client-helpers";
 import { DuplicateImportDialog } from "@/components/logistics/DuplicateImportDialog";
+import { useTr } from "@/lib/i18n/tr";
 
 /**
  * The multi-DDT import screen: upload -> processing summary -> one card per
@@ -51,6 +52,7 @@ interface AnalyzeResponse {
 }
 
 export function DdtImportFlow() {
+  const tr = useTr();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -79,12 +81,12 @@ export function DdtImportFlow() {
       const payload = (await response.json()) as AnalyzeResponse;
 
       if (!payload.ok) {
-        setError(`Analisi non riuscita (${payload.code ?? "errore sconosciuto"}).`);
+        setError(`Analisi non riuscita (${payload.code ?? tr("errore sconosciuto")}).`);
         return;
       }
       setResult(payload);
     } catch {
-      setError("Errore di rete. Riprova.");
+      setError(tr("Errore di rete. Riprova."));
     } finally {
       setBusy(false);
     }
@@ -187,9 +189,9 @@ export function DdtImportFlow() {
           onClick={() => inputRef.current?.click()}
           className="inline-flex h-12 items-center justify-center rounded-xl bg-accent px-6 font-semibold text-white disabled:opacity-50"
         >
-          {busy ? "Analisi…" : "Carica documento"}
+          {busy ? "Analisi…" : tr("Carica documento")}
         </button>
-        <p className="mt-2 text-sm text-ink-soft">PDF o immagine — può contenere uno o più DDT.</p>
+        <p className="mt-2 text-sm text-ink-soft">{tr("PDF o immagine — può contenere uno o più DDT.")}</p>
       </div>
 
       {error && (
@@ -200,7 +202,7 @@ export function DdtImportFlow() {
 
       {result?.unconfigured && (
         <div className="rounded-xl border border-state-warning/30 bg-state-warning-soft p-5">
-          <h2 className="text-base font-bold text-state-warning">Analisi automatica non configurata</h2>
+          <h2 className="text-base font-bold text-state-warning">{tr("Analisi automatica non configurata")}</h2>
           <p className="mt-2 text-sm text-ink">
             Il documento verrà salvato e il testo verrà letto direttamente dal file, dove possibile.
             I dati non leggibili vanno inseriti manualmente — il sistema non inventa valori.
@@ -224,12 +226,12 @@ export function DdtImportFlow() {
 
       {result?.summary && (
         <div className="rounded-xl border border-ink/10 bg-white p-5 shadow-card">
-          <h2 className="text-sm font-bold uppercase tracking-wide text-ink-soft">Analisi documento</h2>
+          <h2 className="text-sm font-bold uppercase tracking-wide text-ink-soft">{tr("Analisi documento")}</h2>
           <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
             <Stat label="Pagini" value={result.pageCount ?? "—"} />
-            <Stat label="DDT rilevati" value={result.summary.documentsFound} />
-            <Stat label="Pneumatici rilevati" value={result.summary.totalTyres} />
-            <Stat label="Da verificare" value={result.summary.needsReview} tone="warning" />
+            <Stat label={tr("DDT rilevati")} value={result.summary.documentsFound} />
+            <Stat label={tr("Pneumatici rilevati")} value={result.summary.totalTyres} />
+            <Stat label={tr("Da verificare")} value={result.summary.needsReview} tone="warning" />
           </div>
           <div className="mt-3 flex flex-wrap gap-3 text-sm text-ink-soft">
             <span>{result.summary.ready} pronti</span>
@@ -305,6 +307,7 @@ function DocumentCard({
   onConfirm: () => void;
   onRequestForceConfirm: () => void;
 }) {
+  const tr = useTr();
   const { extracted } = doc;
 
   return (
@@ -315,10 +318,10 @@ function DocumentCard({
             {STATUS_LABEL[doc.status]}
           </span>
           <div className="mt-1.5 font-mono text-sm font-bold text-ink">
-            {extracted.document.documentNumber ?? "DDT sconosciuto"}
+            {extracted.document.documentNumber ?? tr("DDT sconosciuto")}
           </div>
-          <div className="text-base font-bold text-ink">{extracted.customer.companyName ?? "Cliente sconosciuto"}</div>
-          <div className="text-xs text-ink-soft">{extracted.supplier.name ?? "Fornitore sconosciuto"}</div>
+          <div className="text-base font-bold text-ink">{extracted.customer.companyName ?? tr("Cliente sconosciuto")}</div>
+          <div className="text-xs text-ink-soft">{extracted.supplier.name ?? tr("Fornitore sconosciuto")}</div>
         </div>
 
         <div className="text-right">
@@ -356,7 +359,7 @@ function DocumentCard({
             {confirmed.droppedLineCount > 0 && (
               <div className="mt-1 text-xs font-semibold text-state-warning">
                 {confirmed.droppedLineCount === 1
-                  ? "1 riga non è stata aggiunta (quantità non leggibile) — inseriscila manualmente dalla pagina dell'ordine."
+                  ? tr("1 riga non è stata aggiunta (quantità non leggibile) — inseriscila manualmente dalla pagina dell'ordine.")
                   : `${confirmed.droppedLineCount} righe non sono state aggiunte (quantità non leggibile) — inseriscile manualmente dalla pagina dell'ordine.`}
               </div>
             )}
@@ -368,7 +371,7 @@ function DocumentCard({
             onClick={onConfirm}
             className="h-10 rounded-xl bg-accent px-4 text-sm font-bold text-white disabled:opacity-50"
           >
-            {confirming ? "Salvataggio…" : "Conferma l'ordine"}
+            {confirming ? "Salvataggio…" : tr("Conferma l'ordine")}
           </button>
         ) : canForceConfirm ? (
           <>
@@ -378,12 +381,12 @@ function DocumentCard({
               onClick={onRequestForceConfirm}
               className="h-10 rounded-xl border border-ink/15 bg-white px-4 text-sm font-bold text-ink hover:bg-surface-soft disabled:opacity-50"
             >
-              {confirming ? "Salvataggio…" : "Aggiungi di nuovo"}
+              {confirming ? "Salvataggio…" : tr("Aggiungi di nuovo")}
             </button>
-            <span className="text-xs text-ink-soft">Sembra che lo stesso ordine sia già stato inserito.</span>
+            <span className="text-xs text-ink-soft">{tr("Sembra che lo stesso ordine sia già stato inserito.")}</span>
           </>
         ) : (
-          <span className="text-xs text-ink-soft">Inserisci manualmente dalla pagina Nuovo ordine.</span>
+          <span className="text-xs text-ink-soft">{tr("Inserisci manualmente dalla pagina Nuovo ordine.")}</span>
         )}
         {error && <span className="text-xs font-semibold text-state-danger">Eroare: {error}</span>}
       </div>

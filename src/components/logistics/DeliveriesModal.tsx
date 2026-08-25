@@ -6,6 +6,7 @@ import { formatOrderNumber } from "@/lib/logistics/order-number";
 import { useOps } from "@/lib/i18n/ops";
 import { PROFIT_PER_DELIVERED_TYRE_EUR } from "@/lib/logistics/summary-constants";
 import type { DeliveryRow } from "@/lib/server/summary";
+import { useTr } from "@/lib/i18n/tr";
 
 function formatDateTime(iso: string): string {
   const date = new Date(iso);
@@ -34,6 +35,7 @@ export function DeliveriesModal({
   periodLabel: string;
   onClose: () => void;
 }) {
+  const tr = useTr();
   const ops = useOps();
   const [search, setSearch] = useState("");
   const [supplierFilter, setSupplierFilter] = useState("all");
@@ -85,7 +87,7 @@ export function DeliveriesModal({
       )
       .join("");
 
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>GommaRush — Consegne</title>
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>{tr("GommaRush — Consegne")}</title>
       <style>
         body { font-family: -apple-system, sans-serif; color: #152238; padding: 24px; }
         h1 { font-size: 20px; margin: 0 0 4px; }
@@ -96,15 +98,15 @@ export function DeliveriesModal({
         th, td { border-bottom: 1px solid #e2e8f0; padding: 6px 8px; text-align: left; }
         th { text-transform: uppercase; font-size: 10px; color: #4A5568; }
       </style></head><body>
-      <h1>GommaRush — Consegne</h1>
+      <h1>{tr("GommaRush — Consegne")}</h1>
       <p class="period">Periodo: ${escapeHtml(periodLabel)}</p>
       <div class="summary">
         <div>Comenzi<strong>${filtered.length}</strong></div>
-        <div>Pneumatici<strong>${totalTyres}</strong></div>
+        <div>{tr("Pneumatici")}<strong>${totalTyres}</strong></div>
         <div>Profit<strong>€${totalProfit.toLocaleString("ro-RO")}</strong></div>
       </div>
       <table>
-        <thead><tr><th>Data</th><th>Ordine</th><th>Client</th><th>Supplier</th><th>Veicolo</th><th>Nr. pneumatici</th><th>Status</th></tr></thead>
+        <thead><tr><th>{tr("Data")}</th><th>{tr("Ordine")}</th><th>Client</th><th>Supplier</th><th>{tr("Veicolo")}</th><th>{tr("Nr. pneumatici")}</th><th>Status</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
       </body></html>`;
@@ -118,7 +120,7 @@ export function DeliveriesModal({
   }
 
   return (
-    <Modal onClose={onClose} size="xl" label="Consegne">
+    <Modal onClose={onClose} size="xl" label={tr("Consegne")}>
       <ModalHeader title={`Consegne — ${periodLabel}`} onClose={onClose} />
       <div className="p-6">
         <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -126,7 +128,7 @@ export function DeliveriesModal({
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Cerca ordine / cliente"
+            placeholder={tr("Cerca ordine / cliente")}
             className="h-10 flex-1 min-w-[12rem] rounded-lg border border-ink/15 px-3 text-sm text-ink outline-none focus:border-accent"
           />
           {supplierOptions.length > 1 && (
@@ -135,7 +137,7 @@ export function DeliveriesModal({
               onChange={(event) => setSupplierFilter(event.target.value)}
               className="h-10 rounded-lg border border-ink/15 px-2 text-sm text-ink"
             >
-              <option value="all">Tutti i fornitori</option>
+              <option value="all">{tr("Tutti i fornitori")}</option>
               {supplierOptions.map((name) => (
                 <option key={name} value={name}>
                   {name}
@@ -149,7 +151,7 @@ export function DeliveriesModal({
               onChange={(event) => setVehicleFilter(event.target.value)}
               className="h-10 rounded-lg border border-ink/15 px-2 text-sm text-ink"
             >
-              <option value="all">Tutti i veicoli</option>
+              <option value="all">{tr("Tutti i veicoli")}</option>
               {vehicleOptions.map((name) => (
                 <option key={name} value={name}>
                   {name}
@@ -167,18 +169,18 @@ export function DeliveriesModal({
         </div>
 
         {filtered.length === 0 ? (
-          <p className="py-10 text-center text-sm text-ink-soft">Nessuna consegna nel periodo selezionato.</p>
+          <p className="py-10 text-center text-sm text-ink-soft">{tr("Nessuna consegna nel periodo selezionato.")}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-ink/10 text-left text-xs uppercase text-ink-soft">
-                  <th className="py-2 pr-3">Data</th>
-                  <th className="py-2 pr-3">Ordine</th>
+                  <th className="py-2 pr-3">{tr("Data")}</th>
+                  <th className="py-2 pr-3">{tr("Ordine")}</th>
                   <th className="py-2 pr-3">Client</th>
                   <th className="py-2 pr-3">Supplier</th>
-                  <th className="py-2 pr-3">Veicolo</th>
-                  <th className="py-2 pr-3 text-right">Pneumatici</th>
+                  <th className="py-2 pr-3">{tr("Veicolo")}</th>
+                  <th className="py-2 pr-3 text-right">{tr("Pneumatici")}</th>
                   <th className="py-2">Status</th>
                 </tr>
               </thead>

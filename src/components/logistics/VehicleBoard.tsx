@@ -20,6 +20,7 @@ import { PickupIcon } from "@/components/logistics/SummaryIcons";
 import type { RoutableOrder, RoutableVehicle } from "@/lib/logistics/route-suggestion";
 import type { OrderListRow } from "@/lib/server/orders";
 import type { VehicleRow } from "@/lib/types/logistics";
+import { useTr } from "@/lib/i18n/tr";
 
 /**
  * "Consegne" — the day-scoped, high-density dispatch board: orders grouped
@@ -137,6 +138,7 @@ export function VehicleBoard({
   vehicles: VehicleRow[];
   depotLocation: { lat: number; lng: number } | null;
 }) {
+  const tr = useTr();
   const router = useRouter();
   const { showToast } = useToast();
   const [columnsByKey, setColumnsByKey] = useState<Record<string, OrderListRow[]>>(() =>
@@ -200,7 +202,7 @@ export function VehicleBoard({
           );
         }
       } catch {
-        showToast("Errore di rete. Non è stato possibile salvare la modifica.", "error");
+        showToast(tr("Errore di rete. Non è stato possibile salvare la modifica."), "error");
       } finally {
         router.refresh();
       }
@@ -263,17 +265,17 @@ export function VehicleBoard({
   function handleAssignRecommended(order: OrderListRow, fromKey: string) {
     const vehicles = routableVehicles();
     if (vehicles.length === 0) {
-      showToast("Nessun veicolo disponibile per il suggerimento.", "error");
+      showToast(tr("Nessun veicolo disponibile per il suggerimento."), "error");
       return;
     }
     const routableOrder: RoutableOrder = { id: order.id, city: order.customer_city, unitCount: order.progress.total };
     const suggestedVehicleId = suggestRouteForOrder(routableOrder, vehicles);
     if (!suggestedVehicleId) {
-      showToast("Nessun veicolo disponibile per il suggerimento.", "error");
+      showToast(tr("Nessun veicolo disponibile per il suggerimento."), "error");
       return;
     }
     if (suggestedVehicleId === fromKey) {
-      showToast("L'ordine è già sulla rotta consigliata.", "info");
+      showToast(tr("L'ordine è già sulla rotta consigliata."), "info");
       return;
     }
     moveOrderToColumn(order, fromKey, suggestedVehicleId);
@@ -282,12 +284,12 @@ export function VehicleBoard({
   function handleOptimizeRoutes() {
     const unassignedOrders = columnsByKey["unassigned"] ?? [];
     if (unassignedOrders.length === 0) {
-      showToast("Nessun ordine non assegnato.", "info");
+      showToast(tr("Nessun ordine non assegnato."), "info");
       return;
     }
     const vehicles = routableVehicles();
     if (vehicles.length === 0) {
-      showToast("Nessun veicolo disponibile per il suggerimento.", "error");
+      showToast(tr("Nessun veicolo disponibile per il suggerimento."), "error");
       return;
     }
 
@@ -298,7 +300,7 @@ export function VehicleBoard({
     }));
     const assignments = suggestRouteAssignments(routableOrders, vehicles);
     if (assignments.length === 0) {
-      showToast("Nessun suggerimento disponibile.", "info");
+      showToast(tr("Nessun suggerimento disponibile."), "info");
       return;
     }
 
@@ -482,7 +484,7 @@ export function VehicleBoard({
         }}
         className={`min-h-16 flex-1 space-y-1.5 overflow-y-auto rounded-lg p-1.5 transition-colors ${isOver ? "bg-accent-light/50" : ""}`}
       >
-        {orders.length === 0 && <p className="py-6 text-center text-xs text-ink-soft">Nessun ordine</p>}
+        {orders.length === 0 && <p className="py-6 text-center text-xs text-ink-soft">{tr("Nessun ordine")}</p>}
         {orders.map((order) => renderCard(order, column.key))}
       </div>
     );
@@ -531,7 +533,7 @@ export function VehicleBoard({
   }
 
   return (
-    <section aria-label="Consegne">
+    <section aria-label={tr("Consegne")}>
       {/* ------------------------------------------------- compact status strip */}
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-ink/10 bg-white px-3 py-2">
         <span className="text-xs font-semibold text-ink-soft">
@@ -595,11 +597,11 @@ export function VehicleBoard({
       {/* ------------------------------------------------------- date + CTA */}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-1.5">
-          <span className="text-sm font-semibold text-ink-soft">Consegne per:</span>
+          <span className="text-sm font-semibold text-ink-soft">{tr("Consegne per:")}</span>
           <button
             type="button"
             onClick={() => setSelectedDate((current) => addDays(current, -1))}
-            aria-label="Giorno precedente"
+            aria-label={tr("Giorno precedente")}
             className="flex h-9 w-9 items-center justify-center rounded-lg border border-ink/15 bg-white text-ink hover:bg-surface-soft"
           >
             ‹
@@ -613,7 +615,7 @@ export function VehicleBoard({
           <button
             type="button"
             onClick={() => setSelectedDate((current) => addDays(current, 1))}
-            aria-label="Giorno successivo"
+            aria-label={tr("Giorno successivo")}
             className="flex h-9 w-9 items-center justify-center rounded-lg border border-ink/15 bg-white text-ink hover:bg-surface-soft"
           >
             ›
@@ -647,7 +649,7 @@ export function VehicleBoard({
           type="search"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Cerca cliente / ordine / indirizzo / fornitore"
+          placeholder={tr("Cerca cliente / ordine / indirizzo / fornitore")}
           className="h-9 w-full rounded-lg border border-ink/15 bg-white px-3 text-sm text-ink outline-none focus:border-accent sm:max-w-[220px]"
         />
 
@@ -656,8 +658,8 @@ export function VehicleBoard({
           onChange={(event) => setQuickFilter(event.target.value as QuickFilter)}
           className="h-9 rounded-lg border border-ink/15 bg-white px-2 text-xs font-semibold text-ink-soft"
         >
-          <option value="all">Tutti gli stati</option>
-          <option value="unassigned">Non assegnati</option>
+          <option value="all">{tr("Tutti gli stati")}</option>
+          <option value="unassigned">{tr("Non assegnati")}</option>
           {OPERATIONAL_BUCKETS.map((bucket) => (
             <option key={bucket} value={bucket}>
               {operationalBucketMeta(bucket).label}
@@ -671,7 +673,7 @@ export function VehicleBoard({
             onChange={(event) => setSupplierFilter(event.target.value)}
             className="h-9 rounded-lg border border-ink/15 bg-white px-2 text-xs font-semibold text-ink-soft"
           >
-            <option value="all">Tutti i fornitori</option>
+            <option value="all">{tr("Tutti i fornitori")}</option>
             {supplierOptions.map((name) => (
               <option key={name} value={name}>
                 {name}

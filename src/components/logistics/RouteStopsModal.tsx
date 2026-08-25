@@ -6,6 +6,7 @@ import { Modal, ModalHeader } from "@/components/ui/Modal";
 import { formatOrderNumber } from "@/lib/logistics/order-number";
 import type { OrderListRow } from "@/lib/server/orders";
 import type { Map as LeafletMap } from "leaflet";
+import { useTr } from "@/lib/i18n/tr";
 
 /**
  * "Mappa" — the stop points for one vehicle's route, in delivery order,
@@ -30,6 +31,7 @@ export function RouteStopsModal({
   depotLocation: { lat: number; lng: number } | null;
   onClose: () => void;
 }) {
+  const tr = useTr();
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const [points, setPoints] = useState<Map<string, { lat: number; lng: number } | null> | null>(null);
@@ -65,7 +67,7 @@ export function RouteStopsModal({
       .then((payload: { ok: boolean; points?: { orderId: string; lat: number | null; lng: number | null }[] }) => {
         if (cancelled) return;
         if (!payload.ok || !payload.points) {
-          setError("Non è stato possibile localizzare gli indirizzi.");
+          setError(tr("Non è stato possibile localizzare gli indirizzi."));
           return;
         }
         const map = new Map<string, { lat: number; lng: number } | null>();
@@ -75,7 +77,7 @@ export function RouteStopsModal({
         setPoints(map);
       })
       .catch(() => {
-        if (!cancelled) setError("Errore di rete durante la localizzazione degli indirizzi.");
+        if (!cancelled) setError(tr("Errore di rete durante la localizzazione degli indirizzi."));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -132,7 +134,7 @@ export function RouteStopsModal({
         });
         L.marker([depotLocation.lat, depotLocation.lng], { icon: depotIcon })
           .addTo(map)
-          .bindPopup("<strong>Partenza — Magazzino GommaRush</strong>");
+          .bindPopup(`<strong>${tr("Partenza — Magazzino GommaRush")}</strong>`);
       }
 
       for (const entry of located) {
@@ -167,10 +169,10 @@ export function RouteStopsModal({
       <ModalHeader title={`Puncte de oprire — ${vehicleName}`} onClose={onClose} />
       <div className="p-6">
         {orders.length === 0 && !depotLocation ? (
-          <p className="py-6 text-center text-sm text-ink-soft">Nessun ordine su questo veicolo.</p>
+          <p className="py-6 text-center text-sm text-ink-soft">{tr("Nessun ordine su questo veicolo.")}</p>
         ) : (
           <>
-            {loading && <p className="mb-3 text-sm text-ink-soft">Localizzazione degli indirizzi…</p>}
+            {loading && <p className="mb-3 text-sm text-ink-soft">{tr("Localizzazione degli indirizzi…")}</p>}
             {error && (
               <p role="alert" className="mb-3 rounded-lg bg-state-danger-soft px-3 py-2 text-sm text-state-danger">
                 {error}
@@ -197,7 +199,7 @@ export function RouteStopsModal({
                     </svg>
                   </span>
                   <div className="min-w-0">
-                    <div className="text-sm font-bold text-ink">Partenza — Magazzino GommaRush</div>
+                    <div className="text-sm font-bold text-ink">{tr("Partenza — Magazzino GommaRush")}</div>
                     <div className="mt-0.5 text-xs text-ink-soft">
                       {depotLocation.lat.toFixed(6)}, {depotLocation.lng.toFixed(6)}
                     </div>

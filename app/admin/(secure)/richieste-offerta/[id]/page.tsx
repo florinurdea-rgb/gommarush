@@ -8,6 +8,7 @@ import {
 import { QuoteRequestActions } from "@/components/quote/QuoteRequestActions";
 import { ResendNotificationButton } from "@/components/quote/ResendNotificationButton";
 import { describeEmailConfig } from "@/lib/email/send-quote-request";
+import { getTr } from "@/lib/i18n/tr-server";
 import {
   DELIVERY_LABELS,
   SEASON_LABELS,
@@ -19,15 +20,17 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 function describeProduct(item: QuoteRequestItemRow): string {
+  const tr = getTr();
   if (item.product_type === "tyre") return "Pneumatico";
-  return item.description?.trim() || "Altro prodotto";
+  return item.description?.trim() || tr("Altro prodotto");
 }
 
 function describePreference(item: QuoteRequestItemRow): string {
+  const tr = getTr();
   if (item.preference_type === "specific_brand") {
-    return item.preferred_brand?.trim() || "Marca specifica";
+    return item.preferred_brand?.trim() || tr("Marca specifica");
   }
-  return "Miglior prezzo";
+  return tr("Miglior prezzo");
 }
 
 function formatTime(iso: string | null): string {
@@ -47,6 +50,7 @@ function formatTime(iso: string | null): string {
  * so an unauthenticated visitor never reaches it.
  */
 export default async function QuoteRequestDetailPage({ params }: { params: { id: string } }) {
+  const tr = getTr();
   const detail = await getQuoteRequest(params.id, { withEvents: true });
   if (!detail) notFound();
 
@@ -80,8 +84,8 @@ export default async function QuoteRequestDetailPage({ params }: { params: { id:
             }`}
           >
             {notificationFailed
-              ? "La notifica email interna non è stata inviata."
-              : "La notifica email interna non è ancora partita."}
+              ? tr("La notifica email interna non è stata inviata.")
+              : tr("La notifica email interna non è ancora partita.")}
           </p>
           <p className="mt-1 text-sm text-ink">
             La richiesta è salvata correttamente — solo l&rsquo;email di avviso non è partita.
@@ -100,25 +104,25 @@ export default async function QuoteRequestDetailPage({ params }: { params: { id:
               only the From/To that every sent mail already carries. */}
           <dl className="mt-3 grid gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
             <div className="flex gap-2">
-              <dt className="w-20 flex-none text-ink-soft">Chiave API</dt>
+              <dt className="w-20 flex-none text-ink-soft">{tr("Chiave API")}</dt>
               <dd className="min-w-0 font-semibold text-ink">
                 {!emailConfig.apiKeyPresent
-                  ? "non impostata (RESEND_API_KEY)"
+                  ? tr("non impostata (RESEND_API_KEY)")
                   : emailConfig.apiKeyLooksValid
-                    ? "impostata"
-                    : "impostata ma non sembra una chiave Resend (attesa: re_…)"}
+                    ? tr("impostata")
+                    : tr("impostata ma non sembra una chiave Resend (attesa: re_…)")}
               </dd>
             </div>
             <div className="flex gap-2">
-              <dt className="w-20 flex-none text-ink-soft">Mittente</dt>
+              <dt className="w-20 flex-none text-ink-soft">{tr("Mittente")}</dt>
               <dd className="min-w-0 break-all font-semibold text-ink">
-                {emailConfig.from ?? "non impostato (RESEND_FROM_EMAIL)"}
+                {emailConfig.from ?? tr("non impostato (RESEND_FROM_EMAIL)")}
               </dd>
             </div>
             <div className="flex gap-2">
-              <dt className="w-20 flex-none text-ink-soft">Destinatario</dt>
+              <dt className="w-20 flex-none text-ink-soft">{tr("Destinatario")}</dt>
               <dd className="min-w-0 break-all font-semibold text-ink">
-                {emailConfig.to ?? "non impostato (OFFER_NOTIFICATION_EMAIL)"}
+                {emailConfig.to ?? tr("non impostato (OFFER_NOTIFICATION_EMAIL)")}
               </dd>
             </div>
           </dl>
@@ -138,7 +142,7 @@ export default async function QuoteRequestDetailPage({ params }: { params: { id:
         <h2 className="text-base font-bold text-ink">{request.company_name}</h2>
         <dl className="mt-3 grid gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
           <div className="flex gap-2">
-            <dt className="w-24 flex-none text-ink-soft">Email</dt>
+            <dt className="w-24 flex-none text-ink-soft">{tr("Email")}</dt>
             <dd className="min-w-0 break-all">
               <a
                 href={`mailto:${request.contact_email}`}
@@ -164,17 +168,17 @@ export default async function QuoteRequestDetailPage({ params }: { params: { id:
             </div>
           )}
           <div className="flex gap-2">
-            <dt className="w-24 flex-none text-ink-soft">Ricevuta</dt>
+            <dt className="w-24 flex-none text-ink-soft">{tr("Ricevuta")}</dt>
             <dd>{formatTime(request.submitted_at ?? request.created_at)}</dd>
           </div>
           <div className="flex gap-2">
-            <dt className="w-24 flex-none text-ink-soft">Consegna</dt>
+            <dt className="w-24 flex-none text-ink-soft">{tr("Consegna")}</dt>
             <dd className="font-semibold">
               {request.delivery_preference ? DELIVERY_LABELS[request.delivery_preference] : "—"}
             </dd>
           </div>
           <div className="flex gap-2">
-            <dt className="w-24 flex-none text-ink-soft">Lingua</dt>
+            <dt className="w-24 flex-none text-ink-soft">{tr("Lingua")}</dt>
             <dd className="uppercase">{request.language}</dd>
           </div>
         </dl>
@@ -206,7 +210,7 @@ export default async function QuoteRequestDetailPage({ params }: { params: { id:
               <th scope="col" className="px-4 py-3 font-semibold">Indice</th>
               <th scope="col" className="px-4 py-3 font-semibold">Stagione</th>
               <th scope="col" className="px-4 py-3 font-semibold">Preferenza</th>
-              <th scope="col" className="px-4 py-3 font-semibold">Consegna</th>
+              <th scope="col" className="px-4 py-3 font-semibold">{tr("Consegna")}</th>
               <th scope="col" className="px-4 py-3 text-right font-semibold">Quantità</th>
             </tr>
           </thead>
@@ -262,11 +266,11 @@ export default async function QuoteRequestDetailPage({ params }: { params: { id:
       {/* ---- Operational detail, deliberately last and deliberately quiet.
           Sales needs the request; this is for whoever is debugging it. ---- */}
       <section className="mt-8 rounded-xl border border-ink/10 bg-surface-soft/50 p-4">
-        <h2 className="text-sm font-bold text-ink">Sistema</h2>
+        <h2 className="text-sm font-bold text-ink">{tr("Sistema")}</h2>
 
         <dl className="mt-3 grid gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
           <div className="flex items-center gap-2">
-            <dt className="w-28 flex-none text-ink-soft">Email interna</dt>
+            <dt className="w-28 flex-none text-ink-soft">{tr("Email interna")}</dt>
             <dd>
               <NotificationStatusBadge status={request.notification_status} />
             </dd>
@@ -285,7 +289,7 @@ export default async function QuoteRequestDetailPage({ params }: { params: { id:
           </div>
           {request.provider_message_id && (
             <div className="flex gap-2 sm:col-span-2">
-              <dt className="w-28 flex-none text-ink-soft">ID messaggio</dt>
+              <dt className="w-28 flex-none text-ink-soft">{tr("ID messaggio")}</dt>
               <dd className="min-w-0 break-all font-mono text-xs">{request.provider_message_id}</dd>
             </div>
           )}

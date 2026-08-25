@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/Toast";
+import { useTr } from "@/lib/i18n/tr";
 
 /**
  * The van lane header's "⋯" — Mappa / Rinomina / Elimina il veicolo
@@ -22,6 +23,7 @@ export function VehicleLaneMenu({
   orderCount: number;
   onOpenMap: () => void;
 }) {
+  const tr = useTr();
   const router = useRouter();
   const { showToast } = useToast();
   const [open, setOpen] = useState(false);
@@ -63,14 +65,14 @@ export function VehicleLaneMenu({
       });
       const payload = (await response.json()) as { ok: boolean };
       if (payload.ok) {
-        showToast("Veicolo rinominato.", "success");
+        showToast(tr("Veicolo rinominato."), "success");
         router.refresh();
         close();
       } else {
-        showToast("Rinomina non salvata.", "error");
+        showToast(tr("Rinomina non salvata."), "error");
       }
     } catch {
-      showToast("Errore di rete.", "error");
+      showToast(tr("Errore di rete."), "error");
     } finally {
       setBusy(false);
     }
@@ -84,17 +86,17 @@ export function VehicleLaneMenu({
       if (payload.ok) {
         showToast(
           payload.reassignedOrders
-            ? `${vehicleName} eliminato. ${payload.reassignedOrders} ${payload.reassignedOrders === 1 ? "ordine spostato" : "ordini spostati"} in Non assegnati.`
+            ? `${vehicleName} eliminato. ${payload.reassignedOrders} ${payload.reassignedOrders === 1 ? "ordine spostato" : tr("ordini spostati")} in Non assegnati.`
             : `${vehicleName} eliminato.`,
           "success"
         );
         router.refresh();
         close();
       } else {
-        showToast("Rimozione non salvata.", "error");
+        showToast(tr("Rimozione non salvata."), "error");
       }
     } catch {
-      showToast("Errore di rete.", "error");
+      showToast(tr("Errore di rete."), "error");
     } finally {
       setBusy(false);
     }
@@ -184,8 +186,8 @@ export function VehicleLaneMenu({
             <div className="px-3 py-2.5">
               {orderCount > 0 ? (
                 <p className="text-xs text-ink">
-                  {vehicleName} ha {orderCount} {orderCount === 1 ? "ordine assegnato" : "ordini assegnati"}.{" "}
-                  {orderCount === 1 ? "Verrà spostato" : "Verranno spostati"} in Non assegnati.
+                  {vehicleName} ha {orderCount} {orderCount === 1 ? "ordine assegnato" : tr("ordini assegnati")}.{" "}
+                  {orderCount === 1 ? "Verrà spostato" : tr("Verranno spostati")} in Non assegnati.
                 </p>
               ) : (
                 <p className="text-xs text-ink">Eliminare {vehicleName}?</p>
@@ -204,7 +206,7 @@ export function VehicleLaneMenu({
                   onClick={() => void submitRemove()}
                   className="flex-1 rounded-lg bg-state-danger px-2 py-1.5 text-xs font-bold text-white disabled:opacity-50"
                 >
-                  {busy ? "Rimozione…" : "Elimina"}
+                  {busy ? "Rimozione…" : tr("Elimina")}
                 </button>
               </div>
             </div>
