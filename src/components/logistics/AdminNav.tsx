@@ -33,6 +33,7 @@ const SECONDARY_NAV: NavItem[] = [
   { href: "/admin/customers", label: "Clienți" },
   { href: "/admin/suppliers", label: "Furnizori" },
   { href: "/admin/print-jobs", label: "Coadă printare" },
+  { href: "/admin/sistema", label: "Sistema" },
 ];
 
 function isActive(pathname: string, href: string): boolean {

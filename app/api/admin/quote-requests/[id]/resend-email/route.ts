@@ -4,7 +4,6 @@ import { getQuoteRequest } from "@/lib/server/quote-requests";
 import { notifyQuoteRequest } from "@/lib/server/quote-request-notify";
 import { describeEmailConfig } from "@/lib/email/send-quote-request";
 import { fail, ok, runAdminRoute } from "@/lib/server/route-helpers";
-import { logEvent } from "@/lib/logger";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,12 +31,10 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
     const existing = await getQuoteRequest(params.id);
     if (!existing) return fail(404, "NOT_FOUND");
 
-    logEvent("quote_request_email_retry_requested", {
-      requestId: params.id,
-      by: session.displayName,
+    const result = await notifyQuoteRequest(params.id, {
+      manual: true,
+      actor: session.displayName,
     });
-
-    const result = await notifyQuoteRequest(params.id);
     const config = describeEmailConfig();
 
     // A failed send is a successful API call that reports a failure: the
@@ -45,6 +42,7 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
     return ok({
       sent: result.sent,
       error: result.error,
+      attempts: result.attempts,
       config,
     });
   });

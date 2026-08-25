@@ -3,6 +3,7 @@ import type {
   PreferenceType,
   ProductType,
   QuoteItemInput,
+  Season,
 } from "@/lib/types/quote-request";
 import type { SiteCopy } from "@/lib/i18n/site-content";
 
@@ -23,6 +24,8 @@ export interface DraftItem {
   profile: string;
   rim: string;
   loadSpeedIndex: string;
+  /** "" means the customer has no preference — sent as null, never guessed. */
+  season: Season | "";
   description: string;
   quantity: number;
   preferenceType: PreferenceType;
@@ -43,6 +46,7 @@ export function newDraftItem(productType: ProductType = "tyre"): DraftItem {
     profile: "",
     rim: "",
     loadSpeedIndex: "",
+    season: "",
     description: "",
     // Tyres are almost always bought in pairs; anything else defaults to one.
     quantity: productType === "tyre" ? 2 : 1,
@@ -111,6 +115,7 @@ export function draftToPayload(item: DraftItem): QuoteItemInput {
     profile: isTyre ? Number(item.profile) : null,
     rim: isTyre ? Number(item.rim) : null,
     loadSpeedIndex: isTyre && trimmedIndex ? trimmedIndex : null,
+    season: isTyre && item.season ? item.season : null,
     quantity: Math.max(1, Math.trunc(item.quantity)),
     preferenceType: item.preferenceType,
     preferredBrand: usesBrand && trimmedBrand ? trimmedBrand : null,

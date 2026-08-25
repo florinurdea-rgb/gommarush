@@ -39,11 +39,15 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     }
 
     const buffer = await buildQuoteRequestWorkbook(detail);
-    const fileName = safeFileName(detail.request.company_name, detail.request.created_at);
+    const fileName = safeFileName(
+      detail.request.company_name,
+      detail.request.created_at,
+      detail.request.public_reference
+    );
 
     logEvent("quote_request_exported", {
       requestId: params.id,
-      requestNumber: detail.request.request_number,
+      reference: detail.request.public_reference,
     });
 
     // NextResponse's BodyInit doesn't accept a Node Buffer directly; a

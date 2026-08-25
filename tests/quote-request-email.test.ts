@@ -49,17 +49,25 @@ function detail(): QuoteRequestDetail {
   return {
     request: {
       id: "11111111-1111-4111-8111-111111111111",
-      request_number: "GR-1000",
+      public_reference: "GR-260825-0042",
       company_name: "Gomme Rossi SRL",
       contact_email: "acquisti@gommerossi.it",
       whatsapp: null,
+      notes: null,
       language: "it",
-      status: "new",
-      notification_email_sent: false,
-      notification_email_error: null,
-      notification_email_sent_at: null,
-      idempotency_key: "key-1",
+      status: "submitted",
+      delivery_preference: "24h",
+      notification_status: "pending",
+      notification_provider: null,
+      provider_message_id: null,
+      notification_attempts: 0,
+      last_notification_attempt_at: null,
+      notification_sent_at: null,
+      notification_delivered_at: null,
+      notification_failed_at: null,
+      last_notification_error: null,
       source: "web",
+      submitted_at: "2026-08-25T09:00:00.000Z",
       created_at: "2026-08-25T09:00:00.000Z",
       updated_at: "2026-08-25T09:00:00.000Z",
     },
@@ -73,6 +81,7 @@ function detail(): QuoteRequestDetail {
         profile: 55,
         rim: 16,
         load_speed_index: "91V",
+        season: "summer",
         quantity: 4,
         preference_type: "best_price",
         preferred_brand: null,
@@ -193,7 +202,7 @@ describe("sendQuoteRequestEmail", () => {
     // camelCase — the field name changed in resend v4, and getting it wrong
     // silently drops the reply-to rather than erroring.
     expect(payload.replyTo).toBe("acquisti@gommerossi.it");
-    expect(payload.subject).toContain("GR-1000");
+    expect(payload.subject).toContain("GR-260825-0042");
     expect(payload.subject).toContain("Gomme Rossi SRL");
     expect(payload.html).toContain("205/55 R16");
     expect(payload.text).toContain("205/55 R16");

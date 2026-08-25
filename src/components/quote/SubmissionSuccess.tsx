@@ -14,12 +14,12 @@ import { useLocale } from "@/components/site/LocaleProvider";
  * flow; there is no public route where a request id reveals customer data.
  */
 export function SubmissionSuccess({
-  requestNumber,
+  reference,
   email,
   whatsapp,
   onNewRequest,
 }: {
-  requestNumber: string;
+  reference: string;
   email: string;
   whatsapp: string | null;
   onNewRequest: () => void;
@@ -60,9 +60,9 @@ export function SubmissionSuccess({
 
       <div className="mt-6 inline-flex items-baseline gap-2 rounded-xl border border-ink/10 bg-surface-soft px-4 py-3">
         <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-          {copy.successRequestLabel}
+          {copy.successReferenceLabel}
         </span>
-        <span className="font-mono text-lg font-bold text-ink">{requestNumber}</span>
+        <span className="font-mono text-lg font-bold text-ink">{reference}</span>
       </div>
 
       <div className="mt-8 flex flex-col items-center gap-3">

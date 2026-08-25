@@ -130,6 +130,25 @@ export function QuoteItemEditor({
                 className={inputClass}
               />
             </Field>
+
+            {/* Optional, and "Indifferente" is the default: forcing a season
+                choice would make the customer guess at something the sales
+                team can decide better. */}
+            <Field label={`${copy.seasonLabel} · ${copy.optional}`} htmlFor={`${id}-season`}>
+              <select
+                id={`${id}-season`}
+                value={item.season}
+                onChange={(event) =>
+                  onChange({ season: event.target.value as DraftItem["season"] })
+                }
+                className={inputClass}
+              >
+                <option value="">{copy.seasonAny}</option>
+                <option value="summer">{copy.seasonSummer}</option>
+                <option value="winter">{copy.seasonWinter}</option>
+                <option value="all_season">{copy.seasonAllSeason}</option>
+              </select>
+            </Field>
           </>
         ) : (
           <Field

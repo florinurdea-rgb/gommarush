@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import type { QuoteRequestStatus } from "@/lib/types/quote-request";
+import { QUOTE_STATUS_LABELS, type QuoteRequestStatus } from "@/lib/types/quote-request";
 
 /**
  * Status transitions + Excel export for one request.
@@ -10,7 +10,38 @@ import type { QuoteRequestStatus } from "@/lib/types/quote-request";
  * Status is advanced explicitly by an operator — opening a request never
  * changes it on its own, so "Nuova" keeps meaning "nobody has picked this
  * up" rather than "nobody has glanced at it".
+ *
+ * The primary button offers only the NEXT step in the lifecycle, so the
+ * common path is one tap; a select alongside it can reach any state, because
+ * a sales process that cannot be corrected is a sales process people work
+ * around. Both go through the same server-validated endpoint.
+ *
+ * `status` comes from the server on every render, so if another admin moved
+ * the request while this page was open, the next refresh shows their change
+ * rather than this page's stale idea of it.
  */
+
+/** The single most likely next step for each state. */
+const NEXT_STATUS: Partial<Record<QuoteRequestStatus, QuoteRequestStatus>> = {
+  submitted: "reviewing",
+  reviewing: "quote_preparing",
+  quote_preparing: "quote_ready",
+  quote_ready: "sent",
+  sent: "accepted",
+};
+
+const ALL_STATUSES: QuoteRequestStatus[] = [
+  "submitted",
+  "reviewing",
+  "quote_preparing",
+  "quote_ready",
+  "sent",
+  "accepted",
+  "rejected",
+  "expired",
+  "archived",
+];
+
 export function QuoteRequestActions({
   requestId,
   status,
@@ -22,6 +53,8 @@ export function QuoteRequestActions({
   const [pending, setPending] = useState<QuoteRequestStatus | null>(null);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const nextStatus = NEXT_STATUS[status];
 
   async function changeStatus(next: QuoteRequestStatus) {
     if (pending) return;
@@ -94,27 +127,34 @@ export function QuoteRequestActions({
           {exporting ? "Generazione…" : "Apri in Excel"}
         </button>
 
-        {status === "new" && (
+        {nextStatus && (
           <button
             type="button"
-            onClick={() => void changeStatus("in_progress")}
+            onClick={() => void changeStatus(nextStatus)}
             disabled={pending !== null}
             className="inline-flex min-h-11 items-center justify-center rounded-lg border border-ink/15 px-5 text-sm font-semibold text-ink transition-colors hover:border-accent hover:text-accent disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
-            {pending === "in_progress" ? "Aggiornamento…" : "Segna in lavorazione"}
+            {pending === nextStatus
+              ? "Aggiornamento…"
+              : `Segna: ${QUOTE_STATUS_LABELS[nextStatus]}`}
           </button>
         )}
 
-        {status === "in_progress" && (
-          <button
-            type="button"
-            onClick={() => void changeStatus("offer_sent")}
+        <label className="inline-flex items-center gap-2 text-sm text-ink-soft">
+          <span className="sr-only">Cambia stato richiesta</span>
+          <select
+            value={status}
             disabled={pending !== null}
-            className="inline-flex min-h-11 items-center justify-center rounded-lg border border-ink/15 px-5 text-sm font-semibold text-ink transition-colors hover:border-accent hover:text-accent disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            onChange={(event) => void changeStatus(event.target.value as QuoteRequestStatus)}
+            className="min-h-11 rounded-lg border border-ink/15 bg-white px-3 text-sm font-semibold text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
           >
-            {pending === "offer_sent" ? "Aggiornamento…" : "Segna offerta inviata"}
-          </button>
-        )}
+            {ALL_STATUSES.map((value) => (
+              <option key={value} value={value}>
+                {QUOTE_STATUS_LABELS[value]}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {error && (

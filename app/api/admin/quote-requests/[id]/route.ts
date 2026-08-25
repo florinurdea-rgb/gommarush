@@ -17,7 +17,7 @@ const uuid = z.string().uuid();
  * not a client-side isAdmin flag.
  */
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-  return runAdminRoute(async () => {
+  return runAdminRoute(async (session) => {
     if (!uuid.safeParse(params.id).success) return fail(400, "VALIDATION_FAILED");
 
     const body = await readJsonBody(request);
@@ -29,7 +29,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     const existing = await getQuoteRequest(params.id);
     if (!existing) return fail(404, "NOT_FOUND");
 
-    await updateQuoteRequestStatus(params.id, parsed.data.status);
+    await updateQuoteRequestStatus(params.id, parsed.data.status, session.displayName);
     return ok({ id: params.id, status: parsed.data.status });
   });
 }

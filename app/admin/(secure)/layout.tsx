@@ -3,7 +3,7 @@ import { getAdminSession } from "@/lib/auth/admin-session";
 import { AdminShell } from "@/components/logistics/AdminShell";
 import { ToastProvider } from "@/components/ui/Toast";
 import { countOrdersToPrepare } from "@/lib/server/orders";
-import { countNewQuoteRequests } from "@/lib/server/quote-requests";
+import { countOpenQuoteRequests } from "@/lib/server/quote-requests";
 import { logError } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +31,7 @@ export default async function SecureAdminLayout({ children }: { children: React.
       logError("admin_layout_prepare_count_failed", error);
       return 0;
     }),
-    countNewQuoteRequests().catch((error) => {
+    countOpenQuoteRequests().catch((error) => {
       logError("admin_layout_quote_count_failed", error);
       return 0;
     }),

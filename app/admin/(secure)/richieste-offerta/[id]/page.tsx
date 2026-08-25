@@ -1,16 +1,22 @@
 import { notFound } from "next/navigation";
 import { PageHeading } from "@/components/logistics/AdminShell";
 import { getQuoteRequest } from "@/lib/server/quote-requests";
-import { QuoteRequestStatusBadge } from "@/components/quote/QuoteRequestStatusBadge";
+import {
+  NotificationStatusBadge,
+  QuoteRequestStatusBadge,
+} from "@/components/quote/QuoteRequestStatusBadge";
 import { QuoteRequestActions } from "@/components/quote/QuoteRequestActions";
 import { ResendNotificationButton } from "@/components/quote/ResendNotificationButton";
 import { describeEmailConfig } from "@/lib/email/send-quote-request";
-import { formatTyreSize, type QuoteRequestItemRow } from "@/lib/types/quote-request";
+import {
+  DELIVERY_LABELS,
+  SEASON_LABELS,
+  formatTyreSize,
+  type QuoteRequestItemRow,
+} from "@/lib/types/quote-request";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-const DELIVERY_LABEL: Record<string, string> = { "24h": "24 ore", "7d": "7 giorni" };
 
 function describeProduct(item: QuoteRequestItemRow): string {
   if (item.product_type === "tyre") return "Pneumatico";
@@ -24,6 +30,15 @@ function describePreference(item: QuoteRequestItemRow): string {
   return "Miglior prezzo";
 }
 
+function formatTime(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("it-IT", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Europe/Rome",
+  });
+}
+
 /**
  * Admin detail view for one quote request.
  *
@@ -32,39 +47,49 @@ function describePreference(item: QuoteRequestItemRow): string {
  * so an unauthenticated visitor never reaches it.
  */
 export default async function QuoteRequestDetailPage({ params }: { params: { id: string } }) {
-  const detail = await getQuoteRequest(params.id);
+  const detail = await getQuoteRequest(params.id, { withEvents: true });
   if (!detail) notFound();
 
-  const { request, items } = detail;
+  const { request, items, events = [] } = detail;
   // Read server-side; describeEmailConfig never returns a secret value.
   const emailConfig = describeEmailConfig();
-  const submitted = new Date(request.created_at).toLocaleString("it-IT", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Europe/Rome",
-  });
+  const notificationFailed = request.notification_status === "failed";
+  const notificationPending =
+    request.notification_status === "pending" || request.notification_status === "sending";
 
   return (
     <>
       <PageHeading
-        title={`Richiesta ${request.request_number}`}
+        title={request.public_reference}
         description={request.company_name}
         back
         action={<QuoteRequestStatusBadge status={request.status} size="md" />}
       />
 
-      {!request.notification_email_sent && (
-        <div className="mb-5 rounded-xl border border-state-danger/40 bg-state-danger-soft p-4">
-          <p className="text-sm font-bold text-state-danger">
-            La notifica email interna non è stata inviata.
+      {(notificationFailed || notificationPending) && (
+        <div
+          className={`mb-5 rounded-xl border p-4 ${
+            notificationFailed
+              ? "border-state-danger/40 bg-state-danger-soft"
+              : "border-ink/15 bg-surface-soft"
+          }`}
+        >
+          <p
+            className={`text-sm font-bold ${
+              notificationFailed ? "text-state-danger" : "text-ink"
+            }`}
+          >
+            {notificationFailed
+              ? "La notifica email interna non è stata inviata."
+              : "La notifica email interna non è ancora partita."}
           </p>
           <p className="mt-1 text-sm text-ink">
             La richiesta è salvata correttamente — solo l&rsquo;email di avviso non è partita.
           </p>
 
-          {request.notification_email_error && (
+          {request.last_notification_error && (
             <p className="mt-2 break-words rounded-lg bg-white/70 px-3 py-2 font-mono text-xs text-ink">
-              {request.notification_email_error}
+              {request.last_notification_error}
             </p>
           )}
 
@@ -100,8 +125,8 @@ export default async function QuoteRequestDetailPage({ params }: { params: { id:
 
           {emailConfig.missing.length > 0 && (
             <p className="mt-2 text-xs text-ink">
-              Da impostare su Vercel (Settings → Environment Variables), poi
-              rideploy: <span className="font-mono font-bold">{emailConfig.missing.join(", ")}</span>
+              Da impostare su Vercel (Settings → Environment Variables), poi rideploya:{" "}
+              <span className="font-mono font-bold">{emailConfig.missing.join(", ")}</span>
             </p>
           )}
 
@@ -115,7 +140,10 @@ export default async function QuoteRequestDetailPage({ params }: { params: { id:
           <div className="flex gap-2">
             <dt className="w-24 flex-none text-ink-soft">Email</dt>
             <dd className="min-w-0 break-all">
-              <a href={`mailto:${request.contact_email}`} className="font-semibold text-accent hover:underline">
+              <a
+                href={`mailto:${request.contact_email}`}
+                className="font-semibold text-accent hover:underline"
+              >
                 {request.contact_email}
               </a>
             </dd>
@@ -136,14 +164,29 @@ export default async function QuoteRequestDetailPage({ params }: { params: { id:
             </div>
           )}
           <div className="flex gap-2">
-            <dt className="w-24 flex-none text-ink-soft">Data</dt>
-            <dd>{submitted}</dd>
+            <dt className="w-24 flex-none text-ink-soft">Ricevuta</dt>
+            <dd>{formatTime(request.submitted_at ?? request.created_at)}</dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="w-24 flex-none text-ink-soft">Consegna</dt>
+            <dd className="font-semibold">
+              {request.delivery_preference ? DELIVERY_LABELS[request.delivery_preference] : "—"}
+            </dd>
           </div>
           <div className="flex gap-2">
             <dt className="w-24 flex-none text-ink-soft">Lingua</dt>
             <dd className="uppercase">{request.language}</dd>
           </div>
         </dl>
+
+        {request.notes && (
+          <div className="mt-4 border-t border-ink/5 pt-3">
+            <div className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+              Note del cliente
+            </div>
+            <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{request.notes}</p>
+          </div>
+        )}
       </div>
 
       <div className="mb-6">
@@ -161,6 +204,7 @@ export default async function QuoteRequestDetailPage({ params }: { params: { id:
               <th scope="col" className="px-4 py-3 font-semibold">Prodotto</th>
               <th scope="col" className="px-4 py-3 font-semibold">Dimensione</th>
               <th scope="col" className="px-4 py-3 font-semibold">Indice</th>
+              <th scope="col" className="px-4 py-3 font-semibold">Stagione</th>
               <th scope="col" className="px-4 py-3 font-semibold">Preferenza</th>
               <th scope="col" className="px-4 py-3 font-semibold">Consegna</th>
               <th scope="col" className="px-4 py-3 text-right font-semibold">Quantità</th>
@@ -174,11 +218,16 @@ export default async function QuoteRequestDetailPage({ params }: { params: { id:
                   {formatTyreSize(item.width, item.profile, item.rim) ?? "—"}
                 </td>
                 <td className="px-4 py-3 font-mono text-ink-soft">{item.load_speed_index ?? "—"}</td>
+                <td className="px-4 py-3 text-ink-soft">
+                  {item.season ? SEASON_LABELS[item.season] : "—"}
+                </td>
                 <td className="px-4 py-3 text-ink-soft">{describePreference(item)}</td>
                 <td className="px-4 py-3 text-ink-soft">
-                  {DELIVERY_LABEL[item.delivery_speed] ?? item.delivery_speed}
+                  {DELIVERY_LABELS[item.delivery_speed] ?? item.delivery_speed}
                 </td>
-                <td className="px-4 py-3 text-right font-bold tabular-nums text-ink">{item.quantity}</td>
+                <td className="px-4 py-3 text-right font-bold tabular-nums text-ink">
+                  {item.quantity}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -202,11 +251,69 @@ export default async function QuoteRequestDetailPage({ params }: { params: { id:
               </div>
             </div>
             <div className="mt-2 border-t border-ink/5 pt-2 text-xs text-ink-soft">
-              {describePreference(item)} · {DELIVERY_LABEL[item.delivery_speed] ?? item.delivery_speed}
+              {item.season ? `${SEASON_LABELS[item.season]} · ` : ""}
+              {describePreference(item)} ·{" "}
+              {DELIVERY_LABELS[item.delivery_speed] ?? item.delivery_speed}
             </div>
           </li>
         ))}
       </ul>
+
+      {/* ---- Operational detail, deliberately last and deliberately quiet.
+          Sales needs the request; this is for whoever is debugging it. ---- */}
+      <section className="mt-8 rounded-xl border border-ink/10 bg-surface-soft/50 p-4">
+        <h2 className="text-sm font-bold text-ink">Sistema</h2>
+
+        <dl className="mt-3 grid gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
+          <div className="flex items-center gap-2">
+            <dt className="w-28 flex-none text-ink-soft">Email interna</dt>
+            <dd>
+              <NotificationStatusBadge status={request.notification_status} />
+            </dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="w-28 flex-none text-ink-soft">Tentativi</dt>
+            <dd className="tabular-nums">{request.notification_attempts}</dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="w-28 flex-none text-ink-soft">Inviata</dt>
+            <dd>{formatTime(request.notification_sent_at)}</dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="w-28 flex-none text-ink-soft">Consegnata</dt>
+            <dd>{formatTime(request.notification_delivered_at)}</dd>
+          </div>
+          {request.provider_message_id && (
+            <div className="flex gap-2 sm:col-span-2">
+              <dt className="w-28 flex-none text-ink-soft">ID messaggio</dt>
+              <dd className="min-w-0 break-all font-mono text-xs">{request.provider_message_id}</dd>
+            </div>
+          )}
+        </dl>
+
+        {/* Retry stays available even when the current state is success —
+            re-sending a notification is safe and never touches the request. */}
+        {!notificationFailed && !notificationPending && (
+          <ResendNotificationButton requestId={request.id} subdued />
+        )}
+
+        {events.length > 0 && (
+          <details className="mt-4">
+            <summary className="cursor-pointer text-sm font-semibold text-ink-soft hover:text-ink">
+              Cronologia eventi ({events.length})
+            </summary>
+            <ul className="mt-2 space-y-1 text-xs text-ink-soft">
+              {events.map((event) => (
+                <li key={event.id} className="flex flex-wrap gap-x-3 tabular-nums">
+                  <span className="text-ink-soft/70">{formatTime(event.created_at)}</span>
+                  <span className="font-semibold text-ink">{event.event_type}</span>
+                  {event.duration_ms != null && <span>{event.duration_ms} ms</span>}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </section>
     </>
   );
 }

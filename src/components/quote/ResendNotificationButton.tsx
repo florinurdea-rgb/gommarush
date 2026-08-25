@@ -14,7 +14,14 @@ import { useState } from "react";
  * string ("domain is not verified", "API key is invalid") is the difference
  * between a five-minute fix and an afternoon of guessing.
  */
-export function ResendNotificationButton({ requestId }: { requestId: string }) {
+export function ResendNotificationButton({
+  requestId,
+  subdued = false,
+}: {
+  requestId: string;
+  /** Quieter styling for the operational section, where nothing is wrong. */
+  subdued?: boolean;
+}) {
   const router = useRouter();
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<{ sent: boolean; error: string | null } | null>(null);
@@ -32,6 +39,7 @@ export function ResendNotificationButton({ requestId }: { requestId: string }) {
         ok: boolean;
         sent?: boolean;
         error?: string | null;
+        attempts?: number | null;
         code?: string;
       };
 
@@ -56,9 +64,13 @@ export function ResendNotificationButton({ requestId }: { requestId: string }) {
         type="button"
         onClick={() => void resend()}
         disabled={sending}
-        className="inline-flex min-h-11 items-center justify-center rounded-lg border border-state-danger/40 bg-white px-5 text-sm font-bold text-state-danger transition-colors hover:bg-state-danger hover:text-white disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-state-danger focus-visible:ring-offset-2"
+        className={
+          subdued
+            ? "inline-flex min-h-11 items-center justify-center rounded-lg border border-ink/15 bg-white px-4 text-sm font-semibold text-ink-soft transition-colors hover:border-accent hover:text-accent disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            : "inline-flex min-h-11 items-center justify-center rounded-lg border border-state-danger/40 bg-white px-5 text-sm font-bold text-state-danger transition-colors hover:bg-state-danger hover:text-white disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-state-danger focus-visible:ring-offset-2"
+        }
       >
-        {sending ? "Invio in corso…" : "Riprova invio email"}
+        {sending ? "Invio in corso…" : "Reinvia notifica email"}
       </button>
 
       {result && (

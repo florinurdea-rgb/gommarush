@@ -1,7 +1,13 @@
 import "server-only";
 import { Resend } from "resend";
 import { logError } from "@/lib/logger";
-import { formatTyreSize, type QuoteRequestItemRow, type QuoteRequestRow } from "@/lib/types/quote-request";
+import {
+  DELIVERY_LABELS,
+  SEASON_LABELS,
+  formatTyreSize,
+  type QuoteRequestItemRow,
+  type QuoteRequestRow,
+} from "@/lib/types/quote-request";
 
 /**
  * Internal sales notification for a new quote request.
@@ -108,12 +114,11 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
-const DELIVERY_LABEL: Record<string, string> = { "24h": "24 ore", "7d": "7 giorni" };
-
 function describeItem(item: QuoteRequestItemRow): {
   product: string;
   size: string;
   index: string;
+  season: string;
   preference: string;
   delivery: string;
   quantity: string;
@@ -128,8 +133,9 @@ function describeItem(item: QuoteRequestItemRow): {
     product: isTyre ? "Pneumatico" : item.description ?? "Altro prodotto",
     size: formatTyreSize(item.width, item.profile, item.rim) ?? "—",
     index: item.load_speed_index ?? "—",
+    season: item.season ? SEASON_LABELS[item.season] : "—",
     preference,
-    delivery: DELIVERY_LABEL[item.delivery_speed] ?? item.delivery_speed,
+    delivery: DELIVERY_LABELS[item.delivery_speed] ?? item.delivery_speed,
     quantity: String(item.quantity),
   };
 }
@@ -152,6 +158,7 @@ function buildHtml(
         <td style="padding:8px 10px;border-bottom:1px solid #e5e7eb">${escapeHtml(described.product)}</td>
         <td style="padding:8px 10px;border-bottom:1px solid #e5e7eb">${escapeHtml(described.size)}</td>
         <td style="padding:8px 10px;border-bottom:1px solid #e5e7eb">${escapeHtml(described.index)}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #e5e7eb">${escapeHtml(described.season)}</td>
         <td style="padding:8px 10px;border-bottom:1px solid #e5e7eb">${escapeHtml(described.preference)}</td>
         <td style="padding:8px 10px;border-bottom:1px solid #e5e7eb">${escapeHtml(described.delivery)}</td>
         <td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700">${escapeHtml(described.quantity)}</td>
@@ -161,6 +168,13 @@ function buildHtml(
 
   const whatsappRow = request.whatsapp
     ? `<tr><td style="padding:3px 0;color:#6b7280">WhatsApp</td><td style="padding:3px 0;font-weight:600">${escapeHtml(request.whatsapp)}</td></tr>`
+    : "";
+
+  const notesBlock = request.notes
+    ? `<div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-top:16px">
+         <h2 style="font-size:15px;margin:0 0 6px">Note del cliente</h2>
+         <p style="margin:0;font-size:14px;white-space:pre-wrap">${escapeHtml(request.notes)}</p>
+       </div>`
     : "";
 
   const cta = adminUrl
@@ -180,7 +194,7 @@ function buildHtml(
   <div style="max-width:720px;margin:0 auto;padding:24px">
     <h1 style="font-size:20px;margin:0 0 4px">Nuova richiesta di offerta</h1>
     <p style="margin:0 0 20px;color:#6b7280;font-size:14px">
-      Richiesta <strong style="color:#111827">${escapeHtml(request.request_number)}</strong> · ${escapeHtml(submitted)}
+      Richiesta <strong style="color:#111827">${escapeHtml(request.public_reference)}</strong> · ${escapeHtml(submitted)}
     </p>
 
     <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:16px">
@@ -189,6 +203,9 @@ function buildHtml(
         <tr><td style="padding:3px 0;color:#6b7280;width:110px">Azienda</td><td style="padding:3px 0;font-weight:700">${escapeHtml(request.company_name)}</td></tr>
         <tr><td style="padding:3px 0;color:#6b7280">Email</td><td style="padding:3px 0;font-weight:600"><a href="mailto:${escapeHtml(request.contact_email)}" style="color:#0f7b53">${escapeHtml(request.contact_email)}</a></td></tr>
         ${whatsappRow}
+        <tr><td style="padding:3px 0;color:#6b7280">Consegna</td><td style="padding:3px 0;font-weight:600">${escapeHtml(
+          request.delivery_preference ? DELIVERY_LABELS[request.delivery_preference] : "—"
+        )}</td></tr>
         <tr><td style="padding:3px 0;color:#6b7280">Lingua</td><td style="padding:3px 0">${escapeHtml(request.language.toUpperCase())}</td></tr>
       </table>
     </div>
@@ -201,6 +218,7 @@ function buildHtml(
             <th style="padding:8px 10px;font-weight:600">Prodotto</th>
             <th style="padding:8px 10px;font-weight:600">Dimensione</th>
             <th style="padding:8px 10px;font-weight:600">Indice</th>
+            <th style="padding:8px 10px;font-weight:600">Stagione</th>
             <th style="padding:8px 10px;font-weight:600">Preferenza</th>
             <th style="padding:8px 10px;font-weight:600">Consegna</th>
             <th style="padding:8px 10px;font-weight:600;text-align:right">Q.tà</th>
@@ -210,6 +228,7 @@ function buildHtml(
       </table>
     </div>
 
+    ${notesBlock}
     ${cta}
   </div>
 </body></html>`;
@@ -217,7 +236,7 @@ function buildHtml(
 
 function buildText(request: QuoteRequestRow, items: QuoteRequestItemRow[]): string {
   const lines = [
-    `Nuova richiesta di offerta ${request.request_number}`,
+    `Nuova richiesta di offerta ${request.public_reference}`,
     `Azienda: ${request.company_name}`,
     `Email: ${request.contact_email}`,
     request.whatsapp ? `WhatsApp: ${request.whatsapp}` : null,
@@ -229,8 +248,12 @@ function buildText(request: QuoteRequestRow, items: QuoteRequestItemRow[]): stri
   for (const item of items) {
     const described = describeItem(item);
     lines.push(
-      `- ${described.product} | ${described.size} | ${described.index} | ${described.preference} | ${described.delivery} | x${described.quantity}`
+      `- ${described.product} | ${described.size} | ${described.index} | ${described.season} | ${described.preference} | ${described.delivery} | x${described.quantity}`
     );
+  }
+
+  if (request.notes) {
+    lines.push("", "Note del cliente:", request.notes);
   }
 
   return lines.join("\n");
@@ -265,7 +288,7 @@ export async function sendQuoteRequestEmail(input: {
       from,
       to,
       replyTo: input.request.contact_email,
-      subject: `Nuova richiesta di offerta – ${input.request.company_name} – ${input.request.request_number}`,
+      subject: `Nuova richiesta di offerta – ${input.request.company_name} – ${input.request.public_reference}`,
       html: buildHtml(input.request, input.items, adminUrl),
       text: buildText(input.request, input.items),
     });

@@ -16,8 +16,13 @@ transactional function it calls don't exist yet.
 
 1. Open the Supabase dashboard → your project → **SQL Editor** → **New query**.
 2. Paste the entire contents of
-   `supabase/migrations/20260826000000_quote_requests.sql`.
-3. Press **Run**.
+   `supabase/migrations/20260826000000_quote_requests.sql`, press **Run**.
+3. Then paste `supabase/migrations/20260827000000_quote_requests_production.sql`
+   and press **Run**.
+
+The second file adds the `GR-YYMMDD-NNNN` reference, the full quotation
+lifecycle, notification tracking, the event log and the realtime broadcast.
+Run them in this order; the second builds on the first.
 
 The file is written to be safe to re-run: every statement is
 `create ... if not exists`, `create or replace`, or a guarded `do` block. If
@@ -57,7 +62,24 @@ select 'RLS enabled on both tables',
          select bool_and(rowsecurity) from pg_tables
           where schemaname = 'public'
             and tablename in ('quote_requests', 'quote_request_items')
-       ) then 'OK' else 'NOT ENABLED' end;
+       ) then 'OK' else 'NOT ENABLED' end
+union all
+select 'public_reference column',
+       case when exists (
+         select 1 from information_schema.columns
+          where table_schema='public' and table_name='quote_requests'
+            and column_name='public_reference'
+       ) then 'OK' else 'MISSING' end
+union all
+select 'event log table',
+       case when to_regclass('public.quote_request_events') is not null
+            then 'OK' else 'MISSING' end
+union all
+select 'notification RPC',
+       case when exists (
+         select 1 from information_schema.routines
+          where routine_schema='public' and routine_name='gorush_record_notification'
+       ) then 'OK' else 'MISSING' end;
 ```
 
 ---
@@ -74,6 +96,7 @@ offer-request feature uses.
 | `EMAIL_FROM` | Optional | `RESEND_FROM_EMAIL` |
 | `SALES_NOTIFICATION_EMAIL` | Optional | `OFFER_NOTIFICATION_EMAIL` (already `vendite@gommarush.com`) |
 | `NEXT_PUBLIC_APP_URL` | Recommended | `VERCEL_URL` |
+| `RESEND_WEBHOOK_SECRET` | Only for delivery confirmation (Step 3b) | — |
 
 Set `EMAIL_FROM` / `SALES_NOTIFICATION_EMAIL` **only** if quote notifications
 should go somewhere different from the older offer-request notifications.
@@ -150,6 +173,24 @@ to submit again.
 
 ---
 
+## Step 3b — Delivery confirmation (optional but recommended)
+
+Without this, the system knows Resend *accepted* each message. It cannot know
+the message reached `vendite@gommarush.com`. The **Sistema** page says so
+explicitly when it sees sends but no deliveries.
+
+1. Resend dashboard → **Webhooks** → **Add endpoint**.
+2. URL: `https://gommarush.com/api/webhooks/resend`
+3. Subscribe to: `email.sent`, `email.delivered`, `email.bounced`,
+   `email.complained`.
+4. Copy the signing secret (`whsec_…`) into the Vercel environment variable
+   `RESEND_WEBHOOK_SECRET`, then redeploy.
+
+The endpoint verifies every request's signature before reading its body, and
+is idempotent — a redelivered event changes nothing.
+
+---
+
 ## Step 4 — End-to-end check
 
 1. Open the site. It should be in **Italian** with no language cookie set.
@@ -162,8 +203,8 @@ to submit again.
    *7 giorni*.
 6. Add **Altro prodotto**: `Valvole TR414`, quantity `20`, *7 giorni*.
 7. Fill company + e-mail, optionally a WhatsApp number.
-8. **Richiedi l'offerta** → you should land on **Richiesta inviata!** with a
-   request number like `GR-1000`.
+8. **Richiedi l'offerta** → you should land on **Richiesta inviata** with a
+   reference like `GR-260825-0001`.
 9. Sign in to `/admin` → **Richieste di offerta** → the request is at the top
    with an item count of 3.
 10. Open it → check the customer block and all three products → **Segna in

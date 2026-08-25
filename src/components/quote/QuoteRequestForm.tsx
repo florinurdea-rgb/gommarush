@@ -58,7 +58,8 @@ export function QuoteRequestForm() {
 
   const [phase, setPhase] = useState<Phase>("editing");
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ requestNumber: string } | null>(null);
+  const [notes, setNotes] = useState("");
+  const [result, setResult] = useState<{ reference: string } | null>(null);
   const [undoItem, setUndoItem] = useState<{ item: DraftItem; index: number } | null>(null);
 
   // Survives re-renders; the idempotency key must stay stable across retries
@@ -183,6 +184,7 @@ export function QuoteRequestForm() {
           companyName: companyName.trim(),
           email: email.trim(),
           whatsapp: whatsappOpen && whatsapp.trim() ? whatsapp.trim() : null,
+          notes: notes.trim() || null,
           language: locale,
           items: committed.map(draftToPayload),
           idempotencyKey: idempotencyKey.current,
@@ -198,7 +200,7 @@ export function QuoteRequestForm() {
         return;
       }
 
-      setResult({ requestNumber: payload.requestNumber });
+      setResult({ reference: payload.reference });
       setPhase("success");
     } catch {
       setSubmitError(copy.failBody);
@@ -209,6 +211,7 @@ export function QuoteRequestForm() {
   }
 
   function resetForAnother() {
+    setNotes("");
     setCommitted([]);
     setDraft(newDraftItem("tyre"));
     setEditingKey(null);
@@ -229,7 +232,7 @@ export function QuoteRequestForm() {
   if (phase === "success" && result) {
     return (
       <SubmissionSuccess
-        requestNumber={result.requestNumber}
+        reference={result.reference}
         email={email.trim()}
         whatsapp={whatsappOpen && whatsapp.trim() ? whatsapp.trim() : null}
         onNewRequest={resetForAnother}
@@ -407,6 +410,22 @@ export function QuoteRequestForm() {
                 </button>
               </>
             )}
+          </div>
+
+          {/* Optional and last: a required note field would cost more
+              submissions than the note is worth. */}
+          <div className="mt-4">
+            <Field label={copy.notesLabel} htmlFor="quote-notes" hint={copy.notesHint}>
+              <textarea
+                id="quote-notes"
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                rows={3}
+                maxLength={2000}
+                placeholder={copy.notesPlaceholder}
+                className={`${inputClass} min-h-[88px] resize-y py-3 leading-relaxed`}
+              />
+            </Field>
           </div>
         </div>
       </section>
