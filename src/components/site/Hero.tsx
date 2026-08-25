@@ -19,20 +19,17 @@ export function Hero() {
       <HeroBackground />
 
       <div className="relative mx-auto flex w-full max-w-content flex-col items-start px-4 py-16 sm:px-6 sm:py-24">
-        {/* The compact coverage line, above the fold. The full section
-            below carries the detail; this is the version that fits a phone
-            without wrapping into a paragraph. */}
-        <p className="mb-4 inline-flex items-center rounded-full bg-white/85 px-3.5 py-1.5 text-[13px] font-bold text-accent-dark ring-1 ring-inset ring-accent/25 backdrop-blur-sm sm:text-sm">
-          {copy.coverageBadge}
-        </p>
-
         <h1 className="max-w-2xl text-[26px] font-extrabold leading-[1.15] tracking-tight text-ink sm:text-[34px] lg:text-5xl">
           {copy.heroTitle}
         </h1>
 
-        <p className="mt-4 max-w-xl text-base leading-relaxed text-ink-soft sm:text-lg">
+        {/* A real <h2>, not a styled paragraph: it is the page's second
+            heading level and carries the coverage claim, so it belongs in
+            the document outline. Weight and size keep it subordinate to the
+            h1 visually. */}
+        <h2 className="mt-4 max-w-xl text-base font-normal leading-relaxed text-ink-soft sm:text-lg">
           {copy.heroSubtitle}
-        </p>
+        </h2>
 
         <Link
           href="/richiedi-offerta"
