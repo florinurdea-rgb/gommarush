@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createQuoteRequestSchema, toRpcItem } from "@/lib/validation/quote-request";
-import {
-  createQuoteRequest,
-  getQuoteRequest,
-  recordNotificationOutcome,
-} from "@/lib/server/quote-requests";
-import { sendQuoteRequestEmail } from "@/lib/email/send-quote-request";
+import { createQuoteRequest, getQuoteRequest } from "@/lib/server/quote-requests";
+import { notifyQuoteRequest } from "@/lib/server/quote-request-notify";
 import { getClientIp, isRateLimited } from "@/lib/rate-limit";
 import { logError, logEvent } from "@/lib/logger";
 import type { CreateQuoteRequestResponse } from "@/lib/types/quote-request";
@@ -104,42 +100,43 @@ export async function POST(request: NextRequest) {
   }
 
   // A replayed idempotency key means this exact submission already landed.
-  // Return the original request rather than creating or notifying twice.
+  // Don't create it again — but DO re-attempt the notification if the stored
+  // row shows it never went out. A customer who resubmits after a mail
+  // outage is exactly the case where staff still need to hear about it, and
+  // reporting emailSent from the row (rather than assuming true) keeps the
+  // response honest about what actually happened.
   if (created.replayed) {
     logEvent("quote_request_replayed", { requestId: created.requestId });
+
+    let emailSent = false;
+    try {
+      const existing = await getQuoteRequest(created.requestId);
+      emailSent = existing?.request.notification_email_sent ?? false;
+      if (existing && !emailSent) {
+        emailSent = (await notifyQuoteRequest(created.requestId)).sent;
+      }
+    } catch (error) {
+      // The request is saved; its notification state is a detail.
+      logError("quote_request_replay_status_read_failed", error, {
+        requestId: created.requestId,
+      });
+    }
+
     return NextResponse.json<CreateQuoteRequestResponse>(
       {
         success: true,
         requestId: created.requestId,
         requestNumber: created.requestNumber,
         itemCount: created.itemCount,
-        emailSent: true,
+        emailSent,
       },
       { status: 200 }
     );
   }
 
   // ---- 2. NOTIFY SECOND — failure here never fails the request ----------
-  let emailSent = false;
-  try {
-    const detail = await getQuoteRequest(created.requestId);
-    if (detail) {
-      const result = await sendQuoteRequestEmail(detail);
-      emailSent = result.success;
-      await recordNotificationOutcome(created.requestId, {
-        sent: result.success,
-        error: result.success ? null : result.error,
-      });
-    }
-  } catch (error) {
-    // Swallowed on purpose. The row exists; staff will see it in the admin
-    // list regardless of what the mail provider did.
-    logError("quote_request_notify_failed", error, { requestId: created.requestId });
-    await recordNotificationOutcome(created.requestId, {
-      sent: false,
-      error: error instanceof Error ? error.message : "UNKNOWN",
-    });
-  }
+  // notifyQuoteRequest never throws and records its own outcome on the row.
+  const { sent: emailSent } = await notifyQuoteRequest(created.requestId);
 
   return NextResponse.json<CreateQuoteRequestResponse>(
     {

@@ -13,6 +13,93 @@ import { formatTyreSize, type QuoteRequestItemRow, type QuoteRequestRow } from "
 
 export type SendResult = { success: true; messageId?: string } | { success: false; error: string };
 
+/**
+ * What the deployment's mail configuration actually resolves to, with no
+ * secret values in it. The API key is reported only as present/absent plus
+ * whether it has Resend's `re_` shape — enough to tell "not set" apart from
+ * "set to the wrong string", which are very different fixes.
+ */
+export interface EmailConfigStatus {
+  configured: boolean;
+  apiKeyPresent: boolean;
+  /** False when a key is set but doesn't look like a Resend key at all. */
+  apiKeyLooksValid: boolean;
+  /** The visible From header — not a secret; it is stamped on every mail. */
+  from: string | null;
+  fromVariable: "EMAIL_FROM" | "RESEND_FROM_EMAIL" | null;
+  to: string | null;
+  toVariable: "SALES_NOTIFICATION_EMAIL" | "OFFER_NOTIFICATION_EMAIL" | null;
+  /** Names of the variables that must be set before mail can go out at all. */
+  missing: string[];
+}
+
+/**
+ * Reads an environment variable, treating whitespace-only as unset and
+ * trimming what survives.
+ *
+ * Trimming is not cosmetic here. A key pasted into a dashboard with a
+ * trailing newline produces a malformed Authorization header and Resend
+ * answers 401 "API key is invalid" — indistinguishable, from the outside,
+ * from a genuinely wrong key.
+ */
+function readEnv(name: string): string | null {
+  const value = process.env[name];
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function resolveConfig(): {
+  apiKey: string | null;
+  from: string | null;
+  fromVariable: EmailConfigStatus["fromVariable"];
+  to: string | null;
+  toVariable: EmailConfigStatus["toVariable"];
+} {
+  const apiKey = readEnv("RESEND_API_KEY");
+
+  // EMAIL_FROM / SALES_NOTIFICATION_EMAIL are optional overrides; the
+  // RESEND_FROM_EMAIL / OFFER_NOTIFICATION_EMAIL names are what existing
+  // deployments already set, so an untouched deployment keeps working.
+  const emailFrom = readEnv("EMAIL_FROM");
+  const resendFrom = readEnv("RESEND_FROM_EMAIL");
+  const salesTo = readEnv("SALES_NOTIFICATION_EMAIL");
+  const offerTo = readEnv("OFFER_NOTIFICATION_EMAIL");
+
+  return {
+    apiKey,
+    from: emailFrom ?? resendFrom,
+    fromVariable: emailFrom ? "EMAIL_FROM" : resendFrom ? "RESEND_FROM_EMAIL" : null,
+    to: salesTo ?? offerTo,
+    toVariable: salesTo ? "SALES_NOTIFICATION_EMAIL" : offerTo ? "OFFER_NOTIFICATION_EMAIL" : null,
+  };
+}
+
+/**
+ * Server-side diagnostic for the admin screens. Safe to render: it exposes
+ * the From/To addresses (which are already visible on every mail that goes
+ * out) and never the key itself.
+ */
+export function describeEmailConfig(): EmailConfigStatus {
+  const config = resolveConfig();
+
+  const missing: string[] = [];
+  if (!config.apiKey) missing.push("RESEND_API_KEY");
+  if (!config.from) missing.push("RESEND_FROM_EMAIL");
+  if (!config.to) missing.push("OFFER_NOTIFICATION_EMAIL");
+
+  return {
+    configured: missing.length === 0,
+    apiKeyPresent: Boolean(config.apiKey),
+    apiKeyLooksValid: config.apiKey ? config.apiKey.startsWith("re_") : false,
+    from: config.from,
+    fromVariable: config.fromVariable,
+    to: config.to,
+    toVariable: config.toVariable,
+    missing,
+  };
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -153,17 +240,19 @@ export async function sendQuoteRequestEmail(input: {
   request: QuoteRequestRow;
   items: QuoteRequestItemRow[];
 }): Promise<SendResult> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL;
-  const to = process.env.SALES_NOTIFICATION_EMAIL || process.env.OFFER_NOTIFICATION_EMAIL;
+  const config = describeEmailConfig();
 
   // Not being configured is an operational state, not a crash — the request
-  // is already saved and visible in the admin either way. OFFER_NOTIFICATION_
-  // EMAIL is the legacy name kept as a fallback so existing deployments keep
-  // working without new configuration.
-  if (!apiKey || !from || !to) {
-    return { success: false, error: "EMAIL_NOT_CONFIGURED" };
+  // is already saved and visible in the admin either way. The error names the
+  // variables that are actually missing, so the admin panel can say what to
+  // set instead of a bare "not configured".
+  if (!config.configured) {
+    return { success: false, error: `EMAIL_NOT_CONFIGURED: ${config.missing.join(", ")}` };
   }
+
+  const apiKey = readEnv("RESEND_API_KEY") as string;
+  const from = config.from as string;
+  const to = config.to as string;
 
   const baseUrl =
     process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, "") ||
@@ -182,10 +271,15 @@ export async function sendQuoteRequestEmail(input: {
     });
 
     if (result.error) {
-      logError("quote_request_email_failed", new Error(result.error.message), {
+      // Resend reports failures in the response body, not by throwing. Keep
+      // its name as well as its message: "validation_error" vs
+      // "invalid_access_token" is the difference between an unverified
+      // sending domain and a bad key.
+      const detail = [result.error.name, result.error.message].filter(Boolean).join(": ");
+      logError("quote_request_email_failed", new Error(detail), {
         requestId: input.request.id,
       });
-      return { success: false, error: result.error.message };
+      return { success: false, error: detail || "Resend returned an unspecified error" };
     }
 
     return { success: true, messageId: result.data?.id };

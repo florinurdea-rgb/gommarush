@@ -3,6 +3,8 @@ import { PageHeading } from "@/components/logistics/AdminShell";
 import { getQuoteRequest } from "@/lib/server/quote-requests";
 import { QuoteRequestStatusBadge } from "@/components/quote/QuoteRequestStatusBadge";
 import { QuoteRequestActions } from "@/components/quote/QuoteRequestActions";
+import { ResendNotificationButton } from "@/components/quote/ResendNotificationButton";
+import { describeEmailConfig } from "@/lib/email/send-quote-request";
 import { formatTyreSize, type QuoteRequestItemRow } from "@/lib/types/quote-request";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +36,8 @@ export default async function QuoteRequestDetailPage({ params }: { params: { id:
   if (!detail) notFound();
 
   const { request, items } = detail;
+  // Read server-side; describeEmailConfig never returns a secret value.
+  const emailConfig = describeEmailConfig();
   const submitted = new Date(request.created_at).toLocaleString("it-IT", {
     dateStyle: "medium",
     timeStyle: "short",
@@ -56,8 +60,52 @@ export default async function QuoteRequestDetailPage({ params }: { params: { id:
           </p>
           <p className="mt-1 text-sm text-ink">
             La richiesta è salvata correttamente — solo l&rsquo;email di avviso non è partita.
-            {request.notification_email_error ? ` (${request.notification_email_error})` : ""}
           </p>
+
+          {request.notification_email_error && (
+            <p className="mt-2 break-words rounded-lg bg-white/70 px-3 py-2 font-mono text-xs text-ink">
+              {request.notification_email_error}
+            </p>
+          )}
+
+          {/* The provider's reason alone doesn't say whether the deployment is
+              even configured to send. Showing the resolved configuration next
+              to it turns "email didn't arrive" into a specific missing
+              variable or a specific rejected address. No secret is rendered —
+              only the From/To that every sent mail already carries. */}
+          <dl className="mt-3 grid gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
+            <div className="flex gap-2">
+              <dt className="w-20 flex-none text-ink-soft">Chiave API</dt>
+              <dd className="min-w-0 font-semibold text-ink">
+                {!emailConfig.apiKeyPresent
+                  ? "non impostata (RESEND_API_KEY)"
+                  : emailConfig.apiKeyLooksValid
+                    ? "impostata"
+                    : "impostata ma non sembra una chiave Resend (attesa: re_…)"}
+              </dd>
+            </div>
+            <div className="flex gap-2">
+              <dt className="w-20 flex-none text-ink-soft">Mittente</dt>
+              <dd className="min-w-0 break-all font-semibold text-ink">
+                {emailConfig.from ?? "non impostato (RESEND_FROM_EMAIL)"}
+              </dd>
+            </div>
+            <div className="flex gap-2">
+              <dt className="w-20 flex-none text-ink-soft">Destinatario</dt>
+              <dd className="min-w-0 break-all font-semibold text-ink">
+                {emailConfig.to ?? "non impostato (OFFER_NOTIFICATION_EMAIL)"}
+              </dd>
+            </div>
+          </dl>
+
+          {emailConfig.missing.length > 0 && (
+            <p className="mt-2 text-xs text-ink">
+              Da impostare su Vercel (Settings → Environment Variables), poi
+              rideploy: <span className="font-mono font-bold">{emailConfig.missing.join(", ")}</span>
+            </p>
+          )}
+
+          <ResendNotificationButton requestId={request.id} />
         </div>
       )}
 

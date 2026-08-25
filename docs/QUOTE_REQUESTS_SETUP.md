@@ -110,6 +110,44 @@ Only relevant if e-mail currently fails with a domain error.
 The recipient (`vendite@gommarush.com`) needs no verification — only the
 *sending* domain does.
 
+> On a Resend account with **no verified domain**, sending is restricted to
+> the account owner's own address and everything else is rejected with a
+> `validation_error`. That is the single most common reason a correctly
+> configured key still sends nothing.
+
+---
+
+## Diagnosing "no e-mail arrived"
+
+Never guess at this — the app records the provider's own reason and shows it
+to you.
+
+**`/admin/richieste-offerta`** shows a red banner at the top when the
+deployment cannot send at all, naming the exact environment variables that are
+missing, and an **Email KO** badge on any request whose notification failed.
+
+**Open the request.** The red panel carries three things:
+
+1. the provider's verbatim error (`validation_error: The gommarush.com domain
+   is not verified.`, `invalid_access_token: API key is invalid`, …);
+2. the resolved configuration — whether a key is present and whether it is
+   shaped like a Resend key (`re_…`), plus the From and To actually in use.
+   No secret value is ever rendered;
+3. **Riprova invio email**, which re-attempts the send for that request.
+
+That last button is the point of the persist-before-notify design: fix the
+configuration, redeploy, press the button, and the notification for a request
+that arrived during the outage still goes out. Nobody has to ask the customer
+to submit again.
+
+| What the panel says | What it means | Fix |
+|---|---|---|
+| `EMAIL_NOT_CONFIGURED: RESEND_API_KEY` | The variable isn't set in this environment | Step 2, then redeploy |
+| Key "impostata ma non sembra una chiave Resend" | Something other than a Resend key is in `RESEND_API_KEY` | Paste the `re_…` key |
+| `invalid_access_token` / `API key is invalid` | Wrong, revoked, or whitespace-damaged key | Regenerate in Resend, re-paste, redeploy |
+| `validation_error: … domain is not verified` | Sending domain unverified | Step 3 |
+| `You can only send testing emails to your own email address` | Resend account has no verified domain | Step 3 |
+
 ---
 
 ## Step 4 — End-to-end check
@@ -142,7 +180,7 @@ The recipient (`vendite@gommarush.com`) needs no verification — only the
 | Symptom | Cause | Fix |
 |---|---|---|
 | Submit fails with a generic error | Migration not run | Step 1 |
-| Request saved, **Email KO** badge in admin | Resend key missing/invalid, or unverified domain | Steps 2–3 |
+| Request saved, **Email KO** badge in admin | Resend key missing/invalid, or unverified domain | Open the request — the panel names the reason. See *Diagnosing* above |
 | **Apri richiesta** in the e-mail points at a Vercel preview URL | `NEXT_PUBLIC_APP_URL` unset | Step 2 |
 | Site loads in English first | A `gr_locale` cookie is already set in that browser | Expected — clear cookies to see a first-time visitor's view |
 | Excel totals show `0` | Prices not entered yet | Expected — the column is intentionally empty for the operator |
@@ -151,14 +189,9 @@ The recipient (`vendite@gommarush.com`) needs no verification — only the
 
 ## Note on the older `/get-offer` flow
 
-This is a **second, separate** customer quote path. `/get-offer` and its
-`client_offer_requests` table are untouched and still work.
+It is gone. The route, its API endpoint, its UI components and its admin query
+layer were removed; `/richiedi-offerta` is now the only customer quote path.
 
-They were kept separate because the older table stores tyres as a JSONB blob
-with one delivery preference for the whole request — it cannot express
-non-tyre products, a delivery requirement per item, or a per-item brand
-preference. Widening it would have broken its live rows.
-
-Two public quote paths is a product decision worth making deliberately: either
-retire `/get-offer`, or keep both intentionally. Nothing in the code forces
-either choice.
+Its `client_offer_requests` table is deliberately **not** dropped — it holds
+real historical customer enquiries. See
+`supabase/migrations/20260826000100_retire_client_offer_requests.sql`.
