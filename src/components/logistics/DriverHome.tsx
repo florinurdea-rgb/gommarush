@@ -6,7 +6,7 @@ import { useFeedbackSounds } from "@/hooks/useFeedbackSounds";
 import { DriverRouteMapModal } from "@/components/logistics/DriverRouteMapModal";
 import type { DriverRouteStop } from "@/components/logistics/DriverRouteMapModal";
 import { formatOrderNumber } from "@/lib/logistics/order-number";
-import { errorMessage, orderStatusMeta } from "@/lib/i18n/logistics";
+import { useOps } from "@/lib/i18n/ops";
 import type { DriverOrderSummary } from "@/lib/server/loading";
 
 /**
@@ -22,8 +22,8 @@ import type { DriverOrderSummary } from "@/lib/server/loading";
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cash: "Numerar",
   card: "Card",
-  bank_transfer: "Transfer bancar",
-  already_paid: "Deja achitat",
+  bank_transfer: "Bonifico bancario",
+  already_paid: "Già pagato",
   other: "Altro metodo",
 };
 
@@ -46,6 +46,7 @@ export function DriverHome({
   stops: DriverRouteStop[];
   depotLocation: { lat: number; lng: number } | null;
 }) {
+  const ops = useOps();
   const router = useRouter();
   const sounds = useFeedbackSounds();
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -71,7 +72,7 @@ export function DriverHome({
         const payload = (await response.json()) as { ok: boolean; code?: string };
         if (!payload.ok) {
           sounds.feedback("error");
-          setError(errorMessage(payload.code));
+          setError(ops.errorMessage(payload.code));
           return false;
         }
         sounds.feedback("success");
@@ -79,7 +80,7 @@ export function DriverHome({
         return true;
       } catch {
         sounds.feedback("error");
-        setError(errorMessage("UNKNOWN"));
+        setError(ops.errorMessage("UNKNOWN"));
         return false;
       } finally {
         setBusyId(null);
@@ -116,7 +117,7 @@ export function DriverHome({
   const confirmFailed = useCallback(
     async (order: DriverOrderSummary) => {
       if (reason.trim().length < 3) {
-        setError("Motivul este obligatoriu.");
+        setError("Il motivo è obbligatorio.");
         return;
       }
       const done = await runAction(
@@ -174,7 +175,7 @@ export function DriverHome({
           </div>
           <div>
             <div className="font-mono text-2xl font-black tabular-nums">{summary.tyreCount}</div>
-            <div className="text-[11px] uppercase tracking-wide text-white/50">Anvelope</div>
+            <div className="text-[11px] uppercase tracking-wide text-white/50">Pneumatici</div>
           </div>
           <div>
             <div className="font-mono text-2xl font-black tabular-nums">
@@ -278,7 +279,7 @@ export function DriverHome({
 
       {mapOpen && (
         <DriverRouteMapModal
-          vehicleName={vehicleName ?? "Ruta mea"}
+          vehicleName={vehicleName ?? "Il mio percorso"}
           stops={stops}
           depotLocation={depotLocation}
           onClose={() => setMapOpen(false)}
@@ -339,11 +340,12 @@ function OrderCard({
   onMethodChange: (value: string) => void;
   onReasonChange: (value: string) => void;
 }) {
+  const ops = useOps();
   const canMarkLoaded = order.status === "stored" || order.status === "ready_for_loading";
   const canDeliver = order.status === "loaded" || order.status === "out_for_delivery";
   const isDelivered = order.status === "delivered";
   const address = addressOf(order);
-  const statusMeta = orderStatusMeta(order.status);
+  const statusMeta = ops.orderStatusMeta(order.status);
 
   return (
     <article

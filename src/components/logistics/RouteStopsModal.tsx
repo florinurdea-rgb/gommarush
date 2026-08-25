@@ -65,7 +65,7 @@ export function RouteStopsModal({
       .then((payload: { ok: boolean; points?: { orderId: string; lat: number | null; lng: number | null }[] }) => {
         if (cancelled) return;
         if (!payload.ok || !payload.points) {
-          setError("Nu s-au putut localiza adresele.");
+          setError("Non è stato possibile localizzare gli indirizzi.");
           return;
         }
         const map = new Map<string, { lat: number; lng: number } | null>();

@@ -16,7 +16,7 @@ export default async function SupplierDetailPage({
 
   return (
     <>
-      <PageHeading title={supplier.name} description="Profilul furnizorului." back />
+      <PageHeading title={supplier.name} description="La scheda del fornitore." back />
       <SupplierEditor supplier={supplier} />
     </>
   );

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Modal, ModalHeader } from "@/components/ui/Modal";
 import { formatOrderNumber } from "@/lib/logistics/order-number";
-import { orderStatusMeta } from "@/lib/i18n/logistics";
+import { useOps } from "@/lib/i18n/ops";
 import { PROFIT_PER_DELIVERED_TYRE_EUR } from "@/lib/logistics/summary-constants";
 import type { DeliveryRow } from "@/lib/server/summary";
 
@@ -34,6 +34,7 @@ export function DeliveriesModal({
   periodLabel: string;
   onClose: () => void;
 }) {
+  const ops = useOps();
   const [search, setSearch] = useState("");
   const [supplierFilter, setSupplierFilter] = useState("all");
   const [vehicleFilter, setVehicleFilter] = useState("all");
@@ -79,7 +80,7 @@ export function DeliveriesModal({
           <td>${escapeHtml(d.supplierName ?? "—")}</td>
           <td>${escapeHtml(d.vehicleName ?? "—")}</td>
           <td style="text-align:right">${d.tyreCount}</td>
-          <td>${escapeHtml(orderStatusMeta(d.status).label)}</td>
+          <td>${escapeHtml(ops.orderStatusMeta(d.status).label)}</td>
         </tr>`
       )
       .join("");
@@ -99,7 +100,7 @@ export function DeliveriesModal({
       <p class="period">Periodo: ${escapeHtml(periodLabel)}</p>
       <div class="summary">
         <div>Comenzi<strong>${filtered.length}</strong></div>
-        <div>Anvelope<strong>${totalTyres}</strong></div>
+        <div>Pneumatici<strong>${totalTyres}</strong></div>
         <div>Profit<strong>€${totalProfit.toLocaleString("ro-RO")}</strong></div>
       </div>
       <table>
@@ -177,7 +178,7 @@ export function DeliveriesModal({
                   <th className="py-2 pr-3">Client</th>
                   <th className="py-2 pr-3">Supplier</th>
                   <th className="py-2 pr-3">Veicolo</th>
-                  <th className="py-2 pr-3 text-right">Anvelope</th>
+                  <th className="py-2 pr-3 text-right">Pneumatici</th>
                   <th className="py-2">Status</th>
                 </tr>
               </thead>
@@ -192,7 +193,7 @@ export function DeliveriesModal({
                     <td className="py-2 pr-3 text-ink-soft">{delivery.supplierName ?? "—"}</td>
                     <td className="py-2 pr-3 text-ink-soft">{delivery.vehicleName ?? "—"}</td>
                     <td className="py-2 pr-3 text-right font-mono">{delivery.tyreCount}</td>
-                    <td className="py-2">{orderStatusMeta(delivery.status).label}</td>
+                    <td className="py-2">{ops.orderStatusMeta(delivery.status).label}</td>
                   </tr>
                 ))}
               </tbody>

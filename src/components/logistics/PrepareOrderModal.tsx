@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Modal, ModalHeader } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toast";
 import { formatOrderNumber } from "@/lib/logistics/order-number";
-import { itemTypeLabel } from "@/lib/i18n/logistics";
+import { useOps } from "@/lib/i18n/ops";
 import type { OrderDetail } from "@/lib/server/orders";
 
 function escapeHtml(value: string): string {
@@ -34,6 +34,7 @@ export function PrepareOrderModal({
   onClose: () => void;
   onPrepared: () => void;
 }) {
+  const ops = useOps();
   const { showToast } = useToast();
   const [detail, setDetail] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -77,7 +78,7 @@ export function PrepareOrderModal({
         const size =
           item.width && item.rim_diameter ? `${item.width}/${item.aspect_ratio} R${item.rim_diameter}` : "";
         return `<tr>
-          <td>${escapeHtml([item.brand, size].filter(Boolean).join(" ") || item.description || item.raw_description || itemTypeLabel(item.item_type))}</td>
+          <td>${escapeHtml([item.brand, size].filter(Boolean).join(" ") || item.description || item.raw_description || ops.itemTypeLabel(item.item_type))}</td>
           <td style="text-align:right">${item.quantity}</td>
         </tr>`;
       })
@@ -93,9 +94,9 @@ export function PrepareOrderModal({
       </style></head><body>
       <h1>Ordine ${escapeHtml(formatOrderNumber(detail.order.order_number))}</h1>
       <p class="sub">
-        ${escapeHtml(detail.customer?.name ?? detail.order.delivery_name ?? "Client necunoscut")}<br/>
+        ${escapeHtml(detail.customer?.name ?? detail.order.delivery_name ?? "Cliente sconosciuto")}<br/>
         ${escapeHtml(address || "—")}<br/>
-        Furnizor: ${escapeHtml(detail.supplier?.name ?? "—")}
+        Fornitore: ${escapeHtml(detail.supplier?.name ?? "—")}
       </p>
       <table><thead><tr><th>Produs</th><th style="text-align:right">Cant.</th></tr></thead>
       <tbody>${rows}</tbody></table>
@@ -160,10 +161,10 @@ export function PrepareOrderModal({
                 {formatOrderNumber(detail.order.order_number)}
               </div>
               <div className="text-lg font-bold text-ink">
-                {detail.customer?.name ?? detail.order.delivery_name ?? "Client necunoscut"}
+                {detail.customer?.name ?? detail.order.delivery_name ?? "Cliente sconosciuto"}
               </div>
               <div className="text-sm text-ink-soft">{address || "Indirizzo sconosciuto"}</div>
-              <div className="mt-1 text-xs text-ink-soft">Furnizor: {detail.supplier?.name ?? "—"}</div>
+              <div className="mt-1 text-xs text-ink-soft">Fornitore: {detail.supplier?.name ?? "—"}</div>
             </div>
 
             <h3 className="mt-5 text-xs font-bold uppercase tracking-wide text-ink-soft">
@@ -185,7 +186,7 @@ export function PrepareOrderModal({
                       {[item?.brand, size].filter(Boolean).join(" ") ||
                         item?.description ||
                         item?.raw_description ||
-                        (item ? itemTypeLabel(item.item_type) : "—")}
+                        (item ? ops.itemTypeLabel(item.item_type) : "—")}
                     </span>
                     <span className="flex-none font-mono text-xs text-ink-soft">#{unit.unit_sequence}</span>
                   </li>

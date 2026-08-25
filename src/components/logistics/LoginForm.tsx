@@ -3,9 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/Button";
-import { errorMessage, t } from "@/lib/i18n/logistics";
+import { useOps } from "@/lib/i18n/ops";
 
 export function LoginForm() {
+  const ops = useOps();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -30,11 +31,11 @@ export function LoginForm() {
           const seconds = Number(payload.details[0]);
           setError(
             Number.isFinite(seconds)
-              ? `${errorMessage(payload.code)} (~${Math.ceil(seconds / 60)} min)`
-              : errorMessage(payload.code)
+              ? `${ops.errorMessage(payload.code)} (~${Math.ceil(seconds / 60)} min)`
+              : ops.errorMessage(payload.code)
           );
         } else {
-          setError(errorMessage(payload.code));
+          setError(ops.errorMessage(payload.code));
         }
         return;
       }
@@ -44,7 +45,7 @@ export function LoginForm() {
       router.replace("/admin");
       router.refresh();
     } catch {
-      setError(errorMessage("UNKNOWN"));
+      setError(ops.errorMessage("UNKNOWN"));
     } finally {
       setBusy(false);
     }
@@ -54,7 +55,7 @@ export function LoginForm() {
     <form onSubmit={submit} className="mt-6 space-y-4">
       <div>
         <label htmlFor="email" className="mb-1 block text-sm font-semibold text-ink">
-          {t("email")}
+          {ops.t("email")}
         </label>
         <input
           id="email"
@@ -71,7 +72,7 @@ export function LoginForm() {
 
       <div>
         <label htmlFor="password" className="mb-1 block text-sm font-semibold text-ink">
-          {t("password")}
+          {ops.t("password")}
         </label>
         <input
           id="password"
@@ -92,7 +93,7 @@ export function LoginForm() {
       )}
 
       <Button type="submit" size="lg" disabled={busy} className="w-full">
-        {busy ? t("loading") : t("signIn")}
+        {busy ? ops.t("loading") : ops.t("signIn")}
       </Button>
     </form>
   );

@@ -227,8 +227,8 @@ export function DdtImportFlow() {
           <h2 className="text-sm font-bold uppercase tracking-wide text-ink-soft">Analisi documento</h2>
           <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
             <Stat label="Pagini" value={result.pageCount ?? "—"} />
-            <Stat label="DDT-uri detectate" value={result.summary.documentsFound} />
-            <Stat label="Anvelope detectate" value={result.summary.totalTyres} />
+            <Stat label="DDT rilevati" value={result.summary.documentsFound} />
+            <Stat label="Pneumatici rilevati" value={result.summary.totalTyres} />
             <Stat label="Da verificare" value={result.summary.needsReview} tone="warning" />
           </div>
           <div className="mt-3 flex flex-wrap gap-3 text-sm text-ink-soft">
@@ -315,10 +315,10 @@ function DocumentCard({
             {STATUS_LABEL[doc.status]}
           </span>
           <div className="mt-1.5 font-mono text-sm font-bold text-ink">
-            {extracted.document.documentNumber ?? "DDT necunoscut"}
+            {extracted.document.documentNumber ?? "DDT sconosciuto"}
           </div>
-          <div className="text-base font-bold text-ink">{extracted.customer.companyName ?? "Client necunoscut"}</div>
-          <div className="text-xs text-ink-soft">{extracted.supplier.name ?? "Furnizor necunoscut"}</div>
+          <div className="text-base font-bold text-ink">{extracted.customer.companyName ?? "Cliente sconosciuto"}</div>
+          <div className="text-xs text-ink-soft">{extracted.supplier.name ?? "Fornitore sconosciuto"}</div>
         </div>
 
         <div className="text-right">

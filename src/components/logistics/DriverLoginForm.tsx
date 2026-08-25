@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { errorMessage, t } from "@/lib/i18n/logistics";
+import { useOps } from "@/lib/i18n/ops";
 
 /**
  * Driver login via Supabase Auth — the real authentication that replaced
@@ -10,6 +10,7 @@ import { errorMessage, t } from "@/lib/i18n/logistics";
  * and src/lib/auth/driver-session.ts.
  */
 export function DriverLoginForm() {
+  const ops = useOps();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,11 +35,11 @@ export function DriverLoginForm() {
           const seconds = Number(payload.details[0]);
           setError(
             Number.isFinite(seconds)
-              ? `${errorMessage(payload.code)} (~${Math.ceil(seconds / 60)} min)`
-              : errorMessage(payload.code)
+              ? `${ops.errorMessage(payload.code)} (~${Math.ceil(seconds / 60)} min)`
+              : ops.errorMessage(payload.code)
           );
         } else {
-          setError(errorMessage(payload.code));
+          setError(ops.errorMessage(payload.code));
         }
         return;
       }
@@ -46,7 +47,7 @@ export function DriverLoginForm() {
       router.replace("/driver");
       router.refresh();
     } catch {
-      setError(errorMessage("UNKNOWN"));
+      setError(ops.errorMessage("UNKNOWN"));
     } finally {
       setBusy(false);
     }
@@ -56,7 +57,7 @@ export function DriverLoginForm() {
     <form onSubmit={submit} className="mt-6 space-y-4">
       <div>
         <label htmlFor="driver-email" className="mb-1 block text-sm font-semibold text-white/80">
-          {t("email")}
+          {ops.t("email")}
         </label>
         <input
           id="driver-email"
@@ -72,7 +73,7 @@ export function DriverLoginForm() {
 
       <div>
         <label htmlFor="driver-password" className="mb-1 block text-sm font-semibold text-white/80">
-          {t("password")}
+          {ops.t("password")}
         </label>
         <input
           id="driver-password"
@@ -96,7 +97,7 @@ export function DriverLoginForm() {
         disabled={busy}
         className="min-h-16 w-full rounded-xl bg-accent text-xl font-extrabold text-white disabled:opacity-40"
       >
-        {busy ? t("loading") : t("signIn")}
+        {busy ? ops.t("loading") : ops.t("signIn")}
       </button>
     </form>
   );

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { OrderReviewForm } from "@/components/logistics/OrderReviewForm";
 import { uploadDocumentDirect } from "@/lib/client/document-upload";
-import { errorMessage, t } from "@/lib/i18n/logistics";
+import { useOps } from "@/lib/i18n/ops";
 import type { AnalysisResult } from "@/lib/documents/analyzer";
 import type { CustomerMatchResult } from "@/lib/logistics/customer-matching";
 
@@ -39,10 +39,11 @@ function isoDateOffset(days: number): string {
 const ACCEPTED = ".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.docx,application/pdf,image/*";
 
 export function NewOrderFlow({ analysisConfigured }: NewOrderFlowProps) {
+  const ops = useOps();
   const router = useRouter();
   const [step, setStep] = useState<Step>("day");
   const [plannedDate, setPlannedDate] = useState<string>(isoDateOffset(0));
-  const [dayLabel, setDayLabel] = useState<string>(t("todaysDeliveries"));
+  const [dayLabel, setDayLabel] = useState<string>(ops.t("todaysDeliveries"));
 
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +74,7 @@ export function NewOrderFlow({ analysisConfigured }: NewOrderFlowProps) {
       };
 
       if (!payload.ok || !payload.analysis) {
-        setError(errorMessage(payload.code));
+        setError(ops.errorMessage(payload.code));
         return;
       }
 
@@ -83,7 +84,7 @@ export function NewOrderFlow({ analysisConfigured }: NewOrderFlowProps) {
       setCustomerMatch(payload.customerMatch ?? null);
       setStep("review");
     } catch {
-      setError(errorMessage("UPLOAD_FAILED"));
+      setError(ops.errorMessage("UPLOAD_FAILED"));
     } finally {
       setUploading(false);
     }
@@ -93,15 +94,15 @@ export function NewOrderFlow({ analysisConfigured }: NewOrderFlowProps) {
   if (step === "day") {
     return (
       <div className="max-w-xl rounded-2xl border border-ink/10 bg-white p-6 shadow-card">
-        <h2 className="text-lg font-bold text-ink">{t("whereToAdd")}</h2>
+        <h2 className="text-lg font-bold text-ink">{ops.t("whereToAdd")}</h2>
         <p className="mt-1 text-sm text-ink-soft">
           Scegli il giorno di consegna previsto per questo ordine.
         </p>
 
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
           {[
-            { label: t("todaysDeliveries"), offset: 0 },
-            { label: t("tomorrowsDeliveries"), offset: 1 },
+            { label: ops.t("todaysDeliveries"), offset: 0 },
+            { label: ops.t("tomorrowsDeliveries"), offset: 1 },
           ].map((option) => (
             <button
               key={option.offset}
@@ -133,7 +134,7 @@ export function NewOrderFlow({ analysisConfigured }: NewOrderFlowProps) {
           onClick={() => setStep("day")}
           className="mb-4 text-sm font-semibold text-accent hover:underline"
         >
-          ← {t("back")}
+          ← {ops.t("back")}
         </button>
 
         <h2 className="text-lg font-bold text-ink">{dayLabel}</h2>
@@ -141,7 +142,7 @@ export function NewOrderFlow({ analysisConfigured }: NewOrderFlowProps) {
 
         {!analysisConfigured && (
           <div className="mt-4 rounded-lg bg-state-waiting-soft p-3 text-sm text-state-waiting">
-            <strong className="font-bold">{t("analysisNotConfigured")}</strong>
+            <strong className="font-bold">{ops.t("analysisNotConfigured")}</strong>
             <p className="mt-1 leading-relaxed">
               Il documento verrà salvato e il testo verrà letto direttamente dal file
               acolo unde este posibil. Datele care nu pot fi citite trebuie
@@ -167,7 +168,7 @@ export function NewOrderFlow({ analysisConfigured }: NewOrderFlowProps) {
               }}
             />
             <span className="block text-base font-bold text-accent-dark">
-              {uploading ? "Analisi del documento…" : t("uploadDocument")}
+              {uploading ? "Analisi del documento…" : ops.t("uploadDocument")}
             </span>
             <span className="mt-1 block text-xs text-ink-soft">
               PDF, JPG, PNG, WEBP, HEIC, DOCX — max. 25 MB
@@ -177,9 +178,9 @@ export function NewOrderFlow({ analysisConfigured }: NewOrderFlowProps) {
           {/* Manual entry is architected for but not built in Phase 1. Shown
               disabled rather than hidden, so the path is discoverable. */}
           <div className="rounded-xl border border-ink/10 bg-surface-soft px-4 py-4 text-center">
-            <span className="text-base font-semibold text-ink/40">{t("manualEntry")}</span>
+            <span className="text-base font-semibold text-ink/40">{ops.t("manualEntry")}</span>
             <span className="ml-2 rounded-md bg-ink/10 px-2 py-0.5 text-xs font-semibold text-ink/50">
-              {t("comingSoon")}
+              {ops.t("comingSoon")}
             </span>
           </div>
         </div>

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { errorMessage, t } from "@/lib/i18n/logistics";
+import { useOps } from "@/lib/i18n/ops";
 
 /**
  * Per-order actions: Edit, Move to hold / Reactivate, and Delete.
@@ -22,6 +22,7 @@ export function OrderActionsMenu({
   orderLabel: string;
   variant: "active" | "hold";
 }) {
+  const ops = useOps();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -57,14 +58,14 @@ export function OrderActionsMenu({
       const payload = (await response.json()) as { ok: boolean; code?: string };
 
       if (!payload.ok) {
-        setError(errorMessage(payload.code));
+        setError(ops.errorMessage(payload.code));
         return;
       }
       setOpen(false);
       setConfirmingDelete(false);
       router.refresh();
     } catch {
-      setError(errorMessage("UNKNOWN"));
+      setError(ops.errorMessage("UNKNOWN"));
     } finally {
       setBusy(false);
     }
@@ -76,7 +77,7 @@ export function OrderActionsMenu({
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`${t("actions")} ${orderLabel}`}
+        aria-label={`${ops.t("actions")} ${orderLabel}`}
         onClick={() => setOpen((value) => !value)}
         className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-ink/15 bg-white text-ink hover:bg-surface-soft"
       >
@@ -97,7 +98,7 @@ export function OrderActionsMenu({
             href={`/admin/orders/${orderId}`}
             className="block px-4 py-2.5 text-sm font-medium text-ink hover:bg-surface-soft"
           >
-            {t("edit")}
+            {ops.t("edit")}
           </Link>
 
           {variant === "active" ? (
@@ -108,7 +109,7 @@ export function OrderActionsMenu({
               onClick={() => act("hold")}
               className="block w-full px-4 py-2.5 text-left text-sm font-medium text-ink hover:bg-surface-soft disabled:opacity-50"
             >
-              {t("moveToHold")}
+              {ops.t("moveToHold")}
             </button>
           ) : (
             <button
@@ -118,7 +119,7 @@ export function OrderActionsMenu({
               onClick={() => act("reactivate")}
               className="block w-full px-4 py-2.5 text-left text-sm font-medium text-state-success hover:bg-surface-soft disabled:opacity-50"
             >
-              {t("reactivate")}
+              {ops.t("reactivate")}
             </button>
           )}
 
@@ -131,7 +132,7 @@ export function OrderActionsMenu({
               onClick={() => setConfirmingDelete(true)}
               className="block w-full px-4 py-2.5 text-left text-sm font-medium text-state-danger hover:bg-state-danger-soft"
             >
-              {t("delete")}
+              {ops.t("delete")}
             </button>
           ) : (
             <div className="px-4 py-3">
@@ -148,14 +149,14 @@ export function OrderActionsMenu({
                   onClick={() => act("cancel", "admin_delete")}
                   className="flex-1 rounded-lg bg-state-danger px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
                 >
-                  {t("confirm")}
+                  {ops.t("confirm")}
                 </button>
                 <button
                   type="button"
                   onClick={() => setConfirmingDelete(false)}
                   className="flex-1 rounded-lg border border-ink/15 px-3 py-2 text-sm font-semibold text-ink"
                 >
-                  {t("cancel")}
+                  {ops.t("cancel")}
                 </button>
               </div>
             </div>

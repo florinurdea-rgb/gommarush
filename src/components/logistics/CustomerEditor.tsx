@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/Button";
-import { errorMessage, t } from "@/lib/i18n/logistics";
+import { useOps } from "@/lib/i18n/ops";
 import type { CustomerLocationRow, CustomerRow } from "@/lib/types/logistics";
 
 /**
@@ -66,6 +66,7 @@ export function CustomerEditor({
   customer: CustomerRow;
   locations: CustomerLocationRow[];
 }) {
+  const ops = useOps();
   const router = useRouter();
   const [company, setCompany] = useState({
     name: customer.name,
@@ -96,14 +97,14 @@ export function CustomerEditor({
       });
       const payload = (await response.json()) as { ok: boolean; code?: string };
       if (!payload.ok) {
-        setError(errorMessage(payload.code));
+        setError(ops.errorMessage(payload.code));
         return false;
       }
       setNotice("Salvat.");
       router.refresh();
       return true;
     } catch {
-      setError(errorMessage("SAVE_FAILED"));
+      setError(ops.errorMessage("SAVE_FAILED"));
       return false;
     } finally {
       setBusy(null);
@@ -150,22 +151,22 @@ export function CustomerEditor({
             onChange={(event) => onChange({ recipient_name: event.target.value })} />
         </div>
         <div>
-          <label className={labelClass}>{t("address")}</label>
+          <label className={labelClass}>{ops.t("address")}</label>
           <input className={inputClass} value={draft.address_line1}
             onChange={(event) => onChange({ address_line1: event.target.value })} />
         </div>
         <div>
-          <label className={labelClass}>{t("postalCode")}</label>
+          <label className={labelClass}>{ops.t("postalCode")}</label>
           <input className={inputClass} value={draft.postal_code}
             onChange={(event) => onChange({ postal_code: event.target.value })} />
         </div>
         <div>
-          <label className={labelClass}>{t("city")}</label>
+          <label className={labelClass}>{ops.t("city")}</label>
           <input className={inputClass} value={draft.city}
             onChange={(event) => onChange({ city: event.target.value })} />
         </div>
         <div>
-          <label className={labelClass}>{t("province")}</label>
+          <label className={labelClass}>{ops.t("province")}</label>
           <input className={inputClass} value={draft.province}
             onChange={(event) => onChange({ province: event.target.value })} />
         </div>
@@ -180,7 +181,7 @@ export function CustomerEditor({
             onChange={(event) => onChange({ email: event.target.value })} />
         </div>
         <div className="sm:col-span-2 lg:col-span-3">
-          <label className={labelClass}>{t("deliveryNotes")}</label>
+          <label className={labelClass}>{ops.t("deliveryNotes")}</label>
           <input className={inputClass} value={draft.delivery_notes}
             onChange={(event) => onChange({ delivery_notes: event.target.value })} />
         </div>
@@ -205,7 +206,7 @@ export function CustomerEditor({
         <h2 className="text-base font-bold text-ink">Dati azienda</h2>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div>
-            <label className={labelClass}>{t("companyName")}</label>
+            <label className={labelClass}>{ops.t("companyName")}</label>
             <input className={inputClass} value={company.name}
               onChange={(event) => setCompany({ ...company, name: event.target.value })} />
           </div>
@@ -215,12 +216,12 @@ export function CustomerEditor({
               onChange={(event) => setCompany({ ...company, legal_name: event.target.value })} />
           </div>
           <div>
-            <label className={labelClass}>{t("vatNumber")}</label>
+            <label className={labelClass}>{ops.t("vatNumber")}</label>
             <input className={inputClass} value={company.vat_number}
               onChange={(event) => setCompany({ ...company, vat_number: event.target.value })} />
           </div>
           <div>
-            <label className={labelClass}>Cod fiscal</label>
+            <label className={labelClass}>Codice fiscale</label>
             <input className={inputClass} value={company.fiscal_code}
               onChange={(event) => setCompany({ ...company, fiscal_code: event.target.value })} />
           </div>
@@ -251,24 +252,24 @@ export function CustomerEditor({
             }, "company")
           }
         >
-          {busy === "company" ? t("loading") : t("save")}
+          {busy === "company" ? ops.t("loading") : ops.t("save")}
         </Button>
       </section>
 
       <section className="rounded-xl border border-ink/10 bg-white p-5 shadow-card">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-base font-bold text-ink">{t("locations")}</h2>
+          <h2 className="text-base font-bold text-ink">{ops.t("locations")}</h2>
           <Button
             variant="secondary"
             onClick={() => setNewLocation(newLocation ? null : { ...EMPTY_DRAFT })}
           >
-            {newLocation ? t("cancel") : `+ ${t("addLocation")}`}
+            {newLocation ? ops.t("cancel") : `+ ${ops.t("addLocation")}`}
           </Button>
         </div>
 
         {newLocation && (
           <div className="mt-4 rounded-lg border-2 border-accent/30 bg-accent-light/30 p-4">
-            <h3 className="mb-3 text-sm font-bold text-accent-dark">{t("addLocation")}</h3>
+            <h3 className="mb-3 text-sm font-bold text-accent-dark">{ops.t("addLocation")}</h3>
             <LocationFields
               draft={newLocation}
               onChange={(patch) => setNewLocation({ ...newLocation, ...patch })}
@@ -286,7 +287,7 @@ export function CustomerEditor({
                 if (created) setNewLocation(null);
               }}
             >
-              {t("save")}
+              {ops.t("save")}
             </Button>
             {/* address_line1 and city are NOT NULL in the database. */}
             <p className="mt-2 text-xs text-ink-soft">Indirizzo e città sono obbligatori.</p>
@@ -333,7 +334,7 @@ export function CustomerEditor({
                     )
                   }
                 >
-                  {busy === location.id ? t("loading") : t("save")}
+                  {busy === location.id ? ops.t("loading") : ops.t("save")}
                 </Button>
               </div>
             );

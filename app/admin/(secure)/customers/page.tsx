@@ -2,6 +2,7 @@ import Link from "next/link";
 import { listCustomers } from "@/lib/server/customers";
 import { PageHeading } from "@/components/logistics/AdminShell";
 import { t } from "@/lib/i18n/logistics";
+import { getOpsLocale } from "@/lib/i18n/ops-server";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Elenco clienti" };
@@ -15,13 +16,14 @@ export default async function CustomersPage({
 }: {
   searchParams: Promise<{ q?: string }>;
 }) {
+  const locale = getOpsLocale();
   const { q } = await searchParams;
   const customers = await listCustomers(q);
 
   return (
     <>
       <PageHeading
-        title={t("customerList")}
+        title={t("customerList", locale)}
         description="Aziende clienti. Un'azienda può avere più luoghi di consegna."
       />
 
@@ -33,7 +35,7 @@ export default async function CustomersPage({
           className="h-11 flex-1 rounded-lg border border-ink/15 px-3 text-sm outline-none focus:border-accent"
         />
         <button type="submit" className="h-11 rounded-lg bg-accent px-4 text-sm font-semibold text-white">
-          {t("search")}
+          {t("search", locale)}
         </button>
       </form>
 
@@ -46,11 +48,11 @@ export default async function CustomersPage({
           <table className="w-full border-collapse text-left">
             <thead>
               <tr className="border-b border-ink/10 bg-surface-soft text-xs uppercase tracking-wide text-ink-soft">
-                <th scope="col" className="px-4 py-3 font-semibold">{t("companyName")}</th>
-                <th scope="col" className="px-4 py-3 font-semibold">{t("vatNumber")}</th>
-                <th scope="col" className="px-4 py-3 font-semibold">{t("locations")}</th>
+                <th scope="col" className="px-4 py-3 font-semibold">{t("companyName", locale)}</th>
+                <th scope="col" className="px-4 py-3 font-semibold">{t("vatNumber", locale)}</th>
+                <th scope="col" className="px-4 py-3 font-semibold">{t("locations", locale)}</th>
                 <th scope="col" className="px-4 py-3 font-semibold">Comenzi</th>
-                <th scope="col" className="px-4 py-3 font-semibold">{t("contacts")}</th>
+                <th scope="col" className="px-4 py-3 font-semibold">{t("contacts", locale)}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-ink/5">

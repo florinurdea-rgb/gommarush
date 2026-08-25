@@ -168,7 +168,7 @@ export async function getOperationalSummary(startDate: string, endDate: string):
   const supplierAgg = new Map<string, SupplierPickupRow>();
   for (const order of receivedOrders) {
     const supplierId = order.supplier_id ?? "unknown";
-    const supplierName = order.suppliers?.name ?? "Furnizor necunoscut";
+    const supplierName = order.suppliers?.name ?? "Fornitore sconosciuto";
     const existing = supplierAgg.get(supplierId) ?? { supplierId, supplierName, pickups: 0, tyres: 0 };
     existing.pickups += 1;
     existing.tyres += pickupTyresByOrder.get(order.id) ?? 0;

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/Button";
-import { errorMessage, t } from "@/lib/i18n/logistics";
+import { useOps } from "@/lib/i18n/ops";
 import type { OptionRef } from "@/components/logistics/NewOrderFlow";
 
 /** Assignment editor on the order detail page: driver, van, delivery date, plus hold/reactivate/cancel. */
@@ -31,6 +31,7 @@ export function OrderEditPanel({
   plannedDate,
   status,
 }: OrderEditPanelProps) {
+  const ops = useOps();
   const router = useRouter();
   const [driver, setDriver] = useState(driverId ?? "");
   const [vehicle, setVehicle] = useState(vehicleId ?? "");
@@ -59,14 +60,14 @@ export function OrderEditPanel({
       });
       const payload = (await response.json()) as { ok: boolean; code?: string };
       if (!payload.ok) {
-        setError(errorMessage(payload.code));
+        setError(ops.errorMessage(payload.code));
         return;
       }
 
       setNotice("Salvat.");
       router.refresh();
     } catch {
-      setError(errorMessage("SAVE_FAILED"));
+      setError(ops.errorMessage("SAVE_FAILED"));
     } finally {
       setBusy(false);
     }
@@ -89,12 +90,12 @@ export function OrderEditPanel({
       });
       const payload = (await response.json()) as { ok: boolean; code?: string };
       if (!payload.ok) {
-        setError(errorMessage(payload.code));
+        setError(ops.errorMessage(payload.code));
         return;
       }
       router.refresh();
     } catch {
-      setError(errorMessage("UNKNOWN"));
+      setError(ops.errorMessage("UNKNOWN"));
     } finally {
       setBusy(false);
     }
@@ -102,11 +103,11 @@ export function OrderEditPanel({
 
   return (
     <section className="rounded-xl border border-ink/10 bg-white p-5 shadow-card">
-      <h2 className="text-base font-bold text-ink">{t("assignment")}</h2>
+      <h2 className="text-base font-bold text-ink">{ops.t("assignment")}</h2>
 
       <div className="mt-4 space-y-3">
         <div>
-          <label className={labelClass} htmlFor="edit-driver">{t("driver")}</label>
+          <label className={labelClass} htmlFor="edit-driver">{ops.t("driver")}</label>
           <select id="edit-driver" className={inputClass} value={driver} disabled={cancelled}
             onChange={(event) => setDriver(event.target.value)}>
             <option value="">—</option>
@@ -117,7 +118,7 @@ export function OrderEditPanel({
         </div>
 
         <div>
-          <label className={labelClass} htmlFor="edit-vehicle">{t("vehicle")}</label>
+          <label className={labelClass} htmlFor="edit-vehicle">{ops.t("vehicle")}</label>
           <select id="edit-vehicle" className={inputClass} value={vehicle} disabled={cancelled}
             onChange={(event) => setVehicle(event.target.value)}>
             <option value="">—</option>
@@ -128,13 +129,13 @@ export function OrderEditPanel({
         </div>
 
         <div>
-          <label className={labelClass} htmlFor="edit-date">{t("plannedDate")}</label>
+          <label className={labelClass} htmlFor="edit-date">{ops.t("plannedDate")}</label>
           <input id="edit-date" type="date" className={inputClass} value={date} disabled={cancelled}
             onChange={(event) => setDate(event.target.value)} />
         </div>
 
         <Button className="w-full" disabled={busy || cancelled} onClick={saveAssignment}>
-          {busy ? t("loading") : t("save")}
+          {busy ? ops.t("loading") : ops.t("save")}
         </Button>
       </div>
 
@@ -154,12 +155,12 @@ export function OrderEditPanel({
           {onHold ? (
             <Button variant="secondary" className="w-full" disabled={busy}
               onClick={() => lifecycle("reactivate")}>
-              {t("reactivate")}
+              {ops.t("reactivate")}
             </Button>
           ) : (
             <Button variant="secondary" className="w-full" disabled={busy}
               onClick={() => lifecycle("hold")}>
-              {t("moveToHold")}
+              {ops.t("moveToHold")}
             </Button>
           )}
 
@@ -167,7 +168,7 @@ export function OrderEditPanel({
               rather than destroys. */}
           <Button variant="danger" className="w-full" disabled={busy}
             onClick={() => lifecycle("cancel")}>
-            {t("cancelOrder")}
+            {ops.t("cancelOrder")}
           </Button>
         </div>
       )}

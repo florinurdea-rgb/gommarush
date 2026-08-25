@@ -1,8 +1,7 @@
+"use client";
+
 import type { StatusTone } from "@/lib/i18n/logistics";
-import {
-  orderStatusMeta,
-  unitStatusMeta,
-} from "@/lib/i18n/logistics";
+import { useOps } from "@/lib/i18n/ops";
 
 /**
  * Status chips. Colour comes from the semantic tone in the translation map, so
@@ -37,12 +36,12 @@ export function Badge({ label, tone, size = "md", className = "" }: BadgeProps) 
 }
 
 export function OrderStatusBadge({ status, size }: { status: string; size?: "sm" | "md" }) {
-  const meta = orderStatusMeta(status);
+  const meta = useOps().orderStatusMeta(status);
   return <Badge label={meta.label} tone={meta.tone} size={size} />;
 }
 
 export function UnitStatusBadge({ status, size }: { status: string; size?: "sm" | "md" }) {
-  const meta = unitStatusMeta(status);
+  const meta = useOps().unitStatusMeta(status);
   return <Badge label={meta.label} tone={meta.tone} size={size} />;
 }
 

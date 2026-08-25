@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useToast } from "@/components/ui/Toast";
-import { orderStatusMeta } from "@/lib/i18n/logistics";
+import { useOps } from "@/lib/i18n/ops";
 import { MANUALLY_SETTABLE_STATUSES } from "@/lib/logistics/order-status-rules";
 import type { OrderStatus } from "@/lib/types/logistics";
 
@@ -35,8 +35,8 @@ export interface MoveTarget {
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cash: "Numerar",
   card: "Card",
-  bank_transfer: "Transfer bancar",
-  already_paid: "Deja achitat",
+  bank_transfer: "Bonifico bancario",
+  already_paid: "Già pagato",
   other: "Altro metodo",
 };
 
@@ -63,6 +63,7 @@ export function VehicleCardActionsMenu({
   onAssignRecommended: () => void;
   onMoveTo: (targetKey: string) => void;
 }) {
+  const ops = useOps();
   const { showToast } = useToast();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -121,7 +122,7 @@ export function VehicleCardActionsMenu({
       });
       const payload = (await response.json()) as { ok: boolean; code?: string; details?: string[] };
       if (payload.ok) {
-        showToast(`Status actualizat — ${orderStatusMeta(status).label}.`, "success");
+        showToast(`Status actualizat — ${ops.orderStatusMeta(status).label}.`, "success");
         router.refresh();
       } else {
         const detail = [payload.code, ...(payload.details ?? [])].filter(Boolean).join(" — ");
@@ -185,7 +186,7 @@ export function VehicleCardActionsMenu({
 
   async function confirmDeliveryFailed() {
     if (failureReason.trim().length < 3) {
-      showToast("Motivul este obligatoriu.", "error");
+      showToast("Il motivo è obbligatorio.", "error");
       return;
     }
     const ok = await runDispatchAction(
@@ -439,7 +440,7 @@ export function VehicleCardActionsMenu({
           {statusMenuOpen && (
             <div className="max-h-64 overflow-y-auto bg-surface-soft py-1">
               {MANUALLY_SETTABLE_STATUSES.map((status) => {
-                const meta = orderStatusMeta(status);
+                const meta = ops.orderStatusMeta(status);
                 const isCurrent = status === currentStatus;
                 return (
                   <button

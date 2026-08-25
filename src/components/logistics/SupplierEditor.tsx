@@ -56,7 +56,7 @@ export function SupplierEditor({ supplier }: { supplier: SupplierRow }) {
       });
       const payload = (await response.json()) as { ok: boolean; code?: string };
       if (payload.ok) {
-        setNotice("Furnizor salvat.");
+        setNotice("Fornitore salvato.");
         router.refresh();
       } else {
         setError(`Salvataggio non completato (${payload.code ?? "errore sconosciuto"}).`);
@@ -82,7 +82,7 @@ export function SupplierEditor({ supplier }: { supplier: SupplierRow }) {
       )}
 
       <section className="rounded-xl border border-ink/10 bg-white p-5 shadow-card">
-        <h2 className="text-base font-bold text-ink">Date furnizor</h2>
+        <h2 className="text-base font-bold text-ink">Dati fornitore</h2>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div>
             <label className={labelClass}>Denumire</label>
@@ -109,7 +109,7 @@ export function SupplierEditor({ supplier }: { supplier: SupplierRow }) {
             />
           </div>
           <div>
-            <label className={labelClass}>Cod fiscal</label>
+            <label className={labelClass}>Codice fiscale</label>
             <input
               className={inputClass}
               value={fields.fiscal_code}

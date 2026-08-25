@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { OrderStatusBadge, UnitStatusBadge } from "@/components/logistics/StatusBadge";
 import { formatOrderNumber } from "@/lib/logistics/order-number";
-import { itemTypeLabel, t } from "@/lib/i18n/logistics";
+import { useOps } from "@/lib/i18n/ops";
 import type { OrderDetail } from "@/lib/server/orders";
 
 /**
@@ -16,6 +16,7 @@ import type { OrderDetail } from "@/lib/server/orders";
  * the full page, reached via the footer link.
  */
 export function OrderDetailModal({ orderId, onClose }: { orderId: string; onClose: () => void }) {
+  const ops = useOps();
   const [detail, setDetail] = useState<OrderDetail | null>(null);
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -96,7 +97,7 @@ export function OrderDetailModal({ orderId, onClose }: { orderId: string; onClos
                     {formatOrderNumber(detail.order.order_number)}
                   </div>
                   <h2 className="truncate text-xl font-extrabold tracking-tight text-ink">
-                    {detail.customer?.name ?? "Client nespecificat"}
+                    {detail.customer?.name ?? "Cliente non specificato"}
                   </h2>
                   <div className="mt-1">
                     <OrderStatusBadge status={detail.order.status} size="sm" />
@@ -106,11 +107,11 @@ export function OrderDetailModal({ orderId, onClose }: { orderId: string; onClos
 
               <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
                 <div>
-                  <dt className="text-xs text-ink-soft">{t("plannedDate")}</dt>
+                  <dt className="text-xs text-ink-soft">{ops.t("plannedDate")}</dt>
                   <dd className="font-medium text-ink">{detail.order.planned_delivery_date ?? "—"}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-ink-soft">{t("driverVehicle")}</dt>
+                  <dt className="text-xs text-ink-soft">{ops.t("driverVehicle")}</dt>
                   <dd className="font-medium text-ink">
                     {detail.driver?.name ?? "—"}
                     {detail.vehicle?.name ? ` · ${detail.vehicle.name}` : ""}
@@ -123,11 +124,11 @@ export function OrderDetailModal({ orderId, onClose }: { orderId: string; onClos
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-ink-soft">{t("supplier")}</dt>
+                  <dt className="text-xs text-ink-soft">{ops.t("supplier")}</dt>
                   <dd className="font-medium text-ink">{detail.supplier?.name ?? "—"}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-ink-soft">{t("documentReference")}</dt>
+                  <dt className="text-xs text-ink-soft">{ops.t("documentReference")}</dt>
                   <dd className="font-mono text-ink">{detail.order.supplier_document_number ?? "—"}</dd>
                 </div>
                 {phone && (
@@ -154,7 +155,7 @@ export function OrderDetailModal({ orderId, onClose }: { orderId: string; onClos
 
               {detail.order.cash_on_delivery && (
                 <div className="mt-3 rounded-xl bg-state-warning-soft px-3 py-2 text-sm font-semibold text-state-warning">
-                  {t("amountToCollect")}: {detail.order.amount_to_collect ?? "—"} {detail.order.currency}
+                  {ops.t("amountToCollect")}: {detail.order.amount_to_collect ?? "—"} {detail.order.currency}
                 </div>
               )}
 
@@ -181,12 +182,12 @@ export function OrderDetailModal({ orderId, onClose }: { orderId: string; onClos
               </div>
 
               <div className="mt-5">
-                <h3 className="text-xs font-bold uppercase tracking-wide text-ink-soft">{t("products")}</h3>
+                <h3 className="text-xs font-bold uppercase tracking-wide text-ink-soft">{ops.t("products")}</h3>
                 <ul className="mt-2 space-y-2">
                   {detail.items.map((item) => (
                     <li key={item.id} className="flex items-center justify-between gap-2 text-sm">
                       <span className="min-w-0 truncate text-ink">
-                        {item.description ?? item.raw_description ?? itemTypeLabel(item.item_type)}
+                        {item.description ?? item.raw_description ?? ops.itemTypeLabel(item.item_type)}
                       </span>
                       <span className="flex-none font-mono text-xs text-ink-soft">×{item.quantity}</span>
                     </li>

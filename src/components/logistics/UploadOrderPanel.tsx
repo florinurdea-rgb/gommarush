@@ -170,7 +170,7 @@ export function UploadOrderPanel({
           droppedLineTotal += payload.droppedLineCount ?? 0;
         } else {
           const detail = [payload.code, ...(payload.details ?? [])].filter(Boolean).join(" — ");
-          errors.push(`${doc.extracted.document.documentNumber ?? "DDT necunoscut"}: ${detail || "eroare"}`);
+          errors.push(`${doc.extracted.document.documentNumber ?? "DDT sconosciuto"}: ${detail || "eroare"}`);
         }
       } catch {
         errors.push(`${doc.extracted.document.documentNumber ?? "DDT sconosciuto"}: errore di rete`);
@@ -329,14 +329,14 @@ export function UploadOrderPanel({
                           {DDT_STATUS_LABEL[doc.status]}
                         </span>
                         <span className="font-mono text-xs font-semibold text-ink-soft">
-                          {doc.extracted.document.documentNumber ?? "DDT necunoscut"}
+                          {doc.extracted.document.documentNumber ?? "DDT sconosciuto"}
                         </span>
                       </div>
                       <div className="mt-1 truncate text-base font-bold text-ink">
-                        {doc.extracted.customer.companyName ?? "Client necunoscut"}
+                        {doc.extracted.customer.companyName ?? "Cliente sconosciuto"}
                       </div>
                       <div className="truncate text-xs text-ink-soft">
-                        {doc.extracted.supplier.name ?? "Furnizor necunoscut"}
+                        {doc.extracted.supplier.name ?? "Fornitore sconosciuto"}
                         {doc.extracted.customer.city ? ` · ${doc.extracted.customer.city}` : ""}
                       </div>
                     </button>

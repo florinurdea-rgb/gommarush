@@ -156,8 +156,8 @@ export function SummaryDashboard({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <KpiCard value={summary.orderCount} label="Comenzi" icon={<OrdersIcon />} tone="blue" />
         <KpiCard value={summary.pickupCount} label="Ritiri fornitore" icon={<PickupIcon />} tone="amber" />
-        <KpiCard value={summary.deliveredTyreCount} label="Anvelope livrate" icon={<TyreIcon className="h-5 w-5" />} tone="green" />
-        <KpiCard value={formatEuro(summary.profit)} label="Profit transport" icon={<ProfitIcon />} tone="purple" />
+        <KpiCard value={summary.deliveredTyreCount} label="Pneumatici consegnati" icon={<TyreIcon className="h-5 w-5" />} tone="green" />
+        <KpiCard value={formatEuro(summary.profit)} label="Margine trasporto" icon={<ProfitIcon />} tone="purple" />
       </div>
 
       {/* ------------------------------------------------ Needs attention */}

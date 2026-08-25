@@ -482,7 +482,7 @@ export function VehicleBoard({
         }}
         className={`min-h-16 flex-1 space-y-1.5 overflow-y-auto rounded-lg p-1.5 transition-colors ${isOver ? "bg-accent-light/50" : ""}`}
       >
-        {orders.length === 0 && <p className="py-6 text-center text-xs text-ink-soft">Nicio ordine</p>}
+        {orders.length === 0 && <p className="py-6 text-center text-xs text-ink-soft">Nessun ordine</p>}
         {orders.map((order) => renderCard(order, column.key))}
       </div>
     );
@@ -656,7 +656,7 @@ export function VehicleBoard({
           onChange={(event) => setQuickFilter(event.target.value as QuickFilter)}
           className="h-9 rounded-lg border border-ink/15 bg-white px-2 text-xs font-semibold text-ink-soft"
         >
-          <option value="all">Toate statusurile</option>
+          <option value="all">Tutti gli stati</option>
           <option value="unassigned">Non assegnati</option>
           {OPERATIONAL_BUCKETS.map((bucket) => (
             <option key={bucket} value={bucket}>

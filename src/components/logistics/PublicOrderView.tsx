@@ -2,6 +2,7 @@ import { Logo } from "@/components/Logo";
 import { OrderStatusBadge } from "@/components/logistics/StatusBadge";
 import { formatOrderNumber } from "@/lib/logistics/order-number";
 import { itemTypeLabel, t } from "@/lib/i18n/logistics";
+import { getOpsLocale } from "@/lib/i18n/ops-server";
 import type { PublicOrderViewData } from "@/lib/server/public-order-view";
 
 /**
@@ -19,6 +20,7 @@ export function PublicOrderView({
   view: PublicOrderViewData;
   highlightUnitId?: string;
 }) {
+  const locale = getOpsLocale();
   const { order } = view;
 
   return (
@@ -27,7 +29,7 @@ export function PublicOrderView({
         <div className="mx-auto flex max-w-lg items-center justify-between">
           <Logo iconClassName="h-9 w-9" textClassName="text-lg" />
           <span className="rounded-md bg-state-neutral-soft px-2 py-1 text-xs font-semibold text-state-neutral">
-            {t("readOnlyView")}
+            {t("readOnlyView", locale)}
           </span>
         </div>
       </header>
@@ -50,7 +52,7 @@ export function PublicOrderView({
                 <OrderStatusBadge status={order.status} />
                 {order.planned_delivery_date && (
                   <span className="text-sm text-ink-soft">
-                    {t("plannedDate")}: {order.planned_delivery_date}
+                    {t("plannedDate", locale)}: {order.planned_delivery_date}
                   </span>
                 )}
               </div>
@@ -73,7 +75,7 @@ export function PublicOrderView({
                   >
                     <div className="font-semibold text-ink">{item.description}</div>
                     <div className="mt-0.5 text-xs text-ink-soft">
-                      {itemTypeLabel(item.item_type)} · {t("quantity")}: {item.quantity}
+                      {itemTypeLabel(item.item_type, locale)} · {t("quantity", locale)}: {item.quantity}
                     </div>
                   </article>
                 );

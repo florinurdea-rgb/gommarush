@@ -3,13 +3,14 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/Button";
-import { t } from "@/lib/i18n/logistics";
+import { useOps } from "@/lib/i18n/ops";
 
 /**
  * Signing out clears the httpOnly cookie server-side — the browser cannot do it
  * itself, which is the point of the cookie being httpOnly.
  */
 export function SignOutButton() {
+  const ops = useOps();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
 
@@ -30,7 +31,7 @@ export function SignOutButton() {
         }
       }}
     >
-      {t("signOut")}
+      {ops.t("signOut")}
     </Button>
   );
 }

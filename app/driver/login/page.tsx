@@ -3,11 +3,13 @@ import { getDriverSession } from "@/lib/auth/driver-session";
 import { Logo } from "@/components/Logo";
 import { DriverLoginForm } from "@/components/logistics/DriverLoginForm";
 import { t } from "@/lib/i18n/logistics";
+import { getOpsLocale } from "@/lib/i18n/ops-server";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Autista" };
 
 export default async function DriverLoginPage() {
+  const locale = getOpsLocale();
   if (await getDriverSession()) redirect("/driver");
 
   return (
@@ -15,7 +17,7 @@ export default async function DriverLoginPage() {
       <div className="mx-auto w-full max-w-md">
         <Logo iconClassName="h-12 w-12" textClassName="text-2xl [&>span]:!text-white" />
 
-        <h1 className="mt-8 text-2xl font-extrabold">{t("driverLogin")}</h1>
+        <h1 className="mt-8 text-2xl font-extrabold">{t("driverLogin", locale)}</h1>
         <p className="mt-1 text-sm text-white/60">GommaRush Logistica</p>
 
         <DriverLoginForm />

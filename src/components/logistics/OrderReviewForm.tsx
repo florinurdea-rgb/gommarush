@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Button } from "@/components/Button";
-import { errorMessage, itemTypeLabel, t } from "@/lib/i18n/logistics";
+import { useOps } from "@/lib/i18n/ops";
 import { ITEM_TYPES } from "@/lib/types/logistics";
 import { totalUnitCount } from "@/lib/logistics/inventory-units";
 import { mergeIdenticalProductLines } from "@/lib/logistics/product-normalise";
@@ -82,6 +82,7 @@ export function OrderReviewForm({
   onBack,
   onSaved,
 }: OrderReviewFormProps) {
+  const ops = useOps();
   // --- Supplier ---------------------------------------------------------
   const [supplierName, setSupplierName] = useState(analysis.supplier.name ?? "");
   const [supplierVat, setSupplierVat] = useState(analysis.supplier.vatNumber ?? "");
@@ -165,7 +166,7 @@ export function OrderReviewForm({
     }
   }
 
-  /** "+ Client nou" — the whole point is a clean slate, not whatever was previously typed or picked. */
+  /** "+ Nuovo cliente" — the whole point is a clean slate, not whatever was previously typed or picked. */
   function handleSelectNewCustomer() {
     setMatchedCustomer(null);
     setMatchedLocation(null);
@@ -247,7 +248,7 @@ export function OrderReviewForm({
 
     try {
       const payload = {
-        supplier_name: supplierName.trim() || "Furnizor necunoscut",
+        supplier_name: supplierName.trim() || "Fornitore sconosciuto",
         supplier_vat_number: supplierVat.trim() || null,
         supplier_document_number: documentNumber.trim() || null,
         supplier_document_date: documentDate.trim() || null,
@@ -327,14 +328,14 @@ export function OrderReviewForm({
       };
 
       if (!result.ok || !result.orderId) {
-        setError(errorMessage(result.code));
+        setError(ops.errorMessage(result.code));
         setDetails(result.details ?? []);
         return;
       }
 
       onSaved(result.orderId);
     } catch {
-      setError(errorMessage("SAVE_FAILED"));
+      setError(ops.errorMessage("SAVE_FAILED"));
     } finally {
       setSaving(false);
     }
@@ -354,7 +355,7 @@ export function OrderReviewForm({
         onClick={onBack}
         className="text-sm font-semibold text-accent hover:underline"
       >
-        ← {t("back")}
+        ← {ops.t("back")}
       </button>
 
       {/* Analysis status — honest about what was and wasn't read. */}
@@ -368,10 +369,10 @@ export function OrderReviewForm({
         >
           <p className="text-sm font-bold text-ink">
             {analysis.status === "unconfigured"
-              ? t("analysisNotConfigured")
+              ? ops.t("analysisNotConfigured")
               : analysis.status === "failed"
-                ? errorMessage("ANALYSIS_FAILED")
-                : t("reviewBeforeSave")}
+                ? ops.errorMessage("ANALYSIS_FAILED")
+                : ops.t("reviewBeforeSave")}
           </p>
           {analysis.notes.length > 0 && (
             <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-ink-soft">
@@ -387,25 +388,25 @@ export function OrderReviewForm({
       )}
 
       {/* ---------------------------------------------------------- Supplier */}
-      <Section title={t("supplier")} description="Il fornitore e il riferimento del documento.">
+      <Section title={ops.t("supplier")} description="Il fornitore e il riferimento del documento.">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div>
-            <label className={labelClass} htmlFor="supplier-name">Nume furnizor</label>
+            <label className={labelClass} htmlFor="supplier-name">Nome fornitore</label>
             <input id="supplier-name" className={inputClass} value={supplierName}
               onChange={(event) => setSupplierName(event.target.value)} />
           </div>
           <div>
-            <label className={labelClass} htmlFor="supplier-vat">P.IVA / Cod fiscal</label>
+            <label className={labelClass} htmlFor="supplier-vat">P.IVA / Codice fiscale</label>
             <input id="supplier-vat" className={inputClass} value={supplierVat}
               onChange={(event) => setSupplierVat(event.target.value)} />
           </div>
           <div>
-            <label className={labelClass} htmlFor="doc-number">{t("documentReference")}</label>
+            <label className={labelClass} htmlFor="doc-number">{ops.t("documentReference")}</label>
             <input id="doc-number" className={inputClass} value={documentNumber}
               onChange={(event) => setDocumentNumber(event.target.value)} />
           </div>
           <div>
-            <label className={labelClass} htmlFor="doc-date">Data documentului</label>
+            <label className={labelClass} htmlFor="doc-date">Data del documento</label>
             <input id="doc-date" type="date" className={inputClass} value={documentDate}
               onChange={(event) => setDocumentDate(event.target.value)} />
           </div>
@@ -419,8 +420,8 @@ export function OrderReviewForm({
 
       {/* ---------------------------------------------------------- Customer */}
       <Section
-        title={t("customer")}
-        description="Clientul final al ordinii."
+        title={ops.t("customer")}
+        description="Il cliente finale dell'ordine."
         tone={customerMatch?.requiresReview ? "warning" : undefined}
       >
         {customerMatch && (
@@ -433,10 +434,10 @@ export function OrderReviewForm({
                   : "bg-state-waiting-soft text-state-waiting"
             }`}
           >
-            {customerMatch.kind === "match_confirmed" && t("matchConfirmed")}
-            {customerMatch.kind === "possible_match" && t("possibleMatch")}
-            {customerMatch.kind === "new_customer" && t("newCustomer")}
-            {customerMatch.kind === "new_location" && t("newLocation")}
+            {customerMatch.kind === "match_confirmed" && ops.t("matchConfirmed")}
+            {customerMatch.kind === "possible_match" && ops.t("possibleMatch")}
+            {customerMatch.kind === "new_customer" && ops.t("newCustomer")}
+            {customerMatch.kind === "new_location" && ops.t("newLocation")}
             {matchedCustomer && (
               <span className="ml-2 font-normal">
                 → {matchedCustomer.name}
@@ -469,9 +470,9 @@ export function OrderReviewForm({
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div>
-            <label className={labelClass} htmlFor="customer-name">{t("companyName")}</label>
+            <label className={labelClass} htmlFor="customer-name">{ops.t("companyName")}</label>
             {/* Manual entry (no document match): a searchable dropdown of
-                every customer, "+ Client nou" pinned at the top — the
+                every customer, "+ Nuovo cliente" pinned at the top — the
                 whole point being to pick a real customer instead of
                 free-typing a name that might already exist under a
                 slightly different spelling. */}
@@ -493,13 +494,13 @@ export function OrderReviewForm({
             )}
           </div>
           <div>
-            <label className={labelClass} htmlFor="customer-vat">{t("vatNumber")}</label>
+            <label className={labelClass} htmlFor="customer-vat">{ops.t("vatNumber")}</label>
             <input id="customer-vat" className={inputClass} value={customerVat}
               disabled={useExistingCustomer}
               onChange={(event) => setCustomerVat(event.target.value)} />
           </div>
           <div>
-            <label className={labelClass} htmlFor="customer-code">Cod client la furnizor</label>
+            <label className={labelClass} htmlFor="customer-code">Codice cliente presso il fornitore</label>
             <input id="customer-code" className={inputClass} value={supplierCustomerCode}
               onChange={(event) => setSupplierCustomerCode(event.target.value)} />
           </div>
@@ -508,7 +509,7 @@ export function OrderReviewForm({
 
       {/* ------------------------------------------------- Delivery location */}
       <Section
-        title={t("deliveryLocation")}
+        title={ops.t("deliveryLocation")}
         description="L'indirizzo a cui viene consegnato questo ordine."
       >
         {loadingCustomerLocations && (
@@ -528,7 +529,7 @@ export function OrderReviewForm({
 
         {/* Never silently overwrite master data — this is an explicit choice. */}
         <fieldset className="mb-4">
-          <legend className={labelClass}>Ce facem cu adresa {customerMatch ? "din document" : "clientului"}?</legend>
+          <legend className={labelClass}>Cosa facciamo con l&apos;indirizzo {customerMatch ? "del documento" : "del cliente"}?</legend>
           <div className="space-y-2">
             {(
               customerMatch?.allowedResolutions ??
@@ -546,9 +547,9 @@ export function OrderReviewForm({
                 />
                 <span>
                   {option === "use_existing" && "Usa il luogo esistente"}
-                  {option === "use_for_this_order_only" && t("useAddressForThisOrderOnly")}
-                  {option === "add_as_new_location" && t("addAsNewLocation")}
-                  {option === "update_existing_location" && t("updateExistingLocation")}
+                  {option === "use_for_this_order_only" && ops.t("useAddressForThisOrderOnly")}
+                  {option === "add_as_new_location" && ops.t("addAsNewLocation")}
+                  {option === "update_existing_location" && ops.t("updateExistingLocation")}
                 </span>
               </label>
             ))}
@@ -562,27 +563,27 @@ export function OrderReviewForm({
               onChange={(event) => setRecipient(event.target.value)} />
           </div>
           <div className="lg:col-span-2">
-            <label className={labelClass} htmlFor="address1">{t("address")}</label>
+            <label className={labelClass} htmlFor="address1">{ops.t("address")}</label>
             <input id="address1" className={inputClass} value={addressLine1}
               onChange={(event) => setAddressLine1(event.target.value)} />
           </div>
           <div>
-            <label className={labelClass} htmlFor="postal">{t("postalCode")}</label>
+            <label className={labelClass} htmlFor="postal">{ops.t("postalCode")}</label>
             <input id="postal" className={inputClass} value={postalCode}
               onChange={(event) => setPostalCode(event.target.value)} />
           </div>
           <div>
-            <label className={labelClass} htmlFor="city">{t("city")}</label>
+            <label className={labelClass} htmlFor="city">{ops.t("city")}</label>
             <input id="city" className={inputClass} value={city}
               onChange={(event) => setCity(event.target.value)} />
           </div>
           <div>
-            <label className={labelClass} htmlFor="province">{t("province")}</label>
+            <label className={labelClass} htmlFor="province">{ops.t("province")}</label>
             <input id="province" className={inputClass} value={province}
               onChange={(event) => setProvince(event.target.value)} />
           </div>
           <div className="sm:col-span-2 lg:col-span-3">
-            <label className={labelClass} htmlFor="delivery-notes">{t("deliveryNotes")}</label>
+            <label className={labelClass} htmlFor="delivery-notes">{ops.t("deliveryNotes")}</label>
             <input id="delivery-notes" className={inputClass} value={deliveryNotes}
               onChange={(event) => setDeliveryNotes(event.target.value)} />
           </div>
@@ -590,22 +591,22 @@ export function OrderReviewForm({
       </Section>
 
       {/* ----------------------------------------------------------- Payment */}
-      <Section title={t("payment")}>
+      <Section title={ops.t("payment")}>
         <label className="mb-4 flex items-center gap-2 text-sm font-medium text-ink">
           <input type="checkbox" checked={requiresPayment}
             onChange={(event) => setRequiresPayment(event.target.checked)} />
-          {t("requiresPaymentOnDelivery")}
+          {ops.t("requiresPaymentOnDelivery")}
         </label>
 
         <div className="grid gap-4 sm:grid-cols-3">
           <div>
-            <label className={labelClass} htmlFor="amount">{t("amountToCollect")}</label>
+            <label className={labelClass} htmlFor="amount">{ops.t("amountToCollect")}</label>
             <input id="amount" type="number" step="0.01" min="0" className={inputClass}
               value={amountToCollect} disabled={!requiresPayment}
               onChange={(event) => setAmountToCollect(event.target.value)} />
           </div>
           <div>
-            <label className={labelClass} htmlFor="collection">{t("collectionMethod")}</label>
+            <label className={labelClass} htmlFor="collection">{ops.t("collectionMethod")}</label>
             <input id="collection" className={inputClass} value={collectionMethod}
               disabled={!requiresPayment}
               onChange={(event) => setCollectionMethod(event.target.value)} />
@@ -624,10 +625,10 @@ export function OrderReviewForm({
           "Ottimizza le rotte") — asking for it again at creation time would
           just duplicate that flow with a second, easier-to-forget place to
           set it. */}
-      <Section title={t("assignment")}>
+      <Section title={ops.t("assignment")}>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className={labelClass} htmlFor="delivery-date">{t("plannedDate")}</label>
+            <label className={labelClass} htmlFor="delivery-date">{ops.t("plannedDate")}</label>
             <input id="delivery-date" type="date" className={inputClass} value={deliveryDate}
               onChange={(event) => setDeliveryDate(event.target.value)} />
           </div>
@@ -636,7 +637,7 @@ export function OrderReviewForm({
 
       {/* ---------------------------------------------------------- Products */}
       <Section
-        title={t("products")}
+        title={ops.t("products")}
         description={`Verranno generati ${unitCount} articoli fisici (spese e servizi non generano articoli).`}
       >
         <div className="space-y-3">
@@ -651,7 +652,7 @@ export function OrderReviewForm({
             >
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-12">
                 <div className="lg:col-span-4">
-                  <label className={labelClass}>{t("description")}</label>
+                  <label className={labelClass}>{ops.t("description")}</label>
                   <input
                     className={inputClass}
                     value={line.description ?? line.rawDescription}
@@ -665,7 +666,7 @@ export function OrderReviewForm({
                   />
                 </div>
                 <div className="lg:col-span-2">
-                  <label className={labelClass}>{t("type")}</label>
+                  <label className={labelClass}>{ops.t("type")}</label>
                   <select
                     className={inputClass}
                     value={line.itemTypeValue}
@@ -674,12 +675,12 @@ export function OrderReviewForm({
                     }
                   >
                     {ITEM_TYPES.map((type) => (
-                      <option key={type} value={type}>{itemTypeLabel(type)}</option>
+                      <option key={type} value={type}>{ops.itemTypeLabel(type)}</option>
                     ))}
                   </select>
                 </div>
                 <div className="lg:col-span-2">
-                  <label className={labelClass}>{t("brand")}</label>
+                  <label className={labelClass}>{ops.t("brand")}</label>
                   <input className={inputClass} value={line.brand ?? ""}
                     onChange={(event) => updateLine(line.key, { brand: event.target.value })} />
                 </div>
@@ -705,7 +706,7 @@ export function OrderReviewForm({
                     } />
                 </div>
                 <div className="lg:col-span-1">
-                  <label className={labelClass}>{t("quantity")}</label>
+                  <label className={labelClass}>{ops.t("quantity")}</label>
                   <input type="number" min="1" className={`${inputClass} font-bold`}
                     value={line.quantityValue}
                     onChange={(event) =>
@@ -732,7 +733,7 @@ export function OrderReviewForm({
                   onClick={() => setLines((current) => current.filter((l) => l.key !== line.key))}
                   className="text-xs font-semibold text-state-danger hover:underline"
                 >
-                  {t("removeLine")}
+                  {ops.t("removeLine")}
                 </button>
               </div>
             </div>
@@ -745,7 +746,7 @@ export function OrderReviewForm({
           )}
 
           <Button type="button" variant="secondary" onClick={addLine}>
-            + {t("addLine")}
+            + {ops.t("addLine")}
           </Button>
         </div>
       </Section>
@@ -769,7 +770,7 @@ export function OrderReviewForm({
             {lines.length} linii · <strong className="text-ink">{unitCount}</strong> obiecte fizice
           </span>
           <Button size="lg" disabled={saving || lines.length === 0} onClick={save}>
-            {saving ? t("loading") : t("save")}
+            {saving ? ops.t("loading") : ops.t("save")}
           </Button>
         </div>
       </div>

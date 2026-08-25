@@ -4,7 +4,7 @@ import { BootstrapForm } from "@/components/logistics/BootstrapForm";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "Configurare cont admin" };
+export const metadata = { title: "Configurazione account amministratore" };
 
 /**
  * One-time page: creates or resets the password of a Supabase Auth admin

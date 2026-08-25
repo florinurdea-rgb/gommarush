@@ -7,6 +7,7 @@ import { OrderStatusBadge, UnitStatusBadge } from "@/components/logistics/Status
 import { OrderEditPanel } from "@/components/logistics/OrderEditPanel";
 import { formatOrderNumber } from "@/lib/logistics/order-number";
 import { itemTypeLabel, orderStatusMeta, t } from "@/lib/i18n/logistics";
+import { getOpsLocale } from "@/lib/i18n/ops-server";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ export default async function OrderDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const locale = getOpsLocale();
   const { id } = await params;
   const detail = await getOrderDetail(id);
   if (!detail) notFound();
@@ -36,7 +38,7 @@ export default async function OrderDetailPage({
     <>
       <PageHeading
         title={formatOrderNumber(detail.order.order_number)}
-        description={detail.customer?.name ?? "Client nespecificat"}
+        description={detail.customer?.name ?? "Cliente non specificato"}
         back
         action={<OrderStatusBadge status={detail.order.status} />}
       />
@@ -44,7 +46,7 @@ export default async function OrderDetailPage({
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
           <section className="rounded-xl border border-ink/10 bg-white p-5 shadow-card">
-            <h2 className="text-base font-bold text-ink">{t("products")}</h2>
+            <h2 className="text-base font-bold text-ink">{t("products", locale)}</h2>
             <div className="mt-4 space-y-4">
               {detail.items.map((item) => {
                 const units = unitsByItem.get(item.id) ?? [];
@@ -56,7 +58,7 @@ export default async function OrderDetailPage({
                           {item.description ?? item.raw_description ?? "—"}
                         </div>
                         <div className="mt-0.5 text-xs text-ink-soft">
-                          {itemTypeLabel(item.item_type)} · {t("quantity")}: {item.quantity}
+                          {itemTypeLabel(item.item_type, locale)} · {t("quantity", locale)}: {item.quantity}
                           {item.brand ? ` · ${item.brand}` : ""}
                           {item.width ? ` · ${item.width}/${item.aspect_ratio} R${item.rim_diameter}` : ""}
                         </div>
@@ -110,8 +112,8 @@ export default async function OrderDetailPage({
                     </span>
                     <span className="font-semibold text-ink">
                       {event.old_status && event.old_status !== event.new_status
-                        ? `${orderStatusMeta(event.old_status).label} → ${orderStatusMeta(event.new_status).label}`
-                        : orderStatusMeta(event.new_status).label}
+                        ? `${orderStatusMeta(event.old_status, locale).label} → ${orderStatusMeta(event.new_status, locale).label}`
+                        : orderStatusMeta(event.new_status, locale).label}
                     </span>
                     {event.changed_by_label && <span className="text-ink-soft">{event.changed_by_label}</span>}
                     {event.notes && <span className="text-xs text-ink-soft">({event.notes})</span>}
@@ -147,15 +149,15 @@ export default async function OrderDetailPage({
             </ol>
             <dl className="mt-4 space-y-1 text-sm">
               <div className="flex justify-between">
-                <dt className="text-ink-soft">{t("supplier")}</dt>
+                <dt className="text-ink-soft">{t("supplier", locale)}</dt>
                 <dd className="font-medium text-ink">{detail.supplier?.name ?? "—"}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-ink-soft">{t("documentReference")}</dt>
+                <dt className="text-ink-soft">{t("documentReference", locale)}</dt>
                 <dd className="font-mono text-ink">{detail.order.supplier_document_number ?? "—"}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-ink-soft">{t("deliveryLocation")}</dt>
+                <dt className="text-ink-soft">{t("deliveryLocation", locale)}</dt>
                 <dd className="text-right text-ink">
                   {detail.order.delivery_address_line1 ?? detail.location?.address_line1 ?? "—"}
                   <br />
@@ -167,7 +169,7 @@ export default async function OrderDetailPage({
               </div>
               {detail.order.cash_on_delivery && (
                 <div className="flex justify-between">
-                  <dt className="text-ink-soft">{t("amountToCollect")}</dt>
+                  <dt className="text-ink-soft">{t("amountToCollect", locale)}</dt>
                   <dd className="font-bold text-ink">
                     {detail.order.amount_to_collect ?? "—"} {detail.order.currency}
                   </dd>
@@ -179,7 +181,7 @@ export default async function OrderDetailPage({
               href={`/orders/${detail.order.id}`}
               className="mt-4 inline-block text-sm font-semibold text-accent hover:underline"
             >
-              {t("readOnlyView")} →
+              {t("readOnlyView", locale)} →
             </Link>
           </section>
 
