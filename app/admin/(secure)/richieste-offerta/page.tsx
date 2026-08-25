@@ -11,6 +11,9 @@ import { DashboardLiveRefresh } from "@/components/logistics/DashboardLiveRefres
 import { describeEmailConfig } from "@/lib/email/send-quote-request";
 import { listQuoteRequestsQuerySchema } from "@/lib/validation/quote-request";
 import { DELIVERY_LABELS } from "@/lib/types/quote-request";
+import { checkQuoteSchema } from "@/lib/server/quote-schema-check";
+import { SchemaStatusPanel } from "@/components/quote/SchemaStatusPanel";
+import { logError } from "@/lib/logger";
 
 // Always fresh: a request submitted seconds ago must appear on the next
 // load, never a cached page from before it existed.
@@ -64,6 +67,11 @@ export default async function QuoteRequestsPage({
   const parsed = listQuoteRequestsQuerySchema.safeParse(searchParams);
   const filters = parsed.success ? parsed.data : {};
 
+  // These queries touch tables that may not exist yet. If they fail, this
+  // page must still render — it is where the operator comes to find out WHY
+  // customers are seeing an error, so it is the last screen allowed to
+  // break. `checkQuoteSchema` never throws and explains what is missing.
+  const empty = { rows: [], total: 0, page: 1, perPage: 25, pageCount: 1 };
   const [result, metrics] = await Promise.all([
     listQuoteRequests({
       page: filters.page ?? 1,
@@ -74,12 +82,21 @@ export default async function QuoteRequestsPage({
       search: filters.q ?? null,
       from: filters.from ?? null,
       to: filters.to ?? null,
+    }).catch((error) => {
+      logError("admin_quote_list_failed", error);
+      return empty;
     }),
-    getBusinessMetrics("30d"),
+    getBusinessMetrics("30d").catch((error) => {
+      logError("admin_quote_metrics_failed", error);
+      return { period: "30d" as const, newRequests: 0, toProcess: 0, offersSent: 0, accepted: 0, rejected: 0 };
+    }),
   ]);
 
   const { rows, total, page, pageCount } = result;
   const emailConfig = describeEmailConfig();
+  // Only probed when there is nothing to show — a healthy list is proof
+  // enough that the schema is fine, and this is four extra round trips.
+  const schema = total === 0 ? await checkQuoteSchema() : null;
 
   function pageHref(next: number): string {
     const query = new URLSearchParams();
@@ -105,6 +122,8 @@ export default async function QuoteRequestsPage({
         <Metric label="Offerte inviate" value={metrics.offersSent} />
         <Metric label="Accettate" value={metrics.accepted} />
       </div>
+
+      {schema && <SchemaStatusPanel report={schema} />}
 
       {/* Surfaced at the top of the list, not only inside a failed request:
           if the deployment can't send at all, that's true of every future

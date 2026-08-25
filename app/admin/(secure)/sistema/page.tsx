@@ -1,6 +1,8 @@
 import { PageHeading } from "@/components/logistics/AdminShell";
 import { getSystemHealth, PERIOD_LABELS, type MetricPeriod } from "@/lib/server/quote-metrics";
 import { describeEmailConfig } from "@/lib/email/send-quote-request";
+import { checkQuoteSchema } from "@/lib/server/quote-schema-check";
+import { SchemaStatusPanel } from "@/components/quote/SchemaStatusPanel";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -63,8 +65,9 @@ export default async function SystemPage({
     ? (searchParams.period as MetricPeriod)
     : "7d";
 
-  const [health, emailConfig] = await Promise.all([
+  const [health, schema, emailConfig] = await Promise.all([
     getSystemHealth(period),
+    checkQuoteSchema(),
     Promise.resolve(describeEmailConfig()),
   ]);
 
@@ -76,6 +79,11 @@ export default async function SystemPage({
         title="Sistema"
         description="Salute operativa del flusso richieste di offerta."
       />
+
+      {/* First, and before anything derived from the schema: if the tables
+          are not there, every number below is zero for a reason that has
+          nothing to do with sales. */}
+      <SchemaStatusPanel report={schema} />
 
       <nav className="mb-5 flex flex-wrap gap-2" aria-label="Periodo">
         {PERIODS.map((value) => (
