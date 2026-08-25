@@ -25,8 +25,11 @@ const PRIMARY_NAV: NavItem[] = [
 const PREPARE_HREF = "/admin/prepare";
 const PREPARE_SEEN_KEY = "admin_prepare_seen_count";
 
+const QUOTES_HREF = "/admin/richieste-offerta";
+
 const SECONDARY_NAV: NavItem[] = [
   { href: PREPARE_HREF, label: "De pregătit" },
+  { href: QUOTES_HREF, label: "Richieste di offerta" },
   { href: "/admin/customers", label: "Clienți" },
   { href: "/admin/suppliers", label: "Furnizori" },
   { href: "/admin/print-jobs", label: "Coadă printare" },
@@ -41,10 +44,13 @@ function NavLink({
   item,
   pathname,
   badgeCount,
+  badgeLabel,
 }: {
   item: NavItem;
   pathname: string;
   badgeCount?: number;
+  /** Announced by screen readers; defaults to a generic "N new" for this tab. */
+  badgeLabel?: string;
 }) {
   const active = isActive(pathname, item.href);
   return (
@@ -59,7 +65,7 @@ function NavLink({
       {!!badgeCount && badgeCount > 0 && (
         <span
           className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold leading-none text-white"
-          aria-label={`${badgeCount} comenzi noi de pregătit`}
+          aria-label={badgeLabel ?? `${badgeCount} elemente noi în ${item.label}`}
         >
           {badgeCount > 99 ? "99+" : badgeCount}
         </span>
@@ -68,7 +74,13 @@ function NavLink({
   );
 }
 
-export function AdminNav({ prepareCount }: { prepareCount: number }) {
+export function AdminNav({
+  prepareCount,
+  quoteRequestCount,
+}: {
+  prepareCount: number;
+  quoteRequestCount: number;
+}) {
   const pathname = usePathname() ?? "/admin";
   // null until read from localStorage — avoids a hydration mismatch by not
   // rendering any badge state until we know what's actually been "seen".
@@ -99,7 +111,20 @@ export function AdminNav({ prepareCount }: { prepareCount: number }) {
             key={item.href}
             item={item}
             pathname={pathname}
-            badgeCount={item.href === PREPARE_HREF ? prepareBadge : undefined}
+            badgeCount={
+              item.href === PREPARE_HREF
+                ? prepareBadge
+                : item.href === QUOTES_HREF
+                  ? quoteRequestCount || undefined
+                  : undefined
+            }
+            badgeLabel={
+              item.href === PREPARE_HREF
+                ? `${prepareBadge ?? 0} comenzi noi de pregătit`
+                : item.href === QUOTES_HREF
+                  ? `${quoteRequestCount} richieste di offerta nuove`
+                  : undefined
+            }
           />
         ))}
       </div>

@@ -3,6 +3,7 @@ import { getAdminSession } from "@/lib/auth/admin-session";
 import { AdminShell } from "@/components/logistics/AdminShell";
 import { ToastProvider } from "@/components/ui/Toast";
 import { countOrdersToPrepare } from "@/lib/server/orders";
+import { countNewQuoteRequests } from "@/lib/server/quote-requests";
 import { logError } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
@@ -23,14 +24,26 @@ export default async function SecureAdminLayout({ children }: { children: React.
   const session = await getAdminSession();
   if (!session) redirect("/admin/login");
 
-  const prepareCount = await countOrdersToPrepare().catch((error) => {
-    logError("admin_layout_prepare_count_failed", error);
-    return 0;
-  });
+  // Both counts feed nav badges. Either failing degrades to 0 rather than
+  // taking down every admin page — a missing badge is not worth a 500.
+  const [prepareCount, newQuoteCount] = await Promise.all([
+    countOrdersToPrepare().catch((error) => {
+      logError("admin_layout_prepare_count_failed", error);
+      return 0;
+    }),
+    countNewQuoteRequests().catch((error) => {
+      logError("admin_layout_quote_count_failed", error);
+      return 0;
+    }),
+  ]);
 
   return (
     <ToastProvider>
-      <AdminShell displayName={session.displayName} prepareCount={prepareCount}>
+      <AdminShell
+        displayName={session.displayName}
+        prepareCount={prepareCount}
+        quoteRequestCount={newQuoteCount}
+      >
         {children}
       </AdminShell>
     </ToastProvider>

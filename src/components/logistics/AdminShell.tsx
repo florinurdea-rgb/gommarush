@@ -13,10 +13,12 @@ export function AdminShell({
   children,
   displayName,
   prepareCount,
+  quoteRequestCount,
 }: {
   children: React.ReactNode;
   displayName: string;
   prepareCount: number;
+  quoteRequestCount: number;
 }) {
   return (
     <div className="min-h-screen bg-surface-soft">
@@ -32,7 +34,7 @@ export function AdminShell({
         </div>
       </header>
 
-      <AdminNav prepareCount={prepareCount} />
+      <AdminNav prepareCount={prepareCount} quoteRequestCount={quoteRequestCount} />
 
       <main className="mx-auto w-full max-w-[1760px] px-4 py-6 sm:px-6 sm:py-8">{children}</main>
     </div>
