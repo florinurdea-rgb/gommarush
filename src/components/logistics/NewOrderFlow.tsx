@@ -12,7 +12,7 @@ import type { CustomerMatchResult } from "@/lib/logistics/customer-matching";
  * The import flow, in the order the brief specifies:
  *
  *   1. "Unde adaugi comanda?"  -> today's or tomorrow's deliveries
- *   2. "Încarcă document"      -> upload + analyse (manual entry is visible but
+ *   2. "Carica documento"      -> upload + analyse (manual entry is visible but
  *                                 disabled, marked "În curând")
  *   3. review + confirm        -> the editable review screen
  *
@@ -95,7 +95,7 @@ export function NewOrderFlow({ analysisConfigured }: NewOrderFlowProps) {
       <div className="max-w-xl rounded-2xl border border-ink/10 bg-white p-6 shadow-card">
         <h2 className="text-lg font-bold text-ink">{t("whereToAdd")}</h2>
         <p className="mt-1 text-sm text-ink-soft">
-          Alege ziua de livrare planificată pentru această comandă.
+          Scegli il giorno di consegna previsto per questo ordine.
         </p>
 
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -143,9 +143,9 @@ export function NewOrderFlow({ analysisConfigured }: NewOrderFlowProps) {
           <div className="mt-4 rounded-lg bg-state-waiting-soft p-3 text-sm text-state-waiting">
             <strong className="font-bold">{t("analysisNotConfigured")}</strong>
             <p className="mt-1 leading-relaxed">
-              Documentul va fi stocat, iar textul va fi citit direct din fișier
+              Il documento verrà salvato e il testo verrà letto direttamente dal file
               acolo unde este posibil. Datele care nu pot fi citite trebuie
-              completate manual — sistemul nu inventează valori.
+              inseriti manualmente — il sistema non inventa valori.
             </p>
           </div>
         )}
@@ -167,7 +167,7 @@ export function NewOrderFlow({ analysisConfigured }: NewOrderFlowProps) {
               }}
             />
             <span className="block text-base font-bold text-accent-dark">
-              {uploading ? "Se analizează documentul…" : t("uploadDocument")}
+              {uploading ? "Analisi del documento…" : t("uploadDocument")}
             </span>
             <span className="mt-1 block text-xs text-ink-soft">
               PDF, JPG, PNG, WEBP, HEIC, DOCX — max. 25 MB

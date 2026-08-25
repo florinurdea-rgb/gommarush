@@ -276,7 +276,7 @@ export function OrderReviewForm({
 
         planned_delivery_date: deliveryDate || null,
         // driver_id/vehicle_id deliberately omitted — assignment happens
-        // later, on the Livrări board.
+        // later, on the Consegne board.
 
         requires_payment_on_delivery: requiresPayment,
         payment_method: paymentMethod.trim() || null,
@@ -381,13 +381,13 @@ export function OrderReviewForm({
             </ul>
           )}
           <p className="mt-2 text-xs text-ink-soft">
-            Sursă: <span className="font-mono">{analysis.provider}</span>
+            Origine: <span className="font-mono">{analysis.provider}</span>
           </p>
         </div>
       )}
 
       {/* ---------------------------------------------------------- Supplier */}
-      <Section title={t("supplier")} description="Furnizorul și referința documentului.">
+      <Section title={t("supplier")} description="Il fornitore e il riferimento del documento.">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div>
             <label className={labelClass} htmlFor="supplier-name">Nume furnizor</label>
@@ -410,7 +410,7 @@ export function OrderReviewForm({
               onChange={(event) => setDocumentDate(event.target.value)} />
           </div>
           <div>
-            <label className={labelClass} htmlFor="supplier-ref">Referință comandă furnizor</label>
+            <label className={labelClass} htmlFor="supplier-ref">Riferimento ordine fornitore</label>
             <input id="supplier-ref" className={inputClass} value={supplierReference}
               onChange={(event) => setSupplierReference(event.target.value)} />
           </div>
@@ -420,7 +420,7 @@ export function OrderReviewForm({
       {/* ---------------------------------------------------------- Customer */}
       <Section
         title={t("customer")}
-        description="Clientul final al comenzii."
+        description="Clientul final al ordinii."
         tone={customerMatch?.requiresReview ? "warning" : undefined}
       >
         {customerMatch && (
@@ -445,7 +445,7 @@ export function OrderReviewForm({
             )}
             {customerMatch.differences.length > 0 && (
               <div className="mt-1 font-normal">
-                Diferențe: {customerMatch.differences.join(", ")}
+                Differenze: {customerMatch.differences.join(", ")}
               </div>
             )}
           </div>
@@ -457,12 +457,12 @@ export function OrderReviewForm({
             <label className="flex items-center gap-2 text-sm font-medium text-ink">
               <input type="radio" checked={useExistingCustomer}
                 onChange={() => setUseExistingCustomer(true)} />
-              Folosește clientul existent
+              Usa il cliente esistente
             </label>
             <label className="flex items-center gap-2 text-sm font-medium text-ink">
               <input type="radio" checked={!useExistingCustomer}
                 onChange={() => setUseExistingCustomer(false)} />
-              Creează client nou
+              Crea nuovo cliente
             </label>
           </div>
         )}
@@ -509,15 +509,15 @@ export function OrderReviewForm({
       {/* ------------------------------------------------- Delivery location */}
       <Section
         title={t("deliveryLocation")}
-        description="Adresa la care se livrează această comandă."
+        description="L'indirizzo a cui viene consegnato questo ordine."
       >
         {loadingCustomerLocations && (
-          <p className="mb-4 text-sm text-ink-soft">Se încarcă adresa clientului…</p>
+          <p className="mb-4 text-sm text-ink-soft">Caricamento indirizzo cliente…</p>
         )}
 
         {matchedLocation && (
           <div className="mb-4 rounded-lg border border-ink/10 bg-surface-soft p-3 text-sm">
-            <div className="font-semibold text-ink">Locație existentă în baza de date</div>
+            <div className="font-semibold text-ink">Luogo già presente nel database</div>
             <div className="text-ink-soft">
               {matchedLocation.location_name ? `${matchedLocation.location_name} — ` : ""}
               {matchedLocation.address_line1}, {matchedLocation.postal_code} {matchedLocation.city}
@@ -545,7 +545,7 @@ export function OrderReviewForm({
                   onChange={() => setResolution(option)}
                 />
                 <span>
-                  {option === "use_existing" && "Folosește locația existentă"}
+                  {option === "use_existing" && "Usa il luogo esistente"}
                   {option === "use_for_this_order_only" && t("useAddressForThisOrderOnly")}
                   {option === "add_as_new_location" && t("addAsNewLocation")}
                   {option === "update_existing_location" && t("updateExistingLocation")}
@@ -611,7 +611,7 @@ export function OrderReviewForm({
               onChange={(event) => setCollectionMethod(event.target.value)} />
           </div>
           <div>
-            <label className={labelClass} htmlFor="payment-method">Metodă de plată</label>
+            <label className={labelClass} htmlFor="payment-method">Metodo di pagamento</label>
             <input id="payment-method" className={inputClass} value={paymentMethod}
               onChange={(event) => setPaymentMethod(event.target.value)} />
           </div>
@@ -620,8 +620,8 @@ export function OrderReviewForm({
 
       {/* -------------------------------------------------------- Assignment */}
       {/* Driver/vehicle on purpose NOT here: that assignment happens after
-          the order exists, on the Livrări board (drag from "Neasignate" or
-          "Optimizează rutele") — asking for it again at creation time would
+          the order exists, on the Consegne board (drag from "Non assegnati" or
+          "Ottimizza le rotte") — asking for it again at creation time would
           just duplicate that flow with a second, easier-to-forget place to
           set it. */}
       <Section title={t("assignment")}>
@@ -637,7 +637,7 @@ export function OrderReviewForm({
       {/* ---------------------------------------------------------- Products */}
       <Section
         title={t("products")}
-        description={`${unitCount} obiecte fizice vor fi generate (taxele și serviciile nu produc obiecte).`}
+        description={`Verranno generati ${unitCount} articoli fisici (spese e servizi non generano articoli).`}
       >
         <div className="space-y-3">
           {lines.map((line) => (
@@ -684,7 +684,7 @@ export function OrderReviewForm({
                     onChange={(event) => updateLine(line.key, { brand: event.target.value })} />
                 </div>
                 <div className="lg:col-span-1">
-                  <label className={labelClass}>Lăț.</label>
+                  <label className={labelClass}>Largh.</label>
                   <input type="number" className={inputClass} value={line.width ?? ""}
                     onChange={(event) =>
                       updateLine(line.key, { width: event.target.value ? Number(event.target.value) : null })
@@ -698,7 +698,7 @@ export function OrderReviewForm({
                     } />
                 </div>
                 <div className="lg:col-span-1">
-                  <label className={labelClass}>Jantă</label>
+                  <label className={labelClass}>Cerchio</label>
                   <input type="number" step="0.5" className={inputClass} value={line.rimDiameter ?? ""}
                     onChange={(event) =>
                       updateLine(line.key, { rimDiameter: event.target.value ? Number(event.target.value) : null })
@@ -723,7 +723,7 @@ export function OrderReviewForm({
                   )}
                   {line.rawDescription && line.description !== line.rawDescription && (
                     <span className="ml-2 font-mono opacity-70">
-                      sursă: {line.rawDescription.slice(0, 60)}
+                      origine: {line.rawDescription.slice(0, 60)}
                     </span>
                   )}
                 </div>
@@ -740,7 +740,7 @@ export function OrderReviewForm({
 
           {lines.length === 0 && (
             <p className="rounded-lg border border-dashed border-ink/20 px-4 py-6 text-center text-sm text-ink-soft">
-              Nicio linie de produs. Adaugă manual liniile din document.
+              Nessuna riga prodotto. Aggiungi manualmente le righe dal documento.
             </p>
           )}
 

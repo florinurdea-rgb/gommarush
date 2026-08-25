@@ -74,7 +74,7 @@ export function OrderEditPanel({
 
   async function lifecycle(action: "hold" | "reactivate" | "cancel") {
     if (action === "cancel" && !window.confirm(
-      "Anulezi comanda? Va fi scoasă din lista activă, dar produsele, obiectele fizice și istoricul se păstrează."
+      "Vuoi annullare l'ordine? Uscirà dalla lista attiva, ma prodotti, articoli fisici e storico vengono conservati."
     )) {
       return;
     }

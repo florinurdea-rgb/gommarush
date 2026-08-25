@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 /**
- * Two nav levels: Livrări and Sumar are the two screens someone reaches for
+ * Two nav levels: Consegne and Sumar are the two screens someone reaches for
  * dozens of times a day, so they're never hidden behind "Mai multe" even on
  * a narrow phone — everything else collapses there on mobile instead.
  * Active state is derived from the URL (usePathname) rather than threaded
@@ -18,8 +18,8 @@ interface NavItem {
 }
 
 const PRIMARY_NAV: NavItem[] = [
-  { href: "/admin", label: "Livrări" },
-  { href: "/admin/summary", label: "Sumar" },
+  { href: "/admin", label: "Consegne" },
+  { href: "/admin/summary", label: "Riepilogo" },
 ];
 
 const PREPARE_HREF = "/admin/prepare";
@@ -28,11 +28,10 @@ const PREPARE_SEEN_KEY = "admin_prepare_seen_count";
 const QUOTES_HREF = "/admin/richieste-offerta";
 
 const SECONDARY_NAV: NavItem[] = [
-  { href: PREPARE_HREF, label: "De pregătit" },
+  { href: PREPARE_HREF, label: "Da preparare" },
   { href: QUOTES_HREF, label: "Richieste di offerta" },
-  { href: "/admin/customers", label: "Clienți" },
-  { href: "/admin/suppliers", label: "Furnizori" },
-  { href: "/admin/print-jobs", label: "Coadă printare" },
+  { href: "/admin/customers", label: "Clienti" },
+  { href: "/admin/suppliers", label: "Fornitori" },
   { href: "/admin/sistema", label: "Sistema" },
 ];
 
@@ -66,7 +65,7 @@ function NavLink({
       {!!badgeCount && badgeCount > 0 && (
         <span
           className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold leading-none text-white"
-          aria-label={badgeLabel ?? `${badgeCount} elemente noi în ${item.label}`}
+          aria-label={badgeLabel ?? `${badgeCount} nuovi elementi in ${item.label}`}
         >
           {badgeCount > 99 ? "99+" : badgeCount}
         </span>
@@ -121,7 +120,7 @@ export function AdminNav({
             }
             badgeLabel={
               item.href === PREPARE_HREF
-                ? `${prepareBadge ?? 0} comenzi noi de pregătit`
+                ? `${prepareBadge ?? 0} nuovi ordini da preparare`
                 : item.href === QUOTES_HREF
                   ? `${quoteRequestCount} richieste di offerta nuove`
                   : undefined

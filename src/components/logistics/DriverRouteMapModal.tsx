@@ -16,7 +16,7 @@ export interface DriverRouteStop {
 
 /**
  * The driver-facing route map — same rendering as the admin's RouteStopsModal
- * (Hartă on a Livrări lane), but takes already-geocoded stops as a plain prop
+ * (Mappa on a Consegne lane), but takes already-geocoded stops as a plain prop
  * instead of fetching /api/admin/route-map itself: this page has no admin
  * session, so the geocoding happens server-side in the page component
  * (geocodeAddresses(), same function the admin route uses) and is passed
@@ -81,7 +81,7 @@ export function DriverRouteMapModal({
         });
         L.marker([depotLocation.lat, depotLocation.lng], { icon: depotIcon })
           .addTo(map)
-          .bindPopup("<strong>Plecare — Depozit GommaRush</strong>");
+          .bindPopup("<strong>Partenza — Magazzino GommaRush</strong>");
       }
 
       for (const entry of located) {
@@ -116,7 +116,7 @@ export function DriverRouteMapModal({
       <ModalHeader title={`Traseu — ${vehicleName}`} onClose={onClose} />
       <div className="p-6">
         {stops.length === 0 && !depotLocation ? (
-          <p className="py-6 text-center text-sm text-ink-soft">Nicio comandă azi pe această mașină.</p>
+          <p className="py-6 text-center text-sm text-ink-soft">Nessun ordine oggi su questo veicolo.</p>
         ) : (
           <>
             <div ref={mapContainerRef} className="mb-4 h-72 w-full overflow-hidden rounded-xl border border-ink/10" />
@@ -137,7 +137,7 @@ export function DriverRouteMapModal({
                     </svg>
                   </span>
                   <div className="min-w-0">
-                    <div className="text-sm font-bold text-ink">Plecare — Depozit GommaRush</div>
+                    <div className="text-sm font-bold text-ink">Partenza — Magazzino GommaRush</div>
                     <div className="mt-0.5 text-xs text-ink-soft">
                       {depotLocation.lat.toFixed(6)}, {depotLocation.lng.toFixed(6)}
                     </div>
@@ -160,7 +160,7 @@ export function DriverRouteMapModal({
                     <div className="mt-0.5 truncate text-xs text-ink-soft">{stop.address}</div>
                     {stop.point === null && (
                       <div className="mt-0.5 text-xs font-semibold text-state-warning">
-                        Adresa nu a putut fi localizată pe hartă.
+                        Non è stato possibile localizzare l&apos;indirizzo sulla mappa.
                       </div>
                     )}
                   </div>
@@ -169,11 +169,11 @@ export function DriverRouteMapModal({
             </ol>
 
             <p className="mt-4 text-[11px] text-ink-soft">
-              Hărți © colaboratorii{" "}
+              Mappe © collaboratori{" "}
               <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="underline">
                 OpenStreetMap
               </a>
-              . Ordinea reflectă ordinea de livrare curentă, nu o rută optimizată.
+              . L&apos;ordine rispecchia la sequenza di consegna attuale, non una rotta ottimizzata.
             </p>
           </>
         )}

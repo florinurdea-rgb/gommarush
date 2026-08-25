@@ -78,7 +78,7 @@ export function CustomerPickerField({
         className={inputClass}
         value={value}
         disabled={disabled}
-        placeholder="Caută sau alege un client…"
+        placeholder="Cerca o scegli un cliente…"
         autoComplete="off"
         onFocus={() => {
           setOpen(true);
@@ -107,9 +107,9 @@ export function CustomerPickerField({
           >
             + Client nou
           </button>
-          {loading && <div className="px-3 py-2 text-xs text-ink-soft">Se caută…</div>}
+          {loading && <div className="px-3 py-2 text-xs text-ink-soft">Ricerca…</div>}
           {!loading && results.length === 0 && (
-            <div className="px-3 py-2 text-xs text-ink-soft">Niciun client găsit.</div>
+            <div className="px-3 py-2 text-xs text-ink-soft">Nessun cliente trovato.</div>
           )}
           {!loading &&
             results.map((customer) => (

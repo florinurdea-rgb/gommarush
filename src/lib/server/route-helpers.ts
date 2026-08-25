@@ -106,7 +106,7 @@ export function describeError(error: unknown): string[] {
     if (parts.length > 0) return [parts.join(" — ")];
   }
   if (typeof error === "string" && error.trim()) return [error];
-  return ["eroare necunoscută"];
+  return ["errore sconosciuto"];
 }
 
 export function handleRouteError(error: unknown): NextResponse<ApiError> {

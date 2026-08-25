@@ -295,7 +295,7 @@ export interface ConfirmDdtDocumentResult {
 /**
  * Advances a DDT-confirmed order from 'expected' to 'stored' ("De
  * pregătit") — a scanned document should be immediately visible/actionable
- * there instead of sitting in "Așteaptă marfa". Idempotent by design and
+ * there instead of sitting in "In attesa merce". Idempotent by design and
  * exported (not inlined in confirmDdtDocument) because the confirm route's
  * retry-recovery path (findExistingOrder in
  * app/api/admin/ddt-import/confirm/route.ts) can return a PREVIOUSLY
@@ -366,7 +366,7 @@ export async function advanceDdtOrderToStored(input: {
     // The DDT-specific columns above may be genuinely missing, but status/
     // received_at/stored_at are base columns that have always existed —
     // still worth trying to advance those on their own so the order isn't
-    // stuck at "Așteaptă marfa" just because a later migration hasn't run.
+    // stuck at "In attesa merce" just because a later migration hasn't run.
     const { error: statusOnlyError } = await supabase
       .from("orders")
       .update({ status: "stored", received_at: receivedAt, stored_at: receivedAt })

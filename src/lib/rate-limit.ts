@@ -101,6 +101,6 @@ export function resetLoginFailures(key: string): void {
   loginFailures.delete(key);
 }
 
-// The public barcode-lookup limiter lived here until the "Caută cauciuc"
+// The public barcode-lookup limiter lived here until the "Cerca cauciuc"
 // feature was removed. It was the only consumer, so both it and its
 // BARCODE_LOOKUP_RATE_LIMIT_* env vars went with it.

@@ -14,18 +14,18 @@ export interface MoveTarget {
 }
 
 /**
- * The compact per-card menu on a vehicle-board order card: Editează,
- * "Asignează în ruta recomandată", "Mută în..." (a tap-friendly alternative
+ * The compact per-card menu on a vehicle-board order card: Modifica,
+ * "Assegna alla rotta consigliata", "Mută în..." (a tap-friendly alternative
  * to drag-and-drop — the brief calls for it explicitly since native HTML5
- * drag is unreliable on touch), Marchează încărcată / Marchează livrată /
- * Livrare eșuată (the Phase 1 order-level dispatch actions — no tyre
- * scanning), "Schimbă statusul" (manual override for everything else), and
- * Șterge. Deliberately lighter than OrderActionsMenu (no hold/reactivate —
+ * drag is unreliable on touch), Segna come caricato / Segna come consegnato /
+ * Consegna non riuscita (the Phase 1 order-level dispatch actions — no tyre
+ * scanning), "Cambia stato" (manual override for everything else), and
+ * Elimina. Deliberately lighter than OrderActionsMenu (no hold/reactivate —
  * cards on this board are always active) and takes the route-suggestion/
  * move actions as callbacks since only the board knows about every
  * vehicle's current load and columns.
  *
- * "Schimbă statusul" only lists MANUALLY_SETTABLE_STATUSES (see
+ * "Cambia stato" only lists MANUALLY_SETTABLE_STATUSES (see
  * src/lib/logistics/order-status-rules.ts, shared with the server-side
  * gate in setOrderStatusManually()) — 'loaded'/'delivered'/
  * 'partially_delivered' have their own dedicated actions above instead,
@@ -37,7 +37,7 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   card: "Card",
   bank_transfer: "Transfer bancar",
   already_paid: "Deja achitat",
-  other: "Altă metodă",
+  other: "Altro metodo",
 };
 
 export function VehicleCardActionsMenu({
@@ -128,7 +128,7 @@ export function VehicleCardActionsMenu({
         showToast(`Statusul nu a putut fi salvat.${detail ? ` (${detail})` : ""}`, "error");
       }
     } catch {
-      showToast("Eroare de rețea.", "error");
+      showToast("Errore di rete.", "error");
     } finally {
       setBusy(false);
     }
@@ -151,10 +151,10 @@ export function VehicleCardActionsMenu({
         router.refresh();
         return true;
       }
-      showToast(`Acțiunea nu a putut fi salvată.${payload.code ? ` (${payload.code})` : ""}`, "error");
+      showToast(`Azione non salvata.${payload.code ? ` (${payload.code})` : ""}`, "error");
       return false;
     } catch {
-      showToast("Eroare de rețea.", "error");
+      showToast("Errore di rete.", "error");
       return false;
     } finally {
       setBusy(false);
@@ -163,7 +163,7 @@ export function VehicleCardActionsMenu({
 
   async function markLoaded() {
     setOpen(false);
-    await runDispatchAction({ action: "mark_loaded" }, `Marcată ca încărcată — ${orderLabel}.`);
+    await runDispatchAction({ action: "mark_loaded" }, `Segnato come caricato — ${orderLabel}.`);
   }
 
   async function confirmDeliver() {
@@ -175,7 +175,7 @@ export function VehicleCardActionsMenu({
         amount_collected: parsedAmount != null && Number.isFinite(parsedAmount) ? parsedAmount : null,
         payment_method: trimmed.length > 0 ? paymentMethod : null,
       },
-      `Comandă livrată — ${orderLabel}.`
+      `Ordine consegnato — ${orderLabel}.`
     );
     if (ok) {
       setOpen(false);
@@ -190,7 +190,7 @@ export function VehicleCardActionsMenu({
     }
     const ok = await runDispatchAction(
       { action: "delivery_failed", reason: failureReason.trim() },
-      `Livrare eșuată înregistrată — ${orderLabel}.`
+      `Consegna non riuscita registrata — ${orderLabel}.`
     );
     if (ok) {
       setOpen(false);
@@ -209,13 +209,13 @@ export function VehicleCardActionsMenu({
       });
       const payload = (await response.json()) as { ok: boolean };
       if (payload.ok) {
-        showToast(`Comandă anulată — ${orderLabel}.`, "success");
+        showToast(`Ordine annullato — ${orderLabel}.`, "success");
         router.refresh();
       } else {
-        showToast("Ștergerea nu a putut fi salvată.", "error");
+        showToast("Eliminazione non salvata.", "error");
       }
     } catch {
-      showToast("Eroare de rețea.", "error");
+      showToast("Errore di rete.", "error");
     } finally {
       setBusy(false);
       setOpen(false);
@@ -229,7 +229,7 @@ export function VehicleCardActionsMenu({
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`Acțiuni ${orderLabel}`}
+        aria-label={`Azioni ${orderLabel}`}
         onClick={() => setOpen((value) => !value)}
         className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-soft hover:bg-surface-soft hover:text-ink"
       >
@@ -250,7 +250,7 @@ export function VehicleCardActionsMenu({
             href={`/admin/orders/${orderId}`}
             className="block px-4 py-2.5 text-sm font-medium text-ink hover:bg-surface-soft"
           >
-            Editează
+            Modifica
           </Link>
           <button
             role="menuitem"
@@ -261,7 +261,7 @@ export function VehicleCardActionsMenu({
             }}
             className="block w-full px-4 py-2.5 text-left text-sm font-medium text-accent hover:bg-surface-soft"
           >
-            Asignează în ruta recomandată
+            Assegna alla rotta consigliata
           </button>
 
           {moveTargets.length > 0 && (
@@ -273,7 +273,7 @@ export function VehicleCardActionsMenu({
                 aria-expanded={movingOpen}
                 className="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm font-medium text-ink hover:bg-surface-soft"
               >
-                Mută în…
+                Sposta in…
                 <svg viewBox="0 0 20 20" className={`h-4 w-4 transition-transform ${movingOpen ? "rotate-90" : ""}`} fill="currentColor" aria-hidden="true">
                   <path d="M7 5l6 5-6 5V5z" />
                 </svg>
@@ -308,7 +308,7 @@ export function VehicleCardActionsMenu({
               onClick={() => void markLoaded()}
               className="block w-full px-4 py-2.5 text-left text-sm font-medium text-state-success hover:bg-surface-soft disabled:opacity-50"
             >
-              Marchează încărcată
+              Segna come caricato
             </button>
           )}
 
@@ -323,18 +323,18 @@ export function VehicleCardActionsMenu({
               }}
               className="block w-full px-4 py-2.5 text-left text-sm font-medium text-state-success hover:bg-surface-soft disabled:opacity-50"
             >
-              Marchează livrată
+              Segna come consegnato
             </button>
           )}
           {canDeliver && deliverOpen && (
             <div className="space-y-2 bg-surface-soft px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-                Confirmă livrarea
+                Conferma la consegna
               </p>
               {cashOnDelivery && (
                 <>
                   <label className="block text-xs font-medium text-ink-soft">
-                    Sumă încasată (€)
+                    Importo incassato (€)
                     <input
                       type="number"
                       min={0}
@@ -364,14 +364,14 @@ export function VehicleCardActionsMenu({
                   onClick={() => void confirmDeliver()}
                   className="flex-1 rounded-lg bg-state-success px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
                 >
-                  Confirmă
+                  Conferma
                 </button>
                 <button
                   type="button"
                   onClick={() => setDeliverOpen(false)}
                   className="flex-1 rounded-lg border border-ink/15 px-3 py-2 text-sm font-semibold text-ink"
                 >
-                  Anulează
+                  Annulla
                 </button>
               </div>
             </div>
@@ -388,18 +388,18 @@ export function VehicleCardActionsMenu({
               }}
               className="block w-full px-4 py-2.5 text-left text-sm font-medium text-state-danger hover:bg-state-danger-soft disabled:opacity-50"
             >
-              Livrare eșuată
+              Consegna non riuscita
             </button>
           )}
           {canDeliver && failedOpen && (
             <div className="space-y-2 bg-surface-soft px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-                Motivul eșecului
+                Motivo del mancato esito
               </p>
               <textarea
                 value={failureReason}
                 onChange={(event) => setFailureReason(event.target.value)}
-                placeholder="ex. client închis, marfă refuzată…"
+                placeholder="es. cliente chiuso, merce rifiutata…"
                 rows={2}
                 className="w-full rounded-lg border border-ink/15 px-2 py-1.5 text-sm"
               />
@@ -410,14 +410,14 @@ export function VehicleCardActionsMenu({
                   onClick={() => void confirmDeliveryFailed()}
                   className="flex-1 rounded-lg bg-state-danger px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
                 >
-                  Confirmă
+                  Conferma
                 </button>
                 <button
                   type="button"
                   onClick={() => setFailedOpen(false)}
                   className="flex-1 rounded-lg border border-ink/15 px-3 py-2 text-sm font-semibold text-ink"
                 >
-                  Anulează
+                  Annulla
                 </button>
               </div>
             </div>
@@ -431,7 +431,7 @@ export function VehicleCardActionsMenu({
             disabled={busy}
             className="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm font-medium text-ink hover:bg-surface-soft disabled:opacity-50"
           >
-            Schimbă statusul
+            Cambia stato
             <svg viewBox="0 0 20 20" className={`h-4 w-4 transition-transform ${statusMenuOpen ? "rotate-90" : ""}`} fill="currentColor" aria-hidden="true">
               <path d="M7 5l6 5-6 5V5z" />
             </svg>
@@ -469,7 +469,7 @@ export function VehicleCardActionsMenu({
               onClick={() => setConfirmingDelete(true)}
               className="block w-full px-4 py-2.5 text-left text-sm font-medium text-state-danger hover:bg-state-danger-soft"
             >
-              Șterge
+              Elimina
             </button>
           ) : (
             <div className="px-4 py-3">
@@ -481,14 +481,14 @@ export function VehicleCardActionsMenu({
                   onClick={() => void deleteOrder()}
                   className="flex-1 rounded-lg bg-state-danger px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
                 >
-                  Confirmă
+                  Conferma
                 </button>
                 <button
                   type="button"
                   onClick={() => setConfirmingDelete(false)}
                   className="flex-1 rounded-lg border border-ink/15 px-3 py-2 text-sm font-semibold text-ink"
                 >
-                  Anulează
+                  Annulla
                 </button>
               </div>
             </div>

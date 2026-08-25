@@ -62,7 +62,7 @@ export function ModalHeader({ title, onClose }: { title: string; onClose: () => 
       <button
         type="button"
         onClick={onClose}
-        aria-label="Închide"
+        aria-label="Chiudi"
         className="flex h-8 w-8 items-center justify-center rounded-full text-ink-soft hover:bg-surface-soft hover:text-ink"
       >
         <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" aria-hidden="true">

@@ -19,7 +19,7 @@ let browserSupabase: ReturnType<typeof CreateClient> | null = null;
 
 // Dynamically imported — @supabase/supabase-js is ~60KB and only needed at
 // the moment of an actual upload, not on every page that might show the
-// "Comandă nouă" button.
+// "Nuovo ordine" button.
 async function getBrowserSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

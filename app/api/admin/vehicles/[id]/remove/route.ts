@@ -12,7 +12,7 @@ interface RouteContext {
  * is reassigned to Neasignate and the vehicle is soft-deactivated — see
  * gorush_remove_vehicle. No confirmation payload needed: the confirmation
  * itself already happened client-side (the fleet sheet shows "Van 4 are 6
- * comenzi asignate" before this request ever fires).
+ * ordini asignate" before this request ever fires).
  */
 export async function POST(_request: Request, context: RouteContext) {
   return runAdminRoute(async (session) => {

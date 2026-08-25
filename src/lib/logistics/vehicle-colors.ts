@@ -3,7 +3,7 @@ import type { VehicleColorKey } from "@/lib/types/logistics";
 /**
  * The fleet's per-van accent palette (redesign brief §27) — a subtle
  * identifying color used only for small header accents, never a saturated
- * column background. Shared across the fleet management sheet, the Livrări
+ * column background. Shared across the fleet management sheet, the Consegne
  * board's lane headers, and Sumar's vehicle tabs so the same van always
  * reads as the same color everywhere.
  */

@@ -59,10 +59,10 @@ export function SupplierEditor({ supplier }: { supplier: SupplierRow }) {
         setNotice("Furnizor salvat.");
         router.refresh();
       } else {
-        setError(`Salvarea nu a putut fi finalizată (${payload.code ?? "eroare necunoscută"}).`);
+        setError(`Salvataggio non completato (${payload.code ?? "errore sconosciuto"}).`);
       }
     } catch {
-      setError("Eroare de rețea. Încearcă din nou.");
+      setError("Errore di rete. Riprova.");
     } finally {
       setBusy(false);
     }
@@ -93,7 +93,7 @@ export function SupplierEditor({ supplier }: { supplier: SupplierRow }) {
             />
           </div>
           <div>
-            <label className={labelClass}>Denumire legală</label>
+            <label className={labelClass}>Ragione sociale</label>
             <input
               className={inputClass}
               value={fields.legal_name}
@@ -141,7 +141,7 @@ export function SupplierEditor({ supplier }: { supplier: SupplierRow }) {
             />
           </div>
           <div className="sm:col-span-2 lg:col-span-3">
-            <label className={labelClass}>Notițe</label>
+            <label className={labelClass}>Note</label>
             <textarea
               className={`${inputClass} h-24 resize-y py-2`}
               value={fields.notes}
@@ -151,7 +151,7 @@ export function SupplierEditor({ supplier }: { supplier: SupplierRow }) {
         </div>
 
         <Button className="mt-4" disabled={busy} onClick={() => void save()}>
-          {busy ? "Se salvează…" : "Salvează"}
+          {busy ? "Salvataggio…" : "Salva"}
         </Button>
       </section>
     </div>

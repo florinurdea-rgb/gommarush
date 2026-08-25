@@ -4,7 +4,7 @@ import { PageHeading } from "@/components/logistics/AdminShell";
 import { t } from "@/lib/i18n/logistics";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Listă clienți" };
+export const metadata = { title: "Elenco clienti" };
 
 /**
  * The customer list. A customer here is the legal/company entity; its delivery
@@ -22,14 +22,14 @@ export default async function CustomersPage({
     <>
       <PageHeading
         title={t("customerList")}
-        description="Firme client. O firmă poate avea mai multe locații de livrare."
+        description="Aziende clienti. Un'azienda può avere più luoghi di consegna."
       />
 
       <form className="mb-5 flex max-w-md gap-2" action="/admin/customers">
         <input
           name="q"
           defaultValue={q ?? ""}
-          placeholder="Caută după denumire sau cod fiscal…"
+          placeholder="Cerca per ragione sociale o codice fiscale…"
           className="h-11 flex-1 rounded-lg border border-ink/15 px-3 text-sm outline-none focus:border-accent"
         />
         <button type="submit" className="h-11 rounded-lg bg-accent px-4 text-sm font-semibold text-white">
@@ -39,7 +39,7 @@ export default async function CustomersPage({
 
       {customers.length === 0 ? (
         <div className="rounded-xl border border-dashed border-ink/20 bg-white px-6 py-12 text-center text-ink-soft">
-          Niciun client găsit.
+          Nessun cliente trovato.
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-ink/10 bg-white shadow-card">

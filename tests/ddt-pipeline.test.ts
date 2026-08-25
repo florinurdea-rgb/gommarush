@@ -187,7 +187,7 @@ describe("processExtractedDocument — critical fields missing (spec §21)", () 
     });
     expect(result.status).toBe("NEEDS_REVIEW");
     expect(result.blocked).toBe(false);
-    expect(result.reasons.some((r) => r.includes("cantitate necitibilă"))).toBe(true);
+    expect(result.reasons.some((r) => r.includes("quantità non leggibile"))).toBe(true);
   });
 
   it("requires review but never blocks import when only the DDT number is unreadable", () => {

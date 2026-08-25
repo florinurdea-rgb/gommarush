@@ -19,7 +19,7 @@ export default function DdtImportPage() {
     <>
       <PageHeading
         title="Import DDT"
-        description="Încarcă un document care poate conține unul sau mai multe DDT-uri."
+        description="Carica un documento che può contenere uno o più DDT."
         back
       />
       <DdtImportFlow />

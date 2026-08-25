@@ -43,7 +43,7 @@ export async function extractViaOpenAI(
       documents: [],
       pageCount: null,
       error: "UNSUPPORTED_FILE_TYPE",
-      notes: ["Formatul fișierului nu este acceptat pentru analiză automată."],
+      notes: ["Il formato del file non è supportato per l'analisi automatica."],
     };
   }
 
@@ -89,7 +89,7 @@ export async function extractViaOpenAI(
         documents: [],
         pageCount: null,
         error: `OPENAI_HTTP_${response.status}: ${detail.slice(0, 800)}`,
-        notes: ["Analiza OpenAI a eșuat."],
+        notes: ["L'analisi OpenAI non è riuscita."],
       };
     }
 
@@ -113,7 +113,7 @@ export async function extractViaOpenAI(
         documents: [],
         pageCount,
         error: "OPENAI_NO_DOCUMENTS",
-        notes: ["OpenAI a răspuns, dar nu a fost detectat niciun document utilizabil."],
+        notes: ["OpenAI ha risposto, ma non è stato rilevato alcun documento utilizzabile."],
       };
     }
 
@@ -127,7 +127,7 @@ export async function extractViaOpenAI(
       documents: [],
       pageCount: null,
       error: aborted ? "OPENAI_TIMEOUT" : `OPENAI_ERROR: ${error instanceof Error ? error.message : "UNKNOWN"}`,
-      notes: [aborted ? "Analiza OpenAI a depășit timpul disponibil." : "Analiza OpenAI a eșuat."],
+      notes: [aborted ? "L'analisi OpenAI ha superato il tempo disponibile." : "L'analisi OpenAI non è riuscita."],
     };
   } finally {
     clearTimeout(timeout);

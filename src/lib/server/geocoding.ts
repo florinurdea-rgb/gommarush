@@ -8,9 +8,9 @@ export interface GeoPoint {
 }
 
 /**
- * Address → coordinates for the vehicle board's "Hartă" feature, using the
+ * Address → coordinates for the vehicle board's "Mappa" feature, using the
  * free OpenStreetMap Nominatim API — no key, no billing. Results are cached
- * in the geocode_cache table so a repeat "Hartă" open never re-hits it, and
+ * in the geocode_cache table so a repeat "Mappa" open never re-hits it, and
  * uncached lookups within one request are spaced ~1.1s apart in line with
  * Nominatim's usage policy (max 1 request/second, no bulk/parallel use).
  */

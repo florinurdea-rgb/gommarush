@@ -19,16 +19,16 @@ export default function AdminError({ error, reset }: { error: Error & { digest?:
 
   return (
     <div className="flex min-h-[50vh] flex-col items-center justify-center px-4 text-center">
-      <h1 className="text-xl font-extrabold text-ink">A apărut o eroare la încărcarea paginii</h1>
+      <h1 className="text-xl font-extrabold text-ink">Si è verificato un errore nel caricamento della pagina</h1>
       <p className="mt-2 max-w-md text-sm text-ink-soft">
-        Dacă tocmai ai adăugat o funcție nouă (ex. tabloul de mașini), cel mai probabil o migrare de
-        bază de date nu a fost încă rulată în Supabase. Verifică logurile din Vercel pentru detalii.
+        Se hai appena aggiunto una funzione nuova (es. la gestione veicoli), molto probabilmente una migrazione del
+        migrazione del database non è ancora stata eseguita su Supabase. Controlla i log di Vercel per i dettagli.
       </p>
       {error.digest && (
         <p className="mt-2 font-mono text-xs text-ink-soft">Digest: {error.digest}</p>
       )}
       <Button onClick={reset} className="mt-5">
-        Încearcă din nou
+        Riprova
       </Button>
     </div>
   );

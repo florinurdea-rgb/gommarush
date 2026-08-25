@@ -3,7 +3,7 @@ import type { CustomerMatchResult } from "@/lib/logistics/customer-matching";
 
 /**
  * Client-safe helpers shared by every UI that confirms DDT-import documents
- * (the standalone /admin/orders/import page and the "Comandă nouă" modal's
+ * (the standalone /admin/orders/import page and the "Nuovo ordine" modal's
  * upload step). No "server-only" import here on purpose — this is imported
  * from client components, and pipeline.ts / customer-matching.ts are both
  * already plain, framework-free logic.
@@ -15,9 +15,9 @@ export interface ProcessedDocumentWithMatch extends ProcessedDocument {
 }
 
 export const DDT_STATUS_LABEL: Record<DocumentStatus, string> = {
-  READY: "PREGĂTIT",
-  READY_MISSING_OPTIONAL: "PREGĂTIT — date opționale lipsă",
-  NEEDS_REVIEW: "NECESITĂ VERIFICARE",
+  READY: "PRONTO",
+  READY_MISSING_OPTIONAL: "PRONTO — dati facoltativi mancanti",
+  NEEDS_REVIEW: "DA VERIFICARE",
   POSSIBLE_DUPLICATE: "POSIBIL DUPLICAT",
   DUPLICATE: "DEJA IMPORTAT",
 };
@@ -78,7 +78,7 @@ export function buildCustomerResolution(doc: ProcessedDocumentWithMatch): Custom
  * and can fix it afterward from the order itself. The only thing that
  * actually blocks a direct confirm is `doc.blocked` (no supplier/customer
  * identity to resolve, or nothing importable — see pipeline.ts) plus, for
- * DUPLICATE/POSSIBLE_DUPLICATE, an explicit "Adaugă din nou" choice via
+ * DUPLICATE/POSSIBLE_DUPLICATE, an explicit "Aggiungi di nuovo" choice via
  * canForceConfirmDdtDocument instead of a silent auto-import.
  */
 export function canAutoConfirmDdtDocument(doc: ProcessedDocumentWithMatch): boolean {
@@ -96,7 +96,7 @@ export function canAutoConfirmDdtDocument(doc: ProcessedDocumentWithMatch): bool
  * gate on document status at all (only the database's own unique constraint
  * on supplier+document-number can actually stop a genuine duplicate insert)
  * — the checked/disabled state on these documents is a UI-only safety rail.
- * This says whether that rail can be deliberately lifted, via the "Adaugă
+ * This says whether that rail can be deliberately lifted, via the "Aggiungi
  * din nou" confirmation dialog, for a document that's otherwise resolvable.
  */
 export function canForceConfirmDdtDocument(doc: ProcessedDocumentWithMatch): boolean {

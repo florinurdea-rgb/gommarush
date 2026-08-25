@@ -26,16 +26,16 @@ export default function AdminBootstrapPage() {
         <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-card sm:p-8">
           <h1 className="text-xl font-extrabold tracking-tight text-ink">Configurare cont admin</h1>
           <p className="mt-1 text-sm text-ink-soft">
-            Creează sau resetează parola unui cont de admin, direct — fără email de
+            Crea o reimposta la password di un account amministratore, direttamente — senza email di
             confirmare.
           </p>
 
           <BootstrapForm />
 
           <p className="mt-6 text-xs leading-relaxed text-ink-soft">
-            Cheia service_role o găsești în Supabase → Project Settings → API Keys →
-            rândul <strong>service_role</strong> (secret). Nu se trimite nicăieri
-            altundeva decât către acest server.
+            La chiave service_role si trova in Supabase → Project Settings → API Keys →
+            la riga <strong>service_role</strong> (segreta). Non viene inviata da nessuna parte
+            altrove se non verso questo server.
           </p>
         </div>
       </main>

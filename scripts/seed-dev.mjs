@@ -227,7 +227,7 @@ async function clean() {
   const customerIds = (customers ?? []).map((row) => row.id);
 
   if (customerIds.length > 0) {
-    // Orders cascade to items -> units -> scans -> print jobs, so deleting the
+    // Orders cascade to items -> units -> scans, so deleting the
     // orders is enough to remove everything downstream.
     const { data: orders } = await supabase
       .from("orders")
@@ -236,7 +236,6 @@ async function clean() {
 
     const orderIds = (orders ?? []).map((row) => row.id);
     if (orderIds.length > 0) {
-      await supabase.from("print_jobs").delete().in("order_id", orderIds);
       await supabase.from("orders").delete().in("id", orderIds);
       console.log(`  removed ${orderIds.length} orders`);
     }

@@ -13,10 +13,10 @@ import { logError } from "@/lib/logger";
  * gets counted twice or missed:
  *
  *   - "Comenzi"   -> orders CREATED in the period (excludes cancelled)
- *   - "Ridicări"  -> orders RECEIVED at the warehouse in the period
+ *   - "Ritiri"  -> orders RECEIVED at the warehouse in the period
  *                    (orders.received_at) — one row per actual pickup
  *                    event, not per tyre or per line item
- *   - "Livrări"   -> orders DELIVERED in the period (orders.delivered_at,
+ *   - "Consegne"   -> orders DELIVERED in the period (orders.delivered_at,
  *                    the order-level Phase 1 delivery confirmation — see
  *                    gorush_deliver_order), with tyre count as
  *                    SUM(order_items.quantity) for physical lines. Phase 1

@@ -13,10 +13,10 @@ import { uploadDocumentDirect } from "@/lib/client/document-upload";
 import { DuplicateImportDialog } from "@/components/logistics/DuplicateImportDialog";
 
 /**
- * The "Încarcă document" step of the "Comandă nouă" modal: upload -> a
+ * The "Carica documento" step of the "Nuovo ordine" modal: upload -> a
  * loading bar while the AI (or text-layer fallback) analyzes it -> every
  * document found, selected by default, expandable for detail -> one
- * "Adaugă comenzi" that imports only what's still checked.
+ * "Aggiungi ordini" that imports only what's still checked.
  *
  * Deliberately only pre-selects (and only counts toward the CTA) documents
  * canAutoConfirmDdtDocument() says are actually safe — a checked-but-not-
@@ -52,7 +52,7 @@ export function UploadOrderPanel({
 }: {
   onBack: () => void;
   onDone: (createdCount: number, droppedLineCount: number) => void;
-  /** "Editează și finalizează" — opens the manual form pre-filled with whatever this document DID extract. */
+  /** "Modifica și finalizează" — opens the manual form pre-filled with whatever this document DID extract. */
   onEditDocument: (doc: ProcessedDocumentWithMatch, sourceDocumentId: string) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -80,7 +80,7 @@ export function UploadOrderPanel({
       const payload = (await response.json()) as AnalyzeResponse;
 
       if (!payload.ok) {
-        setError(`Analiza a eșuat (${payload.code ?? "eroare necunoscută"}).`);
+        setError(`Analisi non riuscita (${payload.code ?? "errore sconosciuto"}).`);
         setPhase("pick");
         return;
       }
@@ -95,7 +95,7 @@ export function UploadOrderPanel({
       setPhase(payload.documents && payload.documents.length > 0 ? "review" : "pick");
       if (payload.unconfigured) setPhase("review"); // still show the disclosure message
     } catch {
-      setError("Eroare de rețea. Încearcă din nou.");
+      setError("Errore di rete. Riprova.");
       setPhase("pick");
     }
   }
@@ -173,7 +173,7 @@ export function UploadOrderPanel({
           errors.push(`${doc.extracted.document.documentNumber ?? "DDT necunoscut"}: ${detail || "eroare"}`);
         }
       } catch {
-        errors.push(`${doc.extracted.document.documentNumber ?? "DDT necunoscut"}: eroare de rețea`);
+        errors.push(`${doc.extracted.document.documentNumber ?? "DDT sconosciuto"}: errore di rete`);
       }
 
       setImportProgress((current) => (current ? { ...current, done: current.done + 1 } : current));
@@ -199,7 +199,7 @@ export function UploadOrderPanel({
       {phase === "pick" && (
         <>
           <button type="button" onClick={onBack} className="text-sm font-semibold text-accent hover:underline">
-            ← Înapoi
+            ← Indietro
           </button>
 
           <div className="rounded-xl border border-dashed border-ink/20 bg-white p-8 text-center">
@@ -218,9 +218,9 @@ export function UploadOrderPanel({
               onClick={() => inputRef.current?.click()}
               className="inline-flex h-12 items-center justify-center rounded-xl bg-accent px-6 font-semibold text-white"
             >
-              Încarcă document
+              Carica documento
             </button>
-            <p className="mt-2 text-sm text-ink-soft">PDF sau imagine — poate conține unul sau mai multe DDT-uri.</p>
+            <p className="mt-2 text-sm text-ink-soft">PDF o immagine — può contenere uno o più DDT.</p>
           </div>
 
           {error && (
@@ -233,7 +233,7 @@ export function UploadOrderPanel({
 
       {phase === "analyzing" && (
         <div className="py-10 text-center">
-          <p className="text-sm font-semibold text-ink">Se analizează documentul…</p>
+          <p className="text-sm font-semibold text-ink">Analisi del documento…</p>
           <div className="mx-auto mt-4 h-2 w-full max-w-xs overflow-hidden rounded-full bg-surface-soft">
             <div className="h-full w-1/3 animate-[loading-bar_1.1s_ease-in-out_infinite] rounded-full bg-accent" />
           </div>
@@ -250,13 +250,13 @@ export function UploadOrderPanel({
         <>
           {result.unconfigured && (
             <div className="rounded-xl border border-state-warning/30 bg-state-warning-soft p-5">
-              <h3 className="text-base font-bold text-state-warning">Analiză automată nu este configurată</h3>
+              <h3 className="text-base font-bold text-state-warning">Analisi automatica non configurata</h3>
               <p className="mt-2 text-sm text-ink">
-                Documentul va fi stocat, iar textul va fi citit direct din fișier acolo unde este posibil.
-                Datele care nu pot fi citite trebuie completate manual — sistemul nu inventează valori.
+                Il documento verrà salvato e il testo verrà letto direttamente dal file, dove possibile.
+                I dati non leggibili vanno inseriti manualmente — il sistema non inventa valori.
               </p>
               <button type="button" onClick={onBack} className="mt-3 text-sm font-semibold text-accent hover:underline">
-                Completează manual →
+                Inserisci manualmente →
               </button>
             </div>
           )}
@@ -265,10 +265,10 @@ export function UploadOrderPanel({
             <div className="rounded-xl border border-ink/10 bg-white p-4">
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-soft">
                 <span><strong className="text-ink">{result.summary.documentsFound}</strong> DDT-uri</span>
-                <span><strong className="text-ink">{result.summary.totalTyres}</strong> anvelope</span>
-                <span>{result.summary.ready + result.summary.readyMissingOptional} pregătite</span>
+                <span><strong className="text-ink">{result.summary.totalTyres}</strong> pneumatici</span>
+                <span>{result.summary.ready + result.summary.readyMissingOptional} pronti</span>
                 {result.summary.needsReview > 0 && (
-                  <span className="text-state-warning">{result.summary.needsReview} necesită verificare</span>
+                  <span className="text-state-warning">{result.summary.needsReview} da verificare</span>
                 )}
                 {result.summary.possibleDuplicate > 0 && (
                   <span className="text-state-warning">{result.summary.possibleDuplicate} posibil duplicat</span>
@@ -282,7 +282,7 @@ export function UploadOrderPanel({
 
           {importErrors.length > 0 && (
             <div className="rounded-lg bg-state-danger-soft p-3 text-sm text-state-danger">
-              <p className="font-semibold">Unele comenzi nu au putut fi adăugate:</p>
+              <p className="font-semibold">Alcuni ordini non sono stati aggiunti:</p>
               <ul className="mt-1 list-inside list-disc">
                 {importErrors.map((message) => (
                   <li key={message}>{message}</li>
@@ -342,7 +342,7 @@ export function UploadOrderPanel({
                     </button>
                     <div className="flex-none text-right">
                       <div className="text-xl font-black tabular-nums text-ink">{doc.tyreCount}</div>
-                      <div className="text-xs uppercase text-ink-soft">anvelope</div>
+                      <div className="text-xs uppercase text-ink-soft">pneumatici</div>
                     </div>
                   </div>
 
@@ -351,7 +351,7 @@ export function UploadOrderPanel({
                   {!confirmable && !forceConfirmable && (
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-state-warning/30 pt-3 pl-7">
                       <span className="text-xs font-semibold text-state-warning">
-                        Date lipsă — necesită completare manuală.
+                        Dati mancanti — da completare manualmente.
                       </span>
                       {doc.status === "NEEDS_REVIEW" && (
                         <button
@@ -359,7 +359,7 @@ export function UploadOrderPanel({
                           onClick={() => result?.documentId && onEditDocument(doc, result.documentId)}
                           className="rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-white hover:bg-accent-dark"
                         >
-                          Editează și finalizează →
+                          Modifica e completa →
                         </button>
                       )}
                     </div>
@@ -368,8 +368,8 @@ export function UploadOrderPanel({
                   {!confirmable && forceConfirmable && (
                     <div className="mt-3 border-t border-ink/10 pt-3 pl-7 text-xs text-ink-soft">
                       {selected.has(index)
-                        ? "Va fi adăugată din nou la import."
-                        : "Se pare că a mai fost introdusă în sistem aceeași comandă — bifează pentru a o adăuga din nou."}
+                        ? "Verrà aggiunto di nuovo all'importazione."
+                        : "Sembra che lo stesso ordine sia già stato inserito — spunta per aggiungerlo comunque."}
                     </div>
                   )}
 
@@ -413,7 +413,7 @@ export function UploadOrderPanel({
 
           <div className="flex items-center justify-between gap-3 border-t border-ink/10 pt-4">
             <button type="button" onClick={onBack} className="text-sm font-semibold text-ink-soft hover:text-ink">
-              ← Înapoi
+              ← Indietro
             </button>
             <div className="flex items-center gap-3">
               {importProgress && phase === "importing" && (
@@ -427,7 +427,7 @@ export function UploadOrderPanel({
                 onClick={() => void confirmSelected()}
                 className="h-11 rounded-xl bg-accent px-5 text-sm font-bold text-white disabled:opacity-50"
               >
-                {phase === "importing" ? "Se adaugă…" : `Adaugă comenzi (${selectedConfirmableCount})`}
+                {phase === "importing" ? "Aggiunta…" : `Aggiungi ordini (${selectedConfirmableCount})`}
               </button>
             </div>
           </div>

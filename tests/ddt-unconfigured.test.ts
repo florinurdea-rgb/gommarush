@@ -30,8 +30,8 @@ describe("extractDdtDocuments — unconfigured is disclosed, never a technical f
 
     expect(result.status).toBe("unconfigured");
     expect(result.documents).toEqual([]);
-    expect(result.notes).toContain("Analiza automată nu este configurată.");
-    expect(result.notes.join(" ")).toContain("sistemul nu inventează valori");
+    expect(result.notes).toContain("L'analisi automatica non è configurata.");
+    expect(result.notes.join(" ")).toContain("il sistema non inventa valori");
   });
 
   it("is configured as false when neither API key is present", async () => {

@@ -8,7 +8,7 @@ import type { OrderListRow } from "@/lib/server/orders";
 import type { Map as LeafletMap } from "leaflet";
 
 /**
- * "Hartă" — the stop points for one vehicle's route, in delivery order,
+ * "Mappa" — the stop points for one vehicle's route, in delivery order,
  * starting from the depot the vehicle actually leaves from.
  *
  * Geocoding is OpenStreetMap Nominatim (free, no API key) via
@@ -75,7 +75,7 @@ export function RouteStopsModal({
         setPoints(map);
       })
       .catch(() => {
-        if (!cancelled) setError("Eroare de rețea la localizarea adreselor.");
+        if (!cancelled) setError("Errore di rete durante la localizzazione degli indirizzi.");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -132,7 +132,7 @@ export function RouteStopsModal({
         });
         L.marker([depotLocation.lat, depotLocation.lng], { icon: depotIcon })
           .addTo(map)
-          .bindPopup("<strong>Plecare — Depozit GommaRush</strong>");
+          .bindPopup("<strong>Partenza — Magazzino GommaRush</strong>");
       }
 
       for (const entry of located) {
@@ -167,10 +167,10 @@ export function RouteStopsModal({
       <ModalHeader title={`Puncte de oprire — ${vehicleName}`} onClose={onClose} />
       <div className="p-6">
         {orders.length === 0 && !depotLocation ? (
-          <p className="py-6 text-center text-sm text-ink-soft">Nicio comandă pe această mașină.</p>
+          <p className="py-6 text-center text-sm text-ink-soft">Nessun ordine su questo veicolo.</p>
         ) : (
           <>
-            {loading && <p className="mb-3 text-sm text-ink-soft">Se localizează adresele…</p>}
+            {loading && <p className="mb-3 text-sm text-ink-soft">Localizzazione degli indirizzi…</p>}
             {error && (
               <p role="alert" className="mb-3 rounded-lg bg-state-danger-soft px-3 py-2 text-sm text-state-danger">
                 {error}
@@ -197,7 +197,7 @@ export function RouteStopsModal({
                     </svg>
                   </span>
                   <div className="min-w-0">
-                    <div className="text-sm font-bold text-ink">Plecare — Depozit GommaRush</div>
+                    <div className="text-sm font-bold text-ink">Partenza — Magazzino GommaRush</div>
                     <div className="mt-0.5 text-xs text-ink-soft">
                       {depotLocation.lat.toFixed(6)}, {depotLocation.lng.toFixed(6)}
                     </div>
@@ -223,7 +223,7 @@ export function RouteStopsModal({
                       <div className="mt-0.5 truncate text-xs text-ink-soft">{stop.address}</div>
                       {geocodeFailed && (
                         <div className="mt-0.5 text-xs font-semibold text-state-warning">
-                          Adresa nu a putut fi localizată pe hartă.
+                          Non è stato possibile localizzare l&apos;indirizzo sulla mappa.
                         </div>
                       )}
                     </div>
@@ -233,11 +233,11 @@ export function RouteStopsModal({
             </ol>
 
             <p className="mt-4 text-[11px] text-ink-soft">
-              Hărți © colaboratorii{" "}
+              Mappe © collaboratori{" "}
               <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="underline">
                 OpenStreetMap
               </a>
-              . Ordinea reflectă ordinea de livrare curentă (plecare din depozit), nu o rută optimizată.
+              . La sequenza rispecchia l&apos;ordine di consegna attuale (partenza dal magazzino), non una rotta ottimizzata.
             </p>
           </>
         )}

@@ -32,9 +32,9 @@ async function textFallback(
       error: null,
       notes: [
         ...(providerFailures.length
-          ? ["Analiza AI nu a răspuns corect; documentul a fost recuperat din stratul text al PDF-ului."]
-          : ["Analiza automată nu este configurată; documentul a fost citit din stratul text al fișierului."]),
-        "Un singur document a putut fi citit din text. Separarea automată a mai multor DDT-uri într-un singur PDF necesită un provider AI funcțional.",
+          ? ["L'analisi AI non ha risposto correttamente; il documento è stato recuperato dal livello testo del PDF."]
+          : ["L'analisi automatica non è configurata; il documento è stato letto dal livello testo del file."]),
+        "È stato possibile leggere un solo documento dal testo. La separazione automatica di più DDT in un unico PDF richiede un provider AI funzionante.",
       ],
     };
   }
@@ -46,9 +46,9 @@ async function textFallback(
       pageCount: null,
       error: "UNCONFIGURED",
       notes: [
-        "Analiza automată nu este configurată.",
-        "Documentul a fost stocat, dar nu conține un strat text suficient pentru extracție automată.",
-        "Completează datele manual — sistemul nu inventează valori.",
+        "L'analisi automatica non è configurata.",
+        "Il documento è stato salvato ma non contiene testo sufficiente per l'estrazione automatica.",
+        "Inserisci i dati manualmente — il sistema non inventa valori.",
       ],
     };
   }
@@ -59,7 +59,7 @@ async function textFallback(
     pageCount: null,
     error: providerFailures.length ? providerFailures.join(" | ") : "ANALYSIS_FAILED",
     notes: [
-      "Toți providerii de analiză configurați au eșuat, iar documentul nu a putut fi recuperat din stratul text.",
+      "Tutti i provider di analisi configurati hanno fallito e il documento non è stato recuperato dal livello testo.",
     ],
   };
 }

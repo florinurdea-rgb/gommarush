@@ -68,7 +68,7 @@ export default async function OrderDetailPage({
                       </div>
                       {!item.is_physical && (
                         <span className="rounded-md bg-state-neutral-soft px-2 py-0.5 text-xs font-semibold text-state-neutral">
-                          Fără obiecte fizice
+                          Nessun articolo fisico
                         </span>
                       )}
                     </div>
@@ -100,7 +100,7 @@ export default async function OrderDetailPage({
           <section className="rounded-xl border border-ink/10 bg-white p-5 shadow-card">
             <h2 className="text-base font-bold text-ink">Istoric</h2>
             {history.length === 0 ? (
-              <p className="mt-3 text-sm text-ink-soft">Niciun eveniment încă.</p>
+              <p className="mt-3 text-sm text-ink-soft">Nessun evento finora.</p>
             ) : (
               <ul className="mt-3 divide-y divide-ink/5 text-sm">
                 {history.map((event) => (
@@ -128,8 +128,8 @@ export default async function OrderDetailPage({
             <ol className="mt-3 space-y-2 text-sm">
               {(
                 [
-                  ["Pregătit", detail.order.ready_at],
-                  ["Încărcat", detail.order.loaded_at],
+                  ["Pronto", detail.order.ready_at],
+                  ["Caricato", detail.order.loaded_at],
                   ["Livrat", detail.order.delivered_at],
                 ] as const
               ).map(([label, timestamp]) => (

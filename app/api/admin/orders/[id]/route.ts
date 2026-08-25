@@ -109,7 +109,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 }
 
 /**
- * DELETE — "Șterge" in the Admin UI.
+ * DELETE — "Elimina" in the Admin UI.
  *
  * Phase 1 makes this a SAFE CANCELLATION, never a SQL DELETE: the order leaves
  * the active dashboard but its items, inventory units, scan history and status

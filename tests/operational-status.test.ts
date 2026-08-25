@@ -18,7 +18,7 @@ describe("operationalStatus", () => {
   });
 
   it("buckets ready_for_loading/partially_loaded/loaded/out_for_delivery as ready", () => {
-    // ready_for_loading is where "Pregătește comanda" lands an order — it's
+    // ready_for_loading is where "Prepara l'ordine" lands an order — it's
     // already prepared, just waiting for a van, so it reads as ready (🟢)
     // rather than still needing prep (🟣).
     expect(operationalStatus("ready_for_loading", false).bucket).toBe("ready");

@@ -10,7 +10,7 @@ import type { CreateOrderItemInput } from "@/lib/server/orders";
 export const runtime = "nodejs";
 
 /**
- * POST /api/admin/orders — "Salvează" on the review screen.
+ * POST /api/admin/orders — "Salva" on the review screen.
  *
  * Order of operations matters:
  *   1. resolve the supplier (orders.supplier_id is NOT NULL)

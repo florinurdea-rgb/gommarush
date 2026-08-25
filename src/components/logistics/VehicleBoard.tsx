@@ -22,7 +22,7 @@ import type { OrderListRow } from "@/lib/server/orders";
 import type { VehicleRow } from "@/lib/types/logistics";
 
 /**
- * "Livrări" — the day-scoped, high-density dispatch board: orders grouped
+ * "Consegne" — the day-scoped, high-density dispatch board: orders grouped
  * under the vehicle they're assigned to, draggable between vehicles and
  * reorderable within one ("ordinea livrării"). Owns its own date/search/
  * status filter state entirely client-side, so switching days or typing a
@@ -36,7 +36,7 @@ import type { VehicleRow } from "@/lib/types/logistics";
  * Native HTML5 drag-and-drop, deliberately not a library: this is a
  * desktop-first admin tool, the interaction is a plain "pick up a card,
  * drop it somewhere in a list", and the browser API covers that without
- * adding a dependency. Every card also carries a "Mută în…" menu action as
+ * adding a dependency. Every card also carries a "Sposta in…" menu action as
  * a tap-friendly fallback, since native drag is unreliable on touch.
  *
  * State is optimistic: a drop updates the local column immediately and
@@ -195,12 +195,12 @@ export function VehicleBoard({
         if (!payload.ok) {
           const detail = [payload.code, ...(payload.details ?? [])].filter(Boolean).join(" — ");
           showToast(
-            `Nu am putut salva modificarea. Încearcă din nou.${detail ? ` (${detail})` : ""}`,
+            `Non è stato possibile salvare la modifica. Riprova.${detail ? ` (${detail})` : ""}`,
             "error"
           );
         }
       } catch {
-        showToast("Eroare de rețea. Nu am putut salva modificarea.", "error");
+        showToast("Errore di rete. Non è stato possibile salvare la modifica.", "error");
       } finally {
         router.refresh();
       }
@@ -238,8 +238,8 @@ export function VehicleBoard({
         next[toKey].map((order) => order.id)
       );
       if (fromKey !== toKey) {
-        const targetName = columnMeta.get(toKey)?.name ?? "coloană";
-        showToast(`Comandă mutată pe ${targetName}.`, "success");
+        const targetName = columnMeta.get(toKey)?.name ?? "colonna";
+        showToast(`Ordine spostato su ${targetName}.`, "success");
       }
       return next;
     });
@@ -256,24 +256,24 @@ export function VehicleBoard({
       );
       return next;
     });
-    const targetName = columnMeta.get(toKey)?.name ?? "coloană";
-    showToast(`Comandă mutată pe ${targetName}.`, "success");
+    const targetName = columnMeta.get(toKey)?.name ?? "colonna";
+    showToast(`Ordine spostato su ${targetName}.`, "success");
   }
 
   function handleAssignRecommended(order: OrderListRow, fromKey: string) {
     const vehicles = routableVehicles();
     if (vehicles.length === 0) {
-      showToast("Nicio mașină disponibilă pentru sugestie.", "error");
+      showToast("Nessun veicolo disponibile per il suggerimento.", "error");
       return;
     }
     const routableOrder: RoutableOrder = { id: order.id, city: order.customer_city, unitCount: order.progress.total };
     const suggestedVehicleId = suggestRouteForOrder(routableOrder, vehicles);
     if (!suggestedVehicleId) {
-      showToast("Nicio mașină disponibilă pentru sugestie.", "error");
+      showToast("Nessun veicolo disponibile per il suggerimento.", "error");
       return;
     }
     if (suggestedVehicleId === fromKey) {
-      showToast("Comanda este deja pe ruta recomandată.", "info");
+      showToast("L'ordine è già sulla rotta consigliata.", "info");
       return;
     }
     moveOrderToColumn(order, fromKey, suggestedVehicleId);
@@ -282,12 +282,12 @@ export function VehicleBoard({
   function handleOptimizeRoutes() {
     const unassignedOrders = columnsByKey["unassigned"] ?? [];
     if (unassignedOrders.length === 0) {
-      showToast("Nu există comenzi neasignate.", "info");
+      showToast("Nessun ordine non assegnato.", "info");
       return;
     }
     const vehicles = routableVehicles();
     if (vehicles.length === 0) {
-      showToast("Nicio mașină disponibilă pentru sugestie.", "error");
+      showToast("Nessun veicolo disponibile per il suggerimento.", "error");
       return;
     }
 
@@ -298,7 +298,7 @@ export function VehicleBoard({
     }));
     const assignments = suggestRouteAssignments(routableOrders, vehicles);
     if (assignments.length === 0) {
-      showToast("Nicio sugestie disponibilă.", "info");
+      showToast("Nessun suggerimento disponibile.", "info");
       return;
     }
 
@@ -330,7 +330,7 @@ export function VehicleBoard({
     });
 
     showToast(
-      assignments.length === 1 ? "1 comandă asignată." : `${assignments.length} comenzi asignate.`,
+      assignments.length === 1 ? "1 ordine assegnato." : `${assignments.length} ordini assegnati.`,
       "success"
     );
   }
@@ -482,7 +482,7 @@ export function VehicleBoard({
         }}
         className={`min-h-16 flex-1 space-y-1.5 overflow-y-auto rounded-lg p-1.5 transition-colors ${isOver ? "bg-accent-light/50" : ""}`}
       >
-        {orders.length === 0 && <p className="py-6 text-center text-xs text-ink-soft">Nicio comandă</p>}
+        {orders.length === 0 && <p className="py-6 text-center text-xs text-ink-soft">Nicio ordine</p>}
         {orders.map((order) => renderCard(order, column.key))}
       </div>
     );
@@ -523,7 +523,7 @@ export function VehicleBoard({
           />
         ) : (
           <span className="flex-none rounded-md bg-state-warning-soft px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-state-warning">
-            Necesită dispecerizare
+            Da smistare
           </span>
         )}
       </div>
@@ -531,7 +531,7 @@ export function VehicleBoard({
   }
 
   return (
-    <section aria-label="Livrări">
+    <section aria-label="Consegne">
       {/* ------------------------------------------------- compact status strip */}
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-ink/10 bg-white px-3 py-2">
         <span className="text-xs font-semibold text-ink-soft">
@@ -572,7 +572,7 @@ export function VehicleBoard({
                 <span className="truncate text-xs font-bold text-ink">{column.name}</span>
               </div>
               <div className="mt-1 text-[11px] text-ink-soft">
-                {stats.orderCount} {stats.orderCount === 1 ? "cursă" : "curse"}
+                {stats.orderCount} {stats.orderCount === 1 ? "corsa" : "curse"}
               </div>
               {stats.occupancyPercent !== null ? (
                 <>
@@ -595,11 +595,11 @@ export function VehicleBoard({
       {/* ------------------------------------------------------- date + CTA */}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-1.5">
-          <span className="text-sm font-semibold text-ink-soft">Livrări pentru:</span>
+          <span className="text-sm font-semibold text-ink-soft">Consegne per:</span>
           <button
             type="button"
             onClick={() => setSelectedDate((current) => addDays(current, -1))}
-            aria-label="Ziua anterioară"
+            aria-label="Giorno precedente"
             className="flex h-9 w-9 items-center justify-center rounded-lg border border-ink/15 bg-white text-ink hover:bg-surface-soft"
           >
             ‹
@@ -613,7 +613,7 @@ export function VehicleBoard({
           <button
             type="button"
             onClick={() => setSelectedDate((current) => addDays(current, 1))}
-            aria-label="Ziua următoare"
+            aria-label="Giorno successivo"
             className="flex h-9 w-9 items-center justify-center rounded-lg border border-ink/15 bg-white text-ink hover:bg-surface-soft"
           >
             ›
@@ -624,7 +624,7 @@ export function VehicleBoard({
               onClick={() => setSelectedDate(todayIso())}
               className="h-9 rounded-lg px-3 text-sm font-semibold text-accent hover:bg-accent-light"
             >
-              Astăzi
+              Oggi
             </button>
           )}
           <span className="hidden text-sm text-ink-soft sm:inline">{formatDateLong(selectedDate)}</span>
@@ -636,7 +636,7 @@ export function VehicleBoard({
             onClick={handleOptimizeRoutes}
             className="h-10 rounded-xl bg-accent px-4 text-sm font-bold text-white hover:bg-accent-dark"
           >
-            Optimizează rutele
+            Ottimizza le rotte
           </button>
         </div>
       </div>
@@ -647,7 +647,7 @@ export function VehicleBoard({
           type="search"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Caută client / comandă / adresă / furnizor"
+          placeholder="Cerca cliente / ordine / indirizzo / fornitore"
           className="h-9 w-full rounded-lg border border-ink/15 bg-white px-3 text-sm text-ink outline-none focus:border-accent sm:max-w-[220px]"
         />
 
@@ -657,7 +657,7 @@ export function VehicleBoard({
           className="h-9 rounded-lg border border-ink/15 bg-white px-2 text-xs font-semibold text-ink-soft"
         >
           <option value="all">Toate statusurile</option>
-          <option value="unassigned">Neasignate</option>
+          <option value="unassigned">Non assegnati</option>
           {OPERATIONAL_BUCKETS.map((bucket) => (
             <option key={bucket} value={bucket}>
               {operationalBucketMeta(bucket).label}
@@ -671,7 +671,7 @@ export function VehicleBoard({
             onChange={(event) => setSupplierFilter(event.target.value)}
             className="h-9 rounded-lg border border-ink/15 bg-white px-2 text-xs font-semibold text-ink-soft"
           >
-            <option value="all">Toți furnizorii</option>
+            <option value="all">Tutti i fornitori</option>
             {supplierOptions.map((name) => (
               <option key={name} value={name}>
                 {name}
@@ -690,14 +690,14 @@ export function VehicleBoard({
               <path d="M3 6h14M3 10h14M3 14h8" strokeLinecap="round" />
               <circle cx="15" cy="14" r="1.6" />
             </svg>
-            Gestionează mașinile
+            Gestisci i veicoli
           </button>
         </div>
       </div>
 
       {/* ----------------------------------------------------------- board */}
 
-      {/* Desktop / tablet landscape: full-width Kanban row, up to 5 vans + Neasignate fit without horizontal scroll. */}
+      {/* Desktop / tablet landscape: full-width Kanban row, up to 5 vans + Non assegnati fit without horizontal scroll. */}
       <div className="hidden gap-2 overflow-x-auto pb-2 lg:flex" style={{ height: "calc(100vh - 340px)", minHeight: "420px" }}>
         {initialColumns.map((column) => {
           const orders = visibleOrdersFor(column.key);
@@ -745,7 +745,7 @@ export function VehicleBoard({
             onClick={() => setFleetModalOpen(true)}
             className="flex-none rounded-full border border-ink/15 bg-white px-3 py-2 text-sm font-semibold text-ink-soft"
           >
-            Mașini ⚙
+            Veicoli ⚙
           </button>
         </div>
 

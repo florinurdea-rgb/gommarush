@@ -25,7 +25,7 @@ import { DuplicateImportDialog } from "@/components/logistics/DuplicateImportDia
  * incrementally.
  *
  * Shares its status labels/tones and confirm-eligibility logic with the
- * "Comandă nouă" modal's upload step (src/components/logistics/
+ * "Nuovo ordine" modal's upload step (src/components/logistics/
  * UploadOrderPanel.tsx) via src/lib/ddt-import/client-helpers.ts — one
  * definition of "when is a document safe to auto-confirm", not two.
  */
@@ -79,12 +79,12 @@ export function DdtImportFlow() {
       const payload = (await response.json()) as AnalyzeResponse;
 
       if (!payload.ok) {
-        setError(`Analiza a eșuat (${payload.code ?? "eroare necunoscută"}).`);
+        setError(`Analisi non riuscita (${payload.code ?? "errore sconosciuto"}).`);
         return;
       }
       setResult(payload);
     } catch {
-      setError("Eroare de rețea. Încearcă din nou.");
+      setError("Errore di rete. Riprova.");
     } finally {
       setBusy(false);
     }
@@ -125,7 +125,7 @@ export function DdtImportFlow() {
       if (!payload.ok || !payload.orderId) {
         if (payload.code === "ALREADY_IMPORTED") {
           // A duplicate is a decision for a human, not a dead end — show the
-          // informational dialog (Cancel / Adaugă din nou) instead of a red
+          // informational dialog (Cancel / Aggiungi di nuovo) instead of a red
           // error banner with no path forward.
           setDuplicatePrompt(index);
           return;
@@ -187,9 +187,9 @@ export function DdtImportFlow() {
           onClick={() => inputRef.current?.click()}
           className="inline-flex h-12 items-center justify-center rounded-xl bg-accent px-6 font-semibold text-white disabled:opacity-50"
         >
-          {busy ? "Se analizează…" : "Încarcă document"}
+          {busy ? "Analisi…" : "Carica documento"}
         </button>
-        <p className="mt-2 text-sm text-ink-soft">PDF sau imagine — poate conține unul sau mai multe DDT-uri.</p>
+        <p className="mt-2 text-sm text-ink-soft">PDF o immagine — può contenere uno o più DDT.</p>
       </div>
 
       {error && (
@@ -200,16 +200,16 @@ export function DdtImportFlow() {
 
       {result?.unconfigured && (
         <div className="rounded-xl border border-state-warning/30 bg-state-warning-soft p-5">
-          <h2 className="text-base font-bold text-state-warning">Analiză automată nu este configurată</h2>
+          <h2 className="text-base font-bold text-state-warning">Analisi automatica non configurata</h2>
           <p className="mt-2 text-sm text-ink">
-            Documentul va fi stocat, iar textul va fi citit direct din fișier acolo unde este posibil.
-            Datele care nu pot fi citite trebuie completate manual — sistemul nu inventează valori.
+            Il documento verrà salvato e il testo verrà letto direttamente dal file, dove possibile.
+            I dati non leggibili vanno inseriti manualmente — il sistema non inventa valori.
           </p>
           <Link
             href="/admin/orders/new"
             className="mt-3 inline-block text-sm font-semibold text-accent hover:underline"
           >
-            Completează comanda manual →
+            Completa l&apos;ordine manualmente →
           </Link>
         </div>
       )}
@@ -224,16 +224,16 @@ export function DdtImportFlow() {
 
       {result?.summary && (
         <div className="rounded-xl border border-ink/10 bg-white p-5 shadow-card">
-          <h2 className="text-sm font-bold uppercase tracking-wide text-ink-soft">Analiză document</h2>
+          <h2 className="text-sm font-bold uppercase tracking-wide text-ink-soft">Analisi documento</h2>
           <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
             <Stat label="Pagini" value={result.pageCount ?? "—"} />
             <Stat label="DDT-uri detectate" value={result.summary.documentsFound} />
             <Stat label="Anvelope detectate" value={result.summary.totalTyres} />
-            <Stat label="Necesită verificare" value={result.summary.needsReview} tone="warning" />
+            <Stat label="Da verificare" value={result.summary.needsReview} tone="warning" />
           </div>
           <div className="mt-3 flex flex-wrap gap-3 text-sm text-ink-soft">
-            <span>{result.summary.ready} pregătite</span>
-            <span>{result.summary.readyMissingOptional} pregătite (date opționale lipsă)</span>
+            <span>{result.summary.ready} pronti</span>
+            <span>{result.summary.readyMissingOptional} pronti (dati facoltativi mancanti)</span>
             <span>{result.summary.possibleDuplicate} posibil duplicat</span>
             <span>{result.summary.duplicate} deja importate</span>
           </div>
@@ -244,7 +244,7 @@ export function DdtImportFlow() {
               onClick={() => void confirmAllSafe()}
               className="mt-4 h-11 rounded-xl bg-state-success px-5 text-sm font-bold text-white"
             >
-              Confirmă toate comenzile pregătite ({readyCount})
+              Conferma tutti gli ordini pronti ({readyCount})
             </button>
           )}
         </div>
@@ -323,7 +323,7 @@ function DocumentCard({
 
         <div className="text-right">
           <div className="text-2xl font-black tabular-nums text-ink">{doc.tyreCount}</div>
-          <div className="text-xs uppercase text-ink-soft">anvelope</div>
+          <div className="text-xs uppercase text-ink-soft">pneumatici</div>
         </div>
       </div>
 
@@ -340,7 +340,7 @@ function DocumentCard({
           href={`/admin/orders/${doc.duplicateOfOrderId}`}
           className="mt-2 inline-block text-xs font-semibold text-accent hover:underline"
         >
-          Vezi comanda existentă →
+          Vedi l&apos;ordine esistente →
         </Link>
       )}
 
@@ -351,13 +351,13 @@ function DocumentCard({
               href={`/admin/orders/${confirmed.orderId}`}
               className="text-sm font-bold text-state-success hover:underline"
             >
-              ✓ Comandă creată — {formatOrderNumber(confirmed.orderNumber)} →
+              ✓ Ordine creato — {formatOrderNumber(confirmed.orderNumber)} →
             </Link>
             {confirmed.droppedLineCount > 0 && (
               <div className="mt-1 text-xs font-semibold text-state-warning">
                 {confirmed.droppedLineCount === 1
-                  ? "1 linie nu a putut fi adăugată (cantitate necitibilă) — adaug-o manual din pagina comenzii."
-                  : `${confirmed.droppedLineCount} linii nu au putut fi adăugate (cantitate necitibilă) — adaugă-le manual din pagina comenzii.`}
+                  ? "1 riga non è stata aggiunta (quantità non leggibile) — inseriscila manualmente dalla pagina dell'ordine."
+                  : `${confirmed.droppedLineCount} righe non sono state aggiunte (quantità non leggibile) — inseriscile manualmente dalla pagina dell'ordine.`}
               </div>
             )}
           </div>
@@ -368,7 +368,7 @@ function DocumentCard({
             onClick={onConfirm}
             className="h-10 rounded-xl bg-accent px-4 text-sm font-bold text-white disabled:opacity-50"
           >
-            {confirming ? "Se salvează…" : "Confirmă comanda"}
+            {confirming ? "Salvataggio…" : "Conferma l'ordine"}
           </button>
         ) : canForceConfirm ? (
           <>
@@ -378,12 +378,12 @@ function DocumentCard({
               onClick={onRequestForceConfirm}
               className="h-10 rounded-xl border border-ink/15 bg-white px-4 text-sm font-bold text-ink hover:bg-surface-soft disabled:opacity-50"
             >
-              {confirming ? "Se salvează…" : "Adaugă din nou"}
+              {confirming ? "Salvataggio…" : "Aggiungi di nuovo"}
             </button>
-            <span className="text-xs text-ink-soft">Se pare că a mai fost introdusă în sistem aceeași comandă.</span>
+            <span className="text-xs text-ink-soft">Sembra che lo stesso ordine sia già stato inserito.</span>
           </>
         ) : (
-          <span className="text-xs text-ink-soft">Completează manual din pagina de comandă nouă.</span>
+          <span className="text-xs text-ink-soft">Inserisci manualmente dalla pagina Nuovo ordine.</span>
         )}
         {error && <span className="text-xs font-semibold text-state-danger">Eroare: {error}</span>}
       </div>

@@ -24,7 +24,7 @@ export function BootstrapForm() {
       const payload = (await response.json()) as { ok: boolean; code?: string; action?: string };
 
       if (!payload.ok) {
-        setMessage({ kind: "error", text: `Eroare: ${payload.code ?? "necunoscută"}` });
+        setMessage({ kind: "error", text: `Errore: ${payload.code ?? "sconosciuto"}` });
         return;
       }
 
@@ -32,11 +32,11 @@ export function BootstrapForm() {
         kind: "success",
         text:
           payload.action === "password_reset"
-            ? "Parola a fost resetată. Poți intra acum în cont cu noua parolă."
-            : "Contul a fost creat. Poți intra acum în cont.",
+            ? "Password reimpostata. Ora puoi accedere con la nuova password."
+            : "Account creato. Ora puoi accedere.",
       });
     } catch {
-      setMessage({ kind: "error", text: "Eroare de rețea — încearcă din nou." });
+      setMessage({ kind: "error", text: "Errore di rete — riprova." });
     } finally {
       setBusy(false);
     }
@@ -76,7 +76,7 @@ export function BootstrapForm() {
 
       <div>
         <label htmlFor="password" className="mb-1 block text-sm font-semibold text-ink">
-          Parolă (min. 6 caractere)
+          Password (min. 6 caratteri)
         </label>
         <input
           id="password"
@@ -104,7 +104,7 @@ export function BootstrapForm() {
       )}
 
       <Button type="submit" size="lg" disabled={busy} className="w-full">
-        {busy ? "Se procesează…" : "Creează / resetează contul"}
+        {busy ? "Elaborazione…" : "Crea / reimposta l'account"}
       </Button>
     </form>
   );

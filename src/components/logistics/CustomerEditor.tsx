@@ -140,7 +140,7 @@ export function CustomerEditor({
     return (
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <div>
-          <label className={labelClass}>Denumire locație</label>
+          <label className={labelClass}>Nome del luogo</label>
           <input className={inputClass} value={draft.location_name}
             onChange={(event) => onChange({ location_name: event.target.value })} />
         </div>
@@ -202,7 +202,7 @@ export function CustomerEditor({
       )}
 
       <section className="rounded-xl border border-ink/10 bg-white p-5 shadow-card">
-        <h2 className="text-base font-bold text-ink">Date firmă</h2>
+        <h2 className="text-base font-bold text-ink">Dati azienda</h2>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div>
             <label className={labelClass}>{t("companyName")}</label>
@@ -210,7 +210,7 @@ export function CustomerEditor({
               onChange={(event) => setCompany({ ...company, name: event.target.value })} />
           </div>
           <div>
-            <label className={labelClass}>Denumire legală</label>
+            <label className={labelClass}>Ragione sociale</label>
             <input className={inputClass} value={company.legal_name}
               onChange={(event) => setCompany({ ...company, legal_name: event.target.value })} />
           </div>
@@ -289,13 +289,13 @@ export function CustomerEditor({
               {t("save")}
             </Button>
             {/* address_line1 and city are NOT NULL in the database. */}
-            <p className="mt-2 text-xs text-ink-soft">Adresa și orașul sunt obligatorii.</p>
+            <p className="mt-2 text-xs text-ink-soft">Indirizzo e città sono obbligatori.</p>
           </div>
         )}
 
         <div className="mt-4 space-y-4">
           {locations.length === 0 && !newLocation && (
-            <p className="text-sm text-ink-soft">Nicio locație de livrare înregistrată.</p>
+            <p className="text-sm text-ink-soft">Nessun luogo di consegna registrato.</p>
           )}
 
           {locations.map((location) => {
@@ -308,7 +308,7 @@ export function CustomerEditor({
                   </span>
                   {location.is_primary && (
                     <span className="rounded bg-accent-light px-2 py-0.5 text-xs font-semibold text-accent-dark">
-                      Principală
+                      Principale
                     </span>
                   )}
                 </div>

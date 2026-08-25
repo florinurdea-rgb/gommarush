@@ -18,7 +18,7 @@ export default async function CustomerDetailPage({
     <>
       <PageHeading
         title={result.customer.name}
-        description="Firmă client și locațiile sale de livrare."
+        description="Azienda cliente e i suoi luoghi di consegna."
         back
       />
       <CustomerEditor customer={result.customer} locations={result.locations} />

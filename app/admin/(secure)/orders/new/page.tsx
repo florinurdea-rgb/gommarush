@@ -4,7 +4,7 @@ import { NewOrderFlow } from "@/components/logistics/NewOrderFlow";
 import { t } from "@/lib/i18n/logistics";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Adaugă comandă" };
+export const metadata = { title: "Aggiungi ordine" };
 
 /**
  * Order import.
@@ -19,7 +19,7 @@ export default function NewOrderPage() {
     <>
       <PageHeading
         title={t("addOrder")}
-        description="Încarcă documentul furnizorului, verifică datele extrase, apoi salvează comanda."
+        description="Carica il documento del fornitore, controlla i dati estratti, poi salva l'ordine."
         back
       />
       <NewOrderFlow analysisConfigured={isAnalysisConfigured()} />

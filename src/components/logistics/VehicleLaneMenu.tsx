@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/Toast";
 
 /**
- * The van lane header's "⋯" — Hartă / Redenumește / Elimină mașina
+ * The van lane header's "⋯" — Mappa / Rinomina / Elimina il veicolo
  * (redesign brief §30): rarely-used configuration tucked behind a menu
  * rather than permanent lane-header buttons, so the header stays compact.
  * Self-contained (own fetch calls + router.refresh()) rather than routed
@@ -63,14 +63,14 @@ export function VehicleLaneMenu({
       });
       const payload = (await response.json()) as { ok: boolean };
       if (payload.ok) {
-        showToast("Mașină redenumită.", "success");
+        showToast("Veicolo rinominato.", "success");
         router.refresh();
         close();
       } else {
-        showToast("Redenumirea nu a putut fi salvată.", "error");
+        showToast("Rinomina non salvata.", "error");
       }
     } catch {
-      showToast("Eroare de rețea.", "error");
+      showToast("Errore di rete.", "error");
     } finally {
       setBusy(false);
     }
@@ -84,17 +84,17 @@ export function VehicleLaneMenu({
       if (payload.ok) {
         showToast(
           payload.reassignedOrders
-            ? `${vehicleName} eliminată. ${payload.reassignedOrders} ${payload.reassignedOrders === 1 ? "comandă mutată" : "comenzi mutate"} în Neasignate.`
-            : `${vehicleName} eliminată.`,
+            ? `${vehicleName} eliminato. ${payload.reassignedOrders} ${payload.reassignedOrders === 1 ? "ordine spostato" : "ordini spostati"} in Non assegnati.`
+            : `${vehicleName} eliminato.`,
           "success"
         );
         router.refresh();
         close();
       } else {
-        showToast("Eliminarea nu a putut fi salvată.", "error");
+        showToast("Rimozione non salvata.", "error");
       }
     } catch {
-      showToast("Eroare de rețea.", "error");
+      showToast("Errore di rete.", "error");
     } finally {
       setBusy(false);
     }
@@ -106,7 +106,7 @@ export function VehicleLaneMenu({
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`Acțiuni ${vehicleName}`}
+        aria-label={`Azioni ${vehicleName}`}
         onClick={() => (open ? close() : setOpen(true))}
         className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-soft hover:bg-white hover:text-ink"
       >
@@ -130,7 +130,7 @@ export function VehicleLaneMenu({
                 }}
                 className="block w-full px-4 py-2.5 text-left text-sm font-medium text-ink hover:bg-surface-soft"
               >
-                Hartă
+                Mappa
               </button>
               <button
                 role="menuitem"
@@ -138,7 +138,7 @@ export function VehicleLaneMenu({
                 onClick={() => setMode("rename")}
                 className="block w-full px-4 py-2.5 text-left text-sm font-medium text-ink hover:bg-surface-soft"
               >
-                Redenumește
+                Rinomina
               </button>
               <button
                 role="menuitem"
@@ -146,7 +146,7 @@ export function VehicleLaneMenu({
                 onClick={() => setMode("remove")}
                 className="block w-full px-4 py-2.5 text-left text-sm font-medium text-state-danger hover:bg-state-danger-soft"
               >
-                Elimină mașina
+                Elimina il veicolo
               </button>
             </>
           )}
@@ -166,7 +166,7 @@ export function VehicleLaneMenu({
                   onClick={() => setMode("menu")}
                   className="flex-1 rounded-lg border border-ink/15 px-2 py-1.5 text-xs font-semibold text-ink"
                 >
-                  Anulează
+                  Annulla
                 </button>
                 <button
                   type="button"
@@ -174,7 +174,7 @@ export function VehicleLaneMenu({
                   onClick={() => void submitRename()}
                   className="flex-1 rounded-lg bg-accent px-2 py-1.5 text-xs font-bold text-white disabled:opacity-50"
                 >
-                  Salvează
+                  Salva
                 </button>
               </div>
             </div>
@@ -184,11 +184,11 @@ export function VehicleLaneMenu({
             <div className="px-3 py-2.5">
               {orderCount > 0 ? (
                 <p className="text-xs text-ink">
-                  {vehicleName} are {orderCount} {orderCount === 1 ? "comandă asignată" : "comenzi asignate"}.{" "}
-                  {orderCount === 1 ? "Va fi mutată" : "Vor fi mutate"} în Neasignate.
+                  {vehicleName} ha {orderCount} {orderCount === 1 ? "ordine assegnato" : "ordini assegnati"}.{" "}
+                  {orderCount === 1 ? "Verrà spostato" : "Verranno spostati"} in Non assegnati.
                 </p>
               ) : (
-                <p className="text-xs text-ink">Ștergi {vehicleName}?</p>
+                <p className="text-xs text-ink">Eliminare {vehicleName}?</p>
               )}
               <div className="mt-2 flex gap-2">
                 <button
@@ -196,7 +196,7 @@ export function VehicleLaneMenu({
                   onClick={() => setMode("menu")}
                   className="flex-1 rounded-lg border border-ink/15 px-2 py-1.5 text-xs font-semibold text-ink"
                 >
-                  Anulează
+                  Annulla
                 </button>
                 <button
                   type="button"
@@ -204,7 +204,7 @@ export function VehicleLaneMenu({
                   onClick={() => void submitRemove()}
                   className="flex-1 rounded-lg bg-state-danger px-2 py-1.5 text-xs font-bold text-white disabled:opacity-50"
                 >
-                  {busy ? "Se elimină…" : "Elimină"}
+                  {busy ? "Rimozione…" : "Elimina"}
                 </button>
               </div>
             </div>

@@ -242,7 +242,7 @@ export const reorderVehiclesSchema = z
   .object({ orderedVehicleIds: z.array(uuid).min(1).max(50) })
   .strict();
 
-/** The "Hartă" route-stops geocoding request — one vehicle's stops, in delivery order. */
+/** The "Mappa" route-stops geocoding request — one vehicle's stops, in delivery order. */
 export const routeMapSchema = z
   .object({
     stops: z
@@ -351,6 +351,3 @@ export const deliveryFailedSchema = z
   })
   .strict();
 
-export const printJobActionSchema = z
-  .object({ action: z.literal("retry") })
-  .strict();

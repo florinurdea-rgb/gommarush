@@ -85,7 +85,7 @@ const DRIVER_ACTIVE_STATUSES: OrderStatus[] = [
 /**
  * Orders assigned to this driver — and only this driver. The filter is
  * applied in SQL, so a driver's phone never receives another driver's
- * deliveries in the first place. Ordered the same way the Livrări board
+ * deliveries in the first place. Ordered the same way the Consegne board
  * orders a van's column: manual delivery_sequence first, then planned date.
  */
 export async function listDriverOrders(driverId: string): Promise<DriverOrderSummary[]> {
@@ -180,7 +180,7 @@ export interface DeliverOrderResult extends DispatchActionResult {
 /**
  * "MARK DELIVERED" — one tap per order, with optional COD collection
  * recorded in the same call. `driverId: null` means an admin/warehouse
- * initiated delivery from the Livrări board, exempt from the
+ * initiated delivery from the Consegne board, exempt from the
  * wrong-driver check by design (see the RPC comment); a real driver id
  * (from the driver app) is always enforced server-side.
  */

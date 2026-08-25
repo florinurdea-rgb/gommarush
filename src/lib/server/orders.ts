@@ -183,16 +183,16 @@ export async function listOrdersOnHold(): Promise<OrderListRow[]> {
 }
 
 /**
- * "De pregătit" — orders whose tyres are physically at the warehouse
+ * "Da preparare" — orders whose tyres are physically at the warehouse
  * (received) but not yet prepared/labeled: sorting or stored only.
  * markOrderPrepared() advances an order past this the moment "Pregătește
  * comanda" is used (-> 'ready_for_loading'), so a prepared order drops out
  * of this list immediately — it shows up as unassigned-and-ready on the
- * Livrări board instead, waiting for a van, not stuck looking like it
+ * Consegne board instead, waiting for a van, not stuck looking like it
  * still needs preparing. 'partially_loaded' is excluded for the same
  * reason: loading has already started, so re-prepping doesn't apply.
  * This is the repurposed former "hold" tab — actual on-hold orders
- * (status = on_hold) now surface through Livrări's "Așteaptă marfa"
+ * (status = on_hold) now surface through Consegne's "In attesa merce"
  * filter instead of a dedicated page.
  */
 const TO_PREPARE_STATUSES = ["sorting", "stored"] as const;
@@ -222,7 +222,7 @@ export async function listOrdersToPrepare(): Promise<OrderListRow[]> {
   return ((primary.data ?? []) as unknown as RawOrderListRow[]).map(toListRow);
 }
 
-/** Cheap count for the "De pregătit" nav badge — avoids pulling full rows just to size a circle. */
+/** Cheap count for the "Da preparare" nav badge — avoids pulling full rows just to size a circle. */
 export async function countOrdersToPrepare(): Promise<number> {
   const supabase = createSupabaseAdminClient();
   const { count, error } = await supabase
@@ -539,13 +539,13 @@ export async function holdOrder(
   return setStatus(orderId, "on_hold", { reason, changedBy });
 }
 
-/** "Pregătește comanda" — the order's tyres are labeled (or the admin chose to skip printing) and ready to load. */
+/** "Prepara l'ordine" — the order's tyres are labeled (or the admin chose to skip printing) and ready to load. */
 export async function markOrderPrepared(orderId: string, changedBy: string): Promise<StatusChangeResult> {
   return setStatus(orderId, "ready_for_loading", { reason: "prepared", changedBy });
 }
 
 /**
- * Manual status override from the Livrări board's card menu — the admin
+ * Manual status override from the Consegne board's card menu — the admin
  * needs to be able to correct or advance an order's status directly,
  * without walking through each intermediate step. See
  * isManuallySettableStatus() (src/lib/logistics/order-status-rules.ts) for

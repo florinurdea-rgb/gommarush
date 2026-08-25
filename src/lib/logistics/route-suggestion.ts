@@ -1,5 +1,5 @@
 /**
- * "Asignează în ruta recomandată" — a deliberately simple, honest heuristic,
+ * "Assegna alla rotta consigliata" — a deliberately simple, honest heuristic,
  * not real route optimization. There is no geocoding/routing service wired
  * up yet (see the map feature discussion), so this groups unassigned orders
  * by delivery city — orders in the same city are likely to be on a
@@ -99,7 +99,7 @@ export function suggestRouteAssignments(
   return assignments;
 }
 
-/** The single-order version of the same heuristic — for the per-card "Asignează în ruta recomandată" action. */
+/** The single-order version of the same heuristic — for the per-card "Assegna alla rotta consigliata" action. */
 export function suggestRouteForOrder(order: RoutableOrder, vehicles: RoutableVehicle[]): string | null {
   const assignments = suggestRouteAssignments([order], vehicles);
   return assignments[0]?.vehicleId ?? null;

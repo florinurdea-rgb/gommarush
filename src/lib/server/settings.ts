@@ -41,7 +41,7 @@ export interface DepotLocation {
 
 /**
  * The warehouse's own coordinates — every vehicle's route starts here, so
- * the "Hartă" view marks it as the departure point rather than starting
+ * the "Mappa" view marks it as the departure point rather than starting
  * the map cold at the first delivery stop. Defaulted in code (not just in
  * the DB) so the map still shows a departure point before the seeding
  * migration has run.

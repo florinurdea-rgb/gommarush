@@ -3,13 +3,13 @@
 export type PeriodKey = "today" | "yesterday" | "7d" | "30d" | "this_month" | "last_month" | "custom";
 
 export const PERIOD_OPTIONS: { key: PeriodKey; label: string }[] = [
-  { key: "today", label: "Astăzi" },
+  { key: "today", label: "Oggi" },
   { key: "yesterday", label: "Ieri" },
   { key: "7d", label: "Ultimele 7 zile" },
   { key: "30d", label: "Ultimele 30 zile" },
   { key: "this_month", label: "Luna aceasta" },
-  { key: "last_month", label: "Luna trecută" },
-  { key: "custom", label: "Perioadă personalizată" },
+  { key: "last_month", label: "Mese scorso" },
+  { key: "custom", label: "Periodo personalizzato" },
 ];
 
 function toIso(date: Date): string {

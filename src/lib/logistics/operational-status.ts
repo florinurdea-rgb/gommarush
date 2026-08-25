@@ -26,7 +26,7 @@ const BUCKET_BY_STATUS: Partial<Record<OrderStatus, OperationalBucket>> = {
   received: "receiving",
   sorting: "to_prepare",
   stored: "to_prepare",
-  // 'ready_for_loading' is where markOrderPrepared() ("Pregătește comanda")
+  // 'ready_for_loading' is where markOrderPrepared() ("Prepara l'ordine")
   // lands an order — it has already been prepared/labeled, just waiting
   // for a van, so it reads as "ready" (🟢) here rather than still "to
   // prepare" (🟣). 'partially_loaded' means loading is already underway,
@@ -41,11 +41,11 @@ const BUCKET_BY_STATUS: Partial<Record<OrderStatus, OperationalBucket>> = {
 };
 
 const BUCKET_META: Record<OperationalBucket, Omit<OperationalStatusMeta, "bucket">> = {
-  waiting_goods: { emoji: "🟠", label: "Așteaptă marfa", tone: "waiting" },
-  receiving: { emoji: "🔵", label: "În recepție", tone: "progress" },
-  to_prepare: { emoji: "🟣", label: "De pregătit", tone: "progress" },
+  waiting_goods: { emoji: "🟠", label: "In attesa merce", tone: "waiting" },
+  receiving: { emoji: "🔵", label: "In ricezione", tone: "progress" },
+  to_prepare: { emoji: "🟣", label: "Da preparare", tone: "progress" },
   ready: { emoji: "🟢", label: "Gata de livrare", tone: "success" },
-  problem: { emoji: "🔴", label: "Problemă", tone: "danger" },
+  problem: { emoji: "🔴", label: "Problema", tone: "danger" },
 };
 
 /**

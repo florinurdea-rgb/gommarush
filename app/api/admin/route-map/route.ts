@@ -6,7 +6,7 @@ import { fail, ok, readJsonBody, runAdminRoute, zodDetails } from "@/lib/server/
 export const runtime = "nodejs";
 
 /**
- * POST — geocodes one vehicle's stops (in delivery order) for the "Hartă"
+ * POST — geocodes one vehicle's stops (in delivery order) for the "Mappa"
  * modal. A stop whose address can't be geocoded comes back with point: null
  * so the map can still show the rest and the modal's list can flag it,
  * instead of the whole request failing.

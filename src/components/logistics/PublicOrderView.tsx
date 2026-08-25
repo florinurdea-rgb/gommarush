@@ -35,7 +35,7 @@ export function PublicOrderView({
       <main className="mx-auto w-full max-w-lg px-4 py-6">
         {!order ? (
           <div className="mt-8 rounded-2xl border-2 border-dashed border-ink/20 px-6 py-16 text-center">
-            <p className="text-lg font-semibold text-ink-soft">Comanda nu a fost găsită.</p>
+            <p className="text-lg font-semibold text-ink-soft">Ordine non trovato.</p>
           </div>
         ) : (
           <>

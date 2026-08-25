@@ -91,7 +91,7 @@ export async function analyzeDocument(document: AnalyzableDocument): Promise<Ana
         ...textResult,
         notes: [
           ...textResult.notes,
-          "Analiza AI a eșuat; datele de mai jos provin doar din textul documentului. Verifică-le atent.",
+          "L'analisi AI non è riuscita; i dati qui sotto provengono solo dal testo del documento. Controllali con attenzione.",
         ],
       };
     }
@@ -103,7 +103,7 @@ export async function analyzeDocument(document: AnalyzableDocument): Promise<Ana
     return {
       ...textResult,
       notes: [
-        "Analiza automată (AI/OCR) nu este configurată. Datele de mai jos au fost citite direct din textul documentului și trebuie verificate.",
+        "L'analisi automatica (AI/OCR) non è configurata. I dati qui sotto sono stati letti direttamente dal testo del documento e vanno verificati.",
         ...textResult.notes,
       ],
     };
@@ -114,8 +114,8 @@ export async function analyzeDocument(document: AnalyzableDocument): Promise<Ana
     "unconfigured",
     "none",
     [
-      "Analiza automată nu este configurată și documentul nu conține text care poate fi citit direct.",
-      "Completează manual datele comenzii mai jos.",
+      "L'analisi automatica non è configurata e il documento non contiene testo leggibile direttamente.",
+      "Inserisci manualmente i dati dell'ordine qui sotto.",
     ]
   );
 }

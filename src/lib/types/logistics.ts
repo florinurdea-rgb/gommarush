@@ -83,10 +83,10 @@ export const ORDER_STATUSES = [
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
 /**
- * Statuses that keep an order on the active dashboard ("Livrări").
+ * Statuses that keep an order on the active dashboard ("Consegne").
  * Includes `on_hold` — there is no longer a dedicated "on hold" page (that
- * tab was repurposed into "De pregătit"), so a held order stays visible
- * here instead of disappearing; it surfaces under the "Așteaptă marfa"
+ * tab was repurposed into "Da preparare"), so a held order stays visible
+ * here instead of disappearing; it surfaces under the "In attesa merce"
  * operational-status bucket (src/lib/logistics/operational-status.ts).
  */
 export const ACTIVE_ORDER_STATUSES: readonly OrderStatus[] = [
@@ -169,7 +169,6 @@ export const INCIDENT_TYPES = [
 ] as const;
 export type IncidentType = (typeof INCIDENT_TYPES)[number];
 
-export type PrintJobStatus = "pending" | "processing" | "printed" | "failed" | "cancelled";
 
 /** order_documents.extraction_status, plus 'unconfigured' from Phase 1. */
 export type DocumentExtractionStatus =
@@ -416,22 +415,6 @@ export interface InventoryScanRow {
   scanned_at: string;
 }
 
-export interface PrintJobRow {
-  id: string;
-  inventory_unit_id: string | null;
-  order_id: string | null;
-  print_type: string;
-  status: PrintJobStatus;
-  label_data: LabelData;
-  printer_name: string | null;
-  claimed_by: string | null;
-  claimed_at: string | null;
-  attempts: number;
-  requested_at: string;
-  printed_at: string | null;
-  error_message: string | null;
-  created_at: string;
-}
 
 export interface OrderDocumentRow {
   id: string;
@@ -452,32 +435,3 @@ export interface OrderDocumentRow {
   created_at: string;
 }
 
-/**
- * Everything the Print Agent needs to render one physical label — and nothing
- * more. NEVER add payment amounts, addresses, keys, or any token beyond the
- * unit token itself: this JSON travels to a workshop PC and lands in agent logs.
- */
-export interface LabelData {
-  inventory_unit_id: string;
-  unit_token: string;
-  /** bigint from the database; rendered as "GR-001" on the label. */
-  order_number: number | string;
-  customer: string;
-  product: string;
-  brand?: string;
-  size?: string;
-  load_speed?: string;
-  unit_index?: number;
-  unit_total?: number;
-  item_type?: string;
-  /**
-   * Deliberate, explicit exception to the "nothing sensitive on a label"
-   * rule below — the user was told this data travels to a workshop PC and
-   * gets logged, and chose to include it anyway for the preparation/
-   * labeling flow (src/components/logistics/PrepareOrderModal.tsx). Not an
-   * oversight: assertLabelDataIsSafe() in label.ts intentionally does NOT
-   * forbid these two exact key names.
-   */
-  supplier?: string;
-  delivery_address?: string;
-}

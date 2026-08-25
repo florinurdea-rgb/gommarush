@@ -2,14 +2,14 @@ import { ACTIVE_ORDER_STATUSES } from "@/lib/types/logistics";
 import type { OrderStatus } from "@/lib/types/logistics";
 
 /**
- * Statuses excluded from the generic manual override (the Livrări board's
- * "Schimbă statusul" menu / setOrderStatusManually()) because each one
+ * Statuses excluded from the generic manual override (the Consegne board's
+ * "Cambia stato" menu / setOrderStatusManually()) because each one
  * carries a required side effect a plain status write would skip:
  *   - 'loaded' needs a vehicle + loaded_at -> markOrderLoaded()
  *     (gorush_mark_order_loaded)
  *   - 'delivered' / 'partially_delivered' need delivered_at + payment
  *     recording -> deliverOrder() (gorush_deliver_order)
- * 'cancelled' already has its own "Șterge" action; 'draft'/
+ * 'cancelled' already has its own "Elimina" action; 'draft'/
  * 'review_required' don't apply to an order that already made it onto
  * the board.
  *

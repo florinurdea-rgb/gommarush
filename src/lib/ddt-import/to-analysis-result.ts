@@ -3,8 +3,8 @@ import type { ProcessedDocumentWithMatch } from "@/lib/ddt-import/client-helpers
 
 /**
  * Converts a DDT-import pipeline result into the shape OrderReviewForm
- * already knows how to edit — "Editează și finalizează" reuses the exact
- * same manual-entry form as the "Comandă nouă" modal instead of a second
+ * already knows how to edit — "Modifica și finalizează" reuses the exact
+ * same manual-entry form as the "Nuovo ordine" modal instead of a second
  * editor, just pre-filled with whatever the pipeline DID manage to read.
  * Nothing here invents a value: a field the pipeline couldn't read stays
  * null/empty, same as an unconfigured analysis would leave it.

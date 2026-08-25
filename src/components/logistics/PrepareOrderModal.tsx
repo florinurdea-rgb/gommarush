@@ -15,13 +15,12 @@ function escapeHtml(value: string): string {
 }
 
 /**
- * "Pregătește comanda" — shows the order and, per physical unit, exactly
- * what a shipping label will say. "Tipărește și mută în progres" opens the
- * browser's print dialog immediately for a one-page order summary (the
- * office printer) AND queues one label per unit onto the existing
- * print_jobs queue the GoRush Print Agent polls (the label printer) — two
- * different printers, both triggered from one click, per the brief.
- * "Mută fără tipărit" advances the order without printing anything.
+ * "Prepara l'ordine" — shows the order and, per physical unit, exactly
+ * "Stampa riepilogo e prepara" opens the browser's print dialog for a
+ * one-page order summary and then advances the order; "Prepara senza
+ * stampare" only advances it. The summary print is purely client-side —
+ * the thermal-label queue and its desktop Print Agent were removed, so
+ * there is no longer a second printer involved.
  *
  * Both buttons move the order to `ready_for_loading` — see prepareOrder()
  * in src/lib/server/prepare-order.ts.
@@ -92,7 +91,7 @@ export function PrepareOrderModal({
         table { width: 100%; border-collapse: collapse; font-size: 13px; }
         th, td { border-bottom: 1px solid #e2e8f0; padding: 6px 8px; text-align: left; }
       </style></head><body>
-      <h1>Comandă ${escapeHtml(formatOrderNumber(detail.order.order_number))}</h1>
+      <h1>Ordine ${escapeHtml(formatOrderNumber(detail.order.order_number))}</h1>
       <p class="sub">
         ${escapeHtml(detail.customer?.name ?? detail.order.delivery_name ?? "Client necunoscut")}<br/>
         ${escapeHtml(address || "—")}<br/>
@@ -110,42 +109,30 @@ export function PrepareOrderModal({
     printWindow.print();
   }
 
-  async function submit(printLabels: boolean) {
+  async function submit(printSummaryFirst: boolean) {
     if (!detail) return;
-    setBusy(printLabels ? "print" : "skip");
+    setBusy(printSummaryFirst ? "print" : "skip");
     try {
-      if (printLabels) printSummary();
+      // A browser print of the order summary for the office printer. This
+      // is entirely client-side — the server is not told about it, and no
+      // job is queued anywhere.
+      if (printSummaryFirst) printSummary();
 
       const response = await fetch(`/api/admin/orders/${orderId}/prepare`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ printLabels }),
       });
-      const payload = (await response.json()) as {
-        ok: boolean;
-        code?: string;
-        result?: { labelsQueued: number; labelsFailed: number };
-      };
+      const payload = (await response.json()) as { ok: boolean; code?: string };
 
       if (!payload.ok) {
-        showToast(`Nu am putut pregăti comanda (${payload.code ?? "eroare"}).`, "error");
+        showToast(`Non è stato possibile preparare l'ordine (${payload.code ?? "errore"}).`, "error");
         return;
       }
 
-      const labelsQueued = payload.result?.labelsQueued ?? 0;
-      const labelsFailed = payload.result?.labelsFailed ?? 0;
-      showToast(
-        printLabels
-          ? labelsFailed > 0
-            ? `Comandă pregătită. ${labelsQueued} etichete trimise, ${labelsFailed} au eșuat.`
-            : `Comandă pregătită. ${labelsQueued} etichete trimise la imprimantă.`
-          : "Comandă mutată în progres, fără etichete.",
-        labelsFailed > 0 ? "info" : "success"
-      );
+      showToast("Ordine preparato e pronto per il carico.", "success");
       onPrepared();
       onClose();
     } catch {
-      showToast("Eroare de rețea. Încearcă din nou.", "error");
+      showToast("Errore di rete. Riprova.", "error");
     } finally {
       setBusy(null);
     }
@@ -158,12 +145,12 @@ export function PrepareOrderModal({
     : "";
 
   return (
-    <Modal onClose={onClose} size="lg" label="Pregătește comanda">
-      <ModalHeader title="Pregătește comanda" onClose={onClose} />
+    <Modal onClose={onClose} size="lg" label="Prepara l'ordine">
+      <ModalHeader title="Prepara l'ordine" onClose={onClose} />
       <div className="p-6">
-        {loading && <div className="py-16 text-center text-sm text-ink-soft">Se încarcă…</div>}
+        {loading && <div className="py-16 text-center text-sm text-ink-soft">Caricamento…</div>}
         {!loading && error && (
-          <div className="py-16 text-center text-sm text-state-danger">Comanda nu a putut fi încărcată.</div>
+          <div className="py-16 text-center text-sm text-state-danger">Non è stato possibile caricare l&apos;ordine.</div>
         )}
 
         {!loading && detail && (
@@ -175,7 +162,7 @@ export function PrepareOrderModal({
               <div className="text-lg font-bold text-ink">
                 {detail.customer?.name ?? detail.order.delivery_name ?? "Client necunoscut"}
               </div>
-              <div className="text-sm text-ink-soft">{address || "Adresă necunoscută"}</div>
+              <div className="text-sm text-ink-soft">{address || "Indirizzo sconosciuto"}</div>
               <div className="mt-1 text-xs text-ink-soft">Furnizor: {detail.supplier?.name ?? "—"}</div>
             </div>
 
@@ -183,7 +170,7 @@ export function PrepareOrderModal({
               Etichete ({detail.units.length})
             </h3>
             <p className="mt-1 text-xs text-ink-soft">
-              Fiecare etichetă va conține: produs, furnizor, client, comandă și adresa de livrare.
+              Ogni etichetta conterrà: prodotto, fornitore, cliente, ordine e indirizzo di consegna.
             </p>
             <ul className="mt-2 max-h-64 space-y-1 overflow-y-auto">
               {detail.units.map((unit) => {
@@ -213,7 +200,7 @@ export function PrepareOrderModal({
                 onClick={() => void submit(true)}
                 className="h-11 flex-1 rounded-xl bg-accent px-5 text-sm font-bold text-white disabled:opacity-50"
               >
-                {busy === "print" ? "Se pregătește…" : "Tipărește și mută în progres"}
+                {busy === "print" ? "Preparazione…" : "Stampa riepilogo e prepara"}
               </button>
               <button
                 type="button"
@@ -221,7 +208,7 @@ export function PrepareOrderModal({
                 onClick={() => void submit(false)}
                 className="h-11 flex-1 rounded-xl border border-ink/15 bg-white px-5 text-sm font-bold text-ink disabled:opacity-50"
               >
-                {busy === "skip" ? "Se mută…" : "Mută fără tipărit"}
+                {busy === "skip" ? "Preparazione…" : "Prepara senza stampare"}
               </button>
             </div>
           </>

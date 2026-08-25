@@ -6,7 +6,7 @@ import { resolvePeriod, PERIOD_OPTIONS } from "@/lib/logistics/summary-period";
 import type { PeriodKey } from "@/lib/logistics/summary-period";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Sumar" };
+export const metadata = { title: "Riepilogo" };
 
 const VALID_PERIODS = new Set(PERIOD_OPTIONS.map((option) => option.key));
 
@@ -38,7 +38,7 @@ export default async function SummaryPage({
 
   return (
     <>
-      <PageHeading title="Sumar" description={periodLabel} />
+      <PageHeading title="Riepilogo" description={periodLabel} />
 
       <div className="mb-5">
         <SummaryPeriodSelector activePeriod={periodKey} />

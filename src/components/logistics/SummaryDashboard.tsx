@@ -10,7 +10,7 @@ import { OrdersIcon, PickupIcon, ProfitIcon, TrophyIcon, BuildingIcon, ClockIcon
 import type { OperationalSummary } from "@/lib/server/summary";
 
 /**
- * "Sumar" is the visual/analytics dashboard (Livrări is the dense
+ * "Sumar" is the visual/analytics dashboard (Consegne is the dense
  * operational one) — every tile here deliberately carries a color and an
  * icon rather than staying plain black-on-white, per the brief: this page
  * is meant to read like an infographic at a glance, not a spreadsheet.
@@ -122,8 +122,8 @@ export function SummaryDashboard({
     const topVehicle = summary.vehicles[0];
     if (topVehicle && topVehicle.tyres > 0) {
       list.push({
-        title: `${topVehicle.vehicleName} a livrat cele mai multe anvelope`,
-        detail: `${topVehicle.tyres} anvelope în perioada selectată.`,
+        title: `${topVehicle.vehicleName} a livrat cele mai multe pneumatici`,
+        detail: `${topVehicle.tyres} pneumatici nel periodo selezionato.`,
         icon: <TrophyIcon className="h-5 w-5" />,
         tone: "purple",
       });
@@ -131,16 +131,16 @@ export function SummaryDashboard({
     const topSupplier = summary.supplierPickups[0];
     if (topSupplier && topSupplier.pickups > 0) {
       list.push({
-        title: `${topSupplier.supplierName} a avut cele mai multe ridicări`,
-        detail: `${topSupplier.pickups} ridicări · ${topSupplier.tyres} anvelope.`,
+        title: `${topSupplier.supplierName} a avut cele mai multe ritiri`,
+        detail: `${topSupplier.pickups} ritiri · ${topSupplier.tyres} pneumatici.`,
         icon: <BuildingIcon className="h-5 w-5" />,
         tone: "blue",
       });
     }
     if (summary.waitingGoodsCount > 0) {
       list.push({
-        title: `${summary.waitingGoodsCount} comenzi sunt încă în așteptare`,
-        detail: "Comenzi active care așteaptă marfa de la furnizor, la data curentă.",
+        title: `${summary.waitingGoodsCount} ordini sono ancora in attesa`,
+        detail: "Ordini attivi in attesa della merce dal fornitore, alla data odierna.",
         icon: <ClockIcon className="h-5 w-5" />,
         tone: "amber",
       });
@@ -155,7 +155,7 @@ export function SummaryDashboard({
       {/* --------------------------------------------------------- KPIs */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <KpiCard value={summary.orderCount} label="Comenzi" icon={<OrdersIcon />} tone="blue" />
-        <KpiCard value={summary.pickupCount} label="Ridicări supplier" icon={<PickupIcon />} tone="amber" />
+        <KpiCard value={summary.pickupCount} label="Ritiri fornitore" icon={<PickupIcon />} tone="amber" />
         <KpiCard value={summary.deliveredTyreCount} label="Anvelope livrate" icon={<TyreIcon className="h-5 w-5" />} tone="green" />
         <KpiCard value={formatEuro(summary.profit)} label="Profit transport" icon={<ProfitIcon />} tone="purple" />
       </div>
@@ -163,7 +163,7 @@ export function SummaryDashboard({
       {/* ------------------------------------------------ Needs attention */}
       {(summary.deliveryFailedCount > 0 || summary.unassignedCount > 0 || summary.codExpected > 0) && (
         <section className="mt-6">
-          <h2 className="text-sm font-bold uppercase tracking-wide text-ink-soft">Necesită atenție</h2>
+          <h2 className="text-sm font-bold uppercase tracking-wide text-ink-soft">Richiede attenzione</h2>
           <div className="mt-2 grid gap-3 sm:grid-cols-3">
             {summary.deliveryFailedCount > 0 && (
               <div className="rounded-xl border border-state-danger/30 bg-state-danger-soft p-4">
@@ -171,7 +171,7 @@ export function SummaryDashboard({
                   {summary.deliveryFailedCount}
                 </div>
                 <div className="text-sm font-semibold text-state-danger">
-                  {summary.deliveryFailedCount === 1 ? "livrare eșuată" : "livrări eșuate"}
+                  {summary.deliveryFailedCount === 1 ? "consegna non riuscita" : "consegne non riuscite"}
                 </div>
               </div>
             )}
@@ -181,22 +181,22 @@ export function SummaryDashboard({
                   {summary.unassignedCount}
                 </div>
                 <div className="text-sm font-semibold text-state-waiting">
-                  {summary.unassignedCount === 1 ? "comandă neasignată" : "comenzi neasignate"}
+                  {summary.unassignedCount === 1 ? "ordine non assegnato" : "ordini non assegnati"}
                 </div>
               </div>
             )}
             {summary.codExpected > 0 && (
               <div className="rounded-xl border border-ink/10 bg-white p-4 shadow-card">
                 <div className="flex items-baseline justify-between text-sm">
-                  <span className="text-ink-soft">COD așteptat</span>
+                  <span className="text-ink-soft">Contrassegno previsto</span>
                   <span className="font-bold tabular-nums text-ink">{formatEuro(summary.codExpected)}</span>
                 </div>
                 <div className="mt-1 flex items-baseline justify-between text-sm">
-                  <span className="text-ink-soft">Încasat</span>
+                  <span className="text-ink-soft">Incassato</span>
                   <span className="font-bold tabular-nums text-ink">{formatEuro(summary.codCollected)}</span>
                 </div>
                 <div className="mt-1 flex items-baseline justify-between text-sm">
-                  <span className="text-ink-soft">Diferență</span>
+                  <span className="text-ink-soft">Differenza</span>
                   <span
                     className={`font-bold tabular-nums ${
                       summary.codExpected - summary.codCollected > 0 ? "text-state-danger" : "text-state-success"
@@ -236,10 +236,10 @@ export function SummaryDashboard({
 
       {/* ------------------------------------------------ Supplier pickups */}
       <section className="mt-6">
-        <h2 className="text-sm font-bold uppercase tracking-wide text-ink-soft">Ridicări de la furnizori</h2>
+        <h2 className="text-sm font-bold uppercase tracking-wide text-ink-soft">Ritiri dai fornitori</h2>
         {summary.supplierPickups.length === 0 ? (
           <p className="mt-2 rounded-xl border border-ink/10 bg-white p-4 text-sm text-ink-soft">
-            Nu există ridicări în perioada selectată.
+            Nessun ritiro nel periodo selezionato.
           </p>
         ) : (
           <div className="mt-2 space-y-2 rounded-xl border border-ink/10 bg-white p-4 shadow-card">
@@ -248,7 +248,7 @@ export function SummaryDashboard({
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate text-sm font-semibold text-ink">{row.supplierName}</span>
                   <span className="flex-none text-xs font-semibold text-ink-soft">
-                    {row.pickups} {row.pickups === 1 ? "ridicare" : "ridicări"} · {row.tyres} anvelope
+                    {row.pickups} {row.pickups === 1 ? "ridicare" : "ritiri"} · {row.tyres} pneumatici
                   </span>
                 </div>
                 <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-surface-soft">
@@ -266,28 +266,28 @@ export function SummaryDashboard({
       {/* ----------------------------------------------------- Deliveries */}
       <section className="mt-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold uppercase tracking-wide text-ink-soft">Livrări</h2>
+          <h2 className="text-sm font-bold uppercase tracking-wide text-ink-soft">Consegne</h2>
           <button
             type="button"
             onClick={() => setDeliveriesOpen(true)}
             className="text-sm font-semibold text-accent hover:underline"
           >
-            Vezi livrările →
+            Vedi le consegne →
           </button>
         </div>
         {summary.deliveredTyreCount === 0 ? (
           <p className="mt-2 rounded-xl border border-ink/10 bg-white p-4 text-sm text-ink-soft">
-            Nu există livrări pentru perioada selectată.
+            Nessuna consegna nel periodo selezionato.
           </p>
         ) : (
           <div className="mt-2 grid grid-cols-3 gap-3">
             <div className="rounded-xl border border-ink/10 bg-white p-3 text-center shadow-card">
               <div className="text-xl font-black tabular-nums text-state-success">{summary.deliveredTyreCount}</div>
-              <div className="text-xs text-ink-soft">anvelope</div>
+              <div className="text-xs text-ink-soft">pneumatici</div>
             </div>
             <div className="rounded-xl border border-ink/10 bg-white p-3 text-center shadow-card">
               <div className="text-xl font-black tabular-nums text-accent">{summary.deliveries.length}</div>
-              <div className="text-xs text-ink-soft">comenzi</div>
+              <div className="text-xs text-ink-soft">ordini</div>
             </div>
             <div className="rounded-xl border border-ink/10 bg-white p-3 text-center shadow-card">
               <div className="text-xl font-black tabular-nums text-purple-600">{formatEuro(summary.profit)}</div>
@@ -300,7 +300,7 @@ export function SummaryDashboard({
       {/* ------------------------------------------------------ Vehicles */}
       {vehicleTabs.length > 0 && (
         <section className="mt-6">
-          <h2 className="text-sm font-bold uppercase tracking-wide text-ink-soft">Pe mașină</h2>
+          <h2 className="text-sm font-bold uppercase tracking-wide text-ink-soft">Per veicolo</h2>
           <div className="mt-2 flex flex-wrap gap-1.5 overflow-x-auto">
             <button
               type="button"
@@ -342,11 +342,11 @@ export function SummaryDashboard({
             <div className="mt-2 grid grid-cols-3 gap-3">
               <div className="text-center">
                 <div className="text-lg font-black tabular-nums text-accent">{scoped.orders}</div>
-                <div className="text-[11px] text-ink-soft">{scoped.orders === 1 ? "comandă" : "comenzi"}</div>
+                <div className="text-[11px] text-ink-soft">{scoped.orders === 1 ? "ordine" : "ordini"}</div>
               </div>
               <div className="text-center">
                 <div className="text-lg font-black tabular-nums text-state-success">{scoped.tyres}</div>
-                <div className="text-[11px] text-ink-soft">anvelope</div>
+                <div className="text-[11px] text-ink-soft">pneumatici</div>
               </div>
               <div className="text-center">
                 <div className="text-lg font-black tabular-nums text-purple-600">{formatEuro(scoped.profit)}</div>

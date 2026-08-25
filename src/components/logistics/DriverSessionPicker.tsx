@@ -48,7 +48,7 @@ export function DriverSessionPicker({ driverName, vehicles }: { driverName: stri
         <Logo iconClassName="h-12 w-12" textClassName="text-2xl [&>span]:!text-white" />
 
         <h1 className="mt-8 text-2xl font-extrabold">Salut, {driverName}</h1>
-        <p className="mt-1 text-sm text-white/60">Alege mașina cu care pleci azi.</p>
+        <p className="mt-1 text-sm text-white/60">Scegli il veicolo con cui parti oggi.</p>
 
         <section className="mt-6">
           <div className="grid gap-2">
@@ -67,7 +67,7 @@ export function DriverSessionPicker({ driverName, vehicles }: { driverName: stri
               </button>
             ))}
             {vehicles.length === 0 && (
-              <p className="text-sm text-white/60">Nicio mașină configurată.</p>
+              <p className="text-sm text-white/60">Nessun veicolo configurato.</p>
             )}
           </div>
         </section>
@@ -84,7 +84,7 @@ export function DriverSessionPicker({ driverName, vehicles }: { driverName: stri
           onClick={start}
           className="mt-8 min-h-16 w-full rounded-xl bg-accent text-xl font-extrabold text-white disabled:opacity-40"
         >
-          {busy ? t("loading") : "Începe tura"}
+          {busy ? t("loading") : "Inizia il turno"}
         </button>
       </div>
     </div>

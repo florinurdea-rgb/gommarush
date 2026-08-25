@@ -9,10 +9,10 @@ import { DashboardLiveRefresh } from "@/components/logistics/DashboardLiveRefres
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-export const metadata = { title: "Livrări" };
+export const metadata = { title: "Consegne" };
 
 /**
- * "Livrări" — the default operational screen. Server-rendered from the live
+ * "Consegne" — the default operational screen. Server-rendered from the live
  * database on every request. DashboardLiveRefresh keeps already-open copies
  * on other devices converged as warehouse/admin activity changes the data.
  */
@@ -27,7 +27,7 @@ export default async function AdminDashboardPage() {
     {
       key: "unassigned",
       vehicleId: null,
-      name: "Neasignate",
+      name: "Non assegnati",
       number: null,
       capacityUnits: null,
       colorKey: null,
@@ -47,7 +47,7 @@ export default async function AdminDashboardPage() {
   return (
     <>
       <DashboardLiveRefresh />
-      <PageHeading title="Livrări" action={<NewOrderLauncher />} />
+      <PageHeading title="Consegne" action={<NewOrderLauncher />} />
 
       <VehicleBoard columns={vehicleColumns} vehicles={vehicles} depotLocation={depotLocation} />
     </>

@@ -63,16 +63,16 @@ export function OrderDetailModal({ orderId, onClose }: { orderId: string; onClos
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={detail ? formatOrderNumber(detail.order.order_number) : "Detalii comandă"}
+        aria-label={detail ? formatOrderNumber(detail.order.order_number) : "Dettagli ordine"}
         onClick={(event) => event.stopPropagation()}
         className="fixed inset-y-0 right-0 flex h-full w-full max-w-md flex-col overflow-y-auto bg-white shadow-modal"
       >
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-ink/10 bg-white/95 px-5 py-3 backdrop-blur">
-          <span className="text-sm font-bold text-ink">Detalii comandă</span>
+          <span className="text-sm font-bold text-ink">Dettagli ordine</span>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Închide"
+            aria-label="Chiudi"
             className="flex h-8 w-8 items-center justify-center rounded-full text-ink-soft hover:bg-surface-soft hover:text-ink"
           >
             <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" aria-hidden="true">
@@ -82,10 +82,10 @@ export function OrderDetailModal({ orderId, onClose }: { orderId: string; onClos
         </div>
 
         <div className="flex-1 p-5 sm:p-6">
-          {loading && <div className="py-16 text-center text-sm text-ink-soft">Se încarcă…</div>}
+          {loading && <div className="py-16 text-center text-sm text-ink-soft">Caricamento…</div>}
 
           {!loading && error && (
-            <div className="py-16 text-center text-sm text-state-danger">Comanda nu a putut fi încărcată.</div>
+            <div className="py-16 text-center text-sm text-state-danger">Non è stato possibile caricare l&apos;ordine.</div>
           )}
 
           {!loading && detail && (
@@ -117,7 +117,7 @@ export function OrderDetailModal({ orderId, onClose }: { orderId: string; onClos
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-ink-soft">Poziție livrare</dt>
+                  <dt className="text-xs text-ink-soft">Posizione di consegna</dt>
                   <dd className="font-medium text-ink">
                     {detail.order.delivery_sequence ? `#${detail.order.delivery_sequence}` : "—"}
                   </dd>
@@ -169,8 +169,8 @@ export function OrderDetailModal({ orderId, onClose }: { orderId: string; onClos
               <div className="mt-5 flex flex-wrap gap-x-5 gap-y-1 text-sm">
                 {(
                   [
-                    ["Pregătit", detail.order.ready_at],
-                    ["Încărcat", detail.order.loaded_at],
+                    ["Pronto", detail.order.ready_at],
+                    ["Caricato", detail.order.loaded_at],
                     ["Livrat", detail.order.delivered_at],
                   ] as const
                 ).map(([label, timestamp]) => (
@@ -212,9 +212,6 @@ export function OrderDetailModal({ orderId, onClose }: { orderId: string; onClos
                     Vezi documentul original →
                   </a>
                 )}
-                <Link href="/admin/print-jobs" className="font-semibold text-accent hover:underline">
-                  Coadă de printare →
-                </Link>
               </div>
 
               <div className="mt-4 flex items-center justify-between border-t border-ink/10 pt-4">
@@ -222,14 +219,14 @@ export function OrderDetailModal({ orderId, onClose }: { orderId: string; onClos
                   href={`/admin/orders/${detail.order.id}`}
                   className="text-sm font-semibold text-accent hover:underline"
                 >
-                  Deschide pagina completă →
+                  Apri la pagina completa →
                 </Link>
                 <button
                   type="button"
                   onClick={onClose}
                   className="rounded-xl bg-surface-soft px-4 py-2 text-sm font-semibold text-ink hover:bg-ink/10"
                 >
-                  Închide
+                  Chiudi
                 </button>
               </div>
             </>

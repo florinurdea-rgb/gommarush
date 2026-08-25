@@ -15,7 +15,7 @@ export function PrepareOrdersList({ orders }: { orders: OrderListRow[] }) {
   if (orders.length === 0) {
     return (
       <p className="rounded-xl border border-ink/10 bg-white p-6 text-center text-sm text-ink-soft">
-        Nicio comandă de pregătit — toate sunt fie în așteptarea mărfii, fie deja încărcate.
+        Nessun ordine da preparare — sono tutti in attesa della merce o già caricati.
       </p>
     );
   }
@@ -37,7 +37,7 @@ export function PrepareOrdersList({ orders }: { orders: OrderListRow[] }) {
               </div>
               <div className="truncate text-sm font-bold text-ink">{order.customer_name ?? "—"}</div>
               <div className="truncate text-xs text-ink-soft">
-                {order.customer_address ?? "Adresă necunoscută"}
+                {order.customer_address ?? "Indirizzo sconosciuto"}
                 {order.supplier_name ? ` · ${order.supplier_name}` : ""}
               </div>
             </div>
@@ -50,7 +50,7 @@ export function PrepareOrdersList({ orders }: { orders: OrderListRow[] }) {
               onClick={() => setOpenOrderId(order.id)}
               className="h-10 flex-none rounded-xl bg-accent px-4 text-sm font-bold text-white hover:bg-accent-dark"
             >
-              Pregătește comanda
+              Prepara l&apos;ordine
             </button>
           </div>
         ))}

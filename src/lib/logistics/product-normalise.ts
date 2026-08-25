@@ -94,8 +94,8 @@ const SIZE_PATTERN =
 /** Load index + speed rating: 98V, 103/101T, 91 H. */
 const LOAD_SPEED_PATTERN = /\b(\d{2,3})(?:\s*\/\s*(\d{2,3}))?\s*([A-Z])\b/;
 
-const TUBE_HINTS = ["camera", "camere", "inner tube", "tube", "cámara", "cameră"];
-const WHEEL_HINTS = ["cerchio", "cerchi", "jante", "janta", "jantă", "wheel", "rim", "llanta"];
+const TUBE_HINTS = ["camera", "camere", "inner tube", "tube", "cámara", "camera d'aria"];
+const WHEEL_HINTS = ["cerchio", "cerchi", "jante", "janta", "cerchio", "wheel", "rim", "llanta"];
 const FEE_HINTS = [
   "pfu",
   "contributo",
@@ -104,7 +104,7 @@ const FEE_HINTS = [
   "ecotassa",
   "smaltimento",
   "taxa",
-  "taxă",
+  "spesa",
   "fee",
   "spese",
   "trasporto",

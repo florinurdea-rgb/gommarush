@@ -22,7 +22,7 @@ export async function extractViaAnthropic(
       documents: [],
       pageCount: null,
       error: "UNSUPPORTED_FILE_TYPE",
-      notes: ["Formatul fișierului nu este acceptat pentru analiză automată."],
+      notes: ["Il formato del file non è supportato per l'analisi automatica."],
     };
   }
 
@@ -67,7 +67,7 @@ export async function extractViaAnthropic(
         documents: [],
         pageCount: null,
         error: `HTTP_${response.status}: ${detail.slice(0, 200)}`,
-        notes: ["Analiza automată a eșuat."],
+        notes: ["L'analisi automatica non è riuscita."],
       };
     }
 
@@ -83,7 +83,7 @@ export async function extractViaAnthropic(
         documents: [],
         pageCount: null,
         error: "EMPTY_RESPONSE",
-        notes: ["Analiza automată nu a returnat date."],
+        notes: ["L'analisi automatica non ha restituito dati."],
       };
     }
 
@@ -99,7 +99,7 @@ export async function extractViaAnthropic(
       documents: [],
       pageCount: null,
       error: error instanceof Error ? error.message : "UNKNOWN",
-      notes: [aborted ? "Analiza a durat prea mult." : "Analiza automată a eșuat."],
+      notes: [aborted ? "Analiza a durat prea mult." : "L'analisi automatica non è riuscita."],
     };
   } finally {
     clearTimeout(timeout);

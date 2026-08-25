@@ -24,7 +24,7 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   card: "Card",
   bank_transfer: "Transfer bancar",
   already_paid: "Deja achitat",
-  other: "Altă metodă",
+  other: "Altro metodo",
 };
 
 function navigateUrl(address: string): string {
@@ -140,7 +140,7 @@ export function DriverHome({
         <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="truncate text-lg font-extrabold">{driverName}</div>
-            <div className="truncate text-sm text-white/60">{vehicleName ?? "Fără mașină"}</div>
+            <div className="truncate text-sm text-white/60">{vehicleName ?? "Senza veicolo"}</div>
           </div>
           <div className="flex flex-none items-center gap-2">
             <button
@@ -148,7 +148,7 @@ export function DriverHome({
               onClick={() => setMapOpen(true)}
               className="flex h-11 items-center gap-1.5 rounded-xl bg-white/10 px-4 text-sm font-bold text-white hover:bg-white/20"
             >
-              Hartă
+              Mappa
             </button>
             <button
               type="button"
@@ -159,7 +159,7 @@ export function DriverHome({
               }}
               className="flex h-11 items-center rounded-xl px-3 text-xs font-semibold text-white/50 hover:text-white"
             >
-              Ieșire
+              Esci
             </button>
           </div>
         </div>
@@ -170,7 +170,7 @@ export function DriverHome({
         <section className="grid grid-cols-3 gap-2 rounded-2xl bg-white/5 p-4 text-center">
           <div>
             <div className="font-mono text-2xl font-black tabular-nums">{summary.orderCount}</div>
-            <div className="text-[11px] uppercase tracking-wide text-white/50">Livrări</div>
+            <div className="text-[11px] uppercase tracking-wide text-white/50">Consegne</div>
           </div>
           <div>
             <div className="font-mono text-2xl font-black tabular-nums">{summary.tyreCount}</div>
@@ -193,7 +193,7 @@ export function DriverHome({
         {/* NEXT STOP */}
         {nextStop && (
           <section className="mt-4">
-            <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-white/50">Următoarea oprire</h2>
+            <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-white/50">Prossima fermata</h2>
             <OrderCard
               order={nextStop}
               stopNumber={orders.indexOf(nextStop) + 1}
@@ -234,7 +234,7 @@ export function DriverHome({
             Comenzile tale de azi ({orders.length})
           </h2>
           {orders.length === 0 && (
-            <p className="rounded-xl bg-white/5 p-6 text-center text-white/60">Nicio livrare alocată.</p>
+            <p className="rounded-xl bg-white/5 p-6 text-center text-white/60">Nessuna consegna assegnata.</p>
           )}
           <ul className="space-y-2">
             {orders.map((order, index) => (
@@ -393,14 +393,14 @@ function OrderCard({
               COD €{(order.amount_to_collect ?? 0).toFixed(2)}
               {order.payment_status === "collected" && order.amount_collected != null && (
                 <span className="ml-2 font-normal opacity-70">
-                  (încasat €{order.amount_collected.toFixed(2)})
+                  (incassato €{order.amount_collected.toFixed(2)})
                 </span>
               )}
             </div>
           )}
           {order.delivery_failure_reason && (
             <div className="rounded-lg bg-state-danger/20 px-2 py-1 text-state-danger">
-              Livrare eșuată anterior: {order.delivery_failure_reason}
+              Consegna non riuscita anterior: {order.delivery_failure_reason}
             </div>
           )}
         </div>
@@ -415,7 +415,7 @@ function OrderCard({
             highlight ? "border-2 border-ink/20 text-ink" : "border-2 border-white/20 text-white"
           }`}
         >
-          Navighează
+          Naviga
         </button>
 
         {canMarkLoaded && (
@@ -425,7 +425,7 @@ function OrderCard({
             onClick={onMarkLoaded}
             className="h-12 flex-1 rounded-xl bg-state-warning text-sm font-bold text-ink disabled:opacity-50"
           >
-            {busy ? "…" : "Marchează încărcată"}
+            {busy ? "…" : "Segna come caricato"}
           </button>
         )}
 
@@ -437,7 +437,7 @@ function OrderCard({
               onClick={onOpenDeliver}
               className="h-12 flex-1 rounded-xl bg-state-success text-sm font-bold text-white disabled:opacity-50"
             >
-              Marchează livrată
+              Segna come consegnato
             </button>
             <button
               type="button"
@@ -445,7 +445,7 @@ function OrderCard({
               onClick={onOpenFailed}
               className="h-12 flex-none rounded-xl border-2 border-state-danger px-4 text-sm font-bold text-state-danger disabled:opacity-50"
             >
-              Eșuată
+              Non riuscita
             </button>
           </>
         )}
@@ -456,7 +456,7 @@ function OrderCard({
           {order.cash_on_delivery && (
             <>
               <label className="block text-xs font-bold uppercase opacity-70">
-                Sumă încasată (€)
+                Importo incassato (€)
                 <input
                   type="number"
                   min={0}
@@ -486,14 +486,14 @@ function OrderCard({
               onClick={onConfirmDeliver}
               className="h-12 flex-1 rounded-xl bg-state-success text-sm font-bold text-white disabled:opacity-50"
             >
-              {busy ? "…" : "Confirmă livrarea"}
+              {busy ? "…" : "Conferma la consegna"}
             </button>
             <button
               type="button"
               onClick={onCancelDeliver}
               className="h-12 flex-1 rounded-xl border-2 border-ink/20 text-sm font-bold text-ink"
             >
-              Anulează
+              Annulla
             </button>
           </div>
         </div>
@@ -504,7 +504,7 @@ function OrderCard({
           <textarea
             value={reason}
             onChange={(event) => onReasonChange(event.target.value)}
-            placeholder="Motivul: client închis, marfă refuzată…"
+            placeholder="Motivo: cliente chiuso, merce rifiutata…"
             rows={2}
             className="w-full rounded-lg border border-ink/15 bg-white px-2 py-2 text-base text-ink"
           />
@@ -515,14 +515,14 @@ function OrderCard({
               onClick={onConfirmFailed}
               className="h-12 flex-1 rounded-xl bg-state-danger text-sm font-bold text-white disabled:opacity-50"
             >
-              {busy ? "…" : "Confirmă eșecul"}
+              {busy ? "…" : "Conferma il mancato esito"}
             </button>
             <button
               type="button"
               onClick={onCancelFailed}
               className="h-12 flex-1 rounded-xl border-2 border-ink/20 text-sm font-bold text-ink"
             >
-              Anulează
+              Annulla
             </button>
           </div>
         </div>

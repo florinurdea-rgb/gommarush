@@ -25,12 +25,12 @@ export default async function AdminLoginPage() {
       <main className="flex flex-1 items-center justify-center px-4 py-10">
         <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-card sm:p-8">
           <h1 className="text-xl font-extrabold tracking-tight text-ink">{t("adminLogin")}</h1>
-          <p className="mt-1 text-sm text-ink-soft">GoRush Logistică</p>
+          <p className="mt-1 text-sm text-ink-soft">GommaRush Logistica</p>
 
           <LoginForm />
 
           <p className="mt-6 text-xs leading-relaxed text-ink-soft">
-            Autentificare prin Supabase Auth. Contul se creează din Supabase
+            Autenticazione tramite Supabase Auth. L&apos;account si crea da Supabase
             dashboard → Authentication → Users.
           </p>
         </div>

@@ -234,7 +234,7 @@ export class AnthropicDocumentAnalyzer implements DocumentAnalyzer {
       return emptyResult(
         "failed",
         this.name,
-        [`Formatul ${document.mimeType} nu poate fi analizat automat. Completează manual.`],
+        [`Il formato ${document.mimeType} non può essere analizzato automaticamente. Inserisci manualmente.`],
         "UNSUPPORTED_FOR_VISION"
       );
     }
@@ -278,7 +278,7 @@ export class AnthropicDocumentAnalyzer implements DocumentAnalyzer {
         return emptyResult(
           "failed",
           this.name,
-          ["Analiza automată a eșuat. Completează datele manual."],
+          ["L'analisi automatica non è riuscita. Inserisci i dati manualmente."],
           `HTTP_${response.status}: ${detail.slice(0, 200)}`
         );
       }
@@ -295,7 +295,7 @@ export class AnthropicDocumentAnalyzer implements DocumentAnalyzer {
         return emptyResult(
           "failed",
           this.name,
-          ["Analiza automată nu a returnat date. Completează manual."],
+          ["L'analisi automatica non ha restituito dati. Inserisci manualmente."],
           "EMPTY_RESPONSE"
         );
       }
@@ -314,8 +314,8 @@ export class AnthropicDocumentAnalyzer implements DocumentAnalyzer {
         this.name,
         [
           aborted
-            ? "Analiza automată a durat prea mult. Completează datele manual."
-            : "Analiza automată a eșuat. Completează datele manual.",
+            ? "L'analisi automatica ha impiegato troppo tempo. Inserisci i dati manualmente."
+            : "L'analisi automatica non è riuscita. Inserisci i dati manualmente.",
         ],
         error instanceof Error ? error.message : "UNKNOWN"
       );

@@ -11,7 +11,7 @@ import { ddtDocumentToAnalysisResult } from "@/lib/ddt-import/to-analysis-result
 import type { ProcessedDocumentWithMatch } from "@/lib/ddt-import/client-helpers";
 
 /**
- * "Comandă nouă" now opens here first: a choice between manual entry and
+ * "Nuovo ordine" now opens here first: a choice between manual entry and
  * document upload, labelled in both Romanian and Italian per the brief
  * (the warehouse floor mixes both). Manual entry reuses OrderReviewForm —
  * it's callback-driven, not navigation-owning, so an empty AnalysisResult
@@ -37,8 +37,8 @@ export function NewOrderModal({ onClose }: { onClose: () => void }) {
   } | null>(null);
 
   return (
-    <Modal onClose={onClose} size={step === "choice" ? "md" : "xl"} label="Comandă nouă / Nuovo ordine">
-      <ModalHeader title="Comandă nouă / Nuovo ordine" onClose={onClose} />
+    <Modal onClose={onClose} size={step === "choice" ? "md" : "xl"} label="Nuovo ordine">
+      <ModalHeader title="Nuovo ordine" onClose={onClose} />
       <div className="p-6">
         {step === "choice" && (
           <div className="grid gap-4 sm:grid-cols-2">
@@ -47,7 +47,7 @@ export function NewOrderModal({ onClose }: { onClose: () => void }) {
               onClick={() => setStep("manual")}
               className="rounded-xl border-2 border-ink/10 bg-white px-4 py-8 text-center transition-colors hover:border-accent hover:bg-accent-light"
             >
-              <div className="text-base font-bold text-ink">Adaugă manual</div>
+              <div className="text-base font-bold text-ink">Aggiungi manualmente</div>
               <div className="mt-0.5 text-sm text-ink-soft">Aggiungi manualmente</div>
             </button>
             <button
@@ -55,7 +55,7 @@ export function NewOrderModal({ onClose }: { onClose: () => void }) {
               onClick={() => setStep("upload")}
               className="rounded-xl border-2 border-ink/10 bg-white px-4 py-8 text-center transition-colors hover:border-accent hover:bg-accent-light"
             >
-              <div className="text-base font-bold text-ink">Încarcă document</div>
+              <div className="text-base font-bold text-ink">Carica documento</div>
               <div className="mt-0.5 text-sm text-ink-soft">Carica documento</div>
             </button>
           </div>
@@ -71,7 +71,7 @@ export function NewOrderModal({ onClose }: { onClose: () => void }) {
             onBack={() => setStep("choice")}
             onSaved={(orderId) => {
               onClose();
-              showToast("Comandă adăugată în Așteaptă asignare.", "success");
+              showToast("Ordine aggiunto in Da assegnare.", "success");
               router.push(`/admin?created=${orderId}`);
               router.refresh();
             }}
@@ -89,11 +89,11 @@ export function NewOrderModal({ onClose }: { onClose: () => void }) {
                 onClose();
                 const base =
                   createdCount === 1
-                    ? "1 comandă adăugată în Așteaptă asignare."
-                    : `${createdCount} comenzi adăugate în Așteaptă asignare.`;
+                    ? "1 ordine aggiunto in Da assegnare."
+                    : `${createdCount} ordini aggiunti in Da assegnare.`;
                 const dropped =
                   droppedLineCount > 0
-                    ? ` ${droppedLineCount} ${droppedLineCount === 1 ? "linie nu a putut fi adăugată" : "linii nu au putut fi adăugate"} (cantitate necitibilă) — completează manual.`
+                    ? ` ${droppedLineCount} ${droppedLineCount === 1 ? "riga non aggiunta" : "righe non aggiunte"} (quantità non leggibile) — inserisci manualmente.`
                     : "";
                 showToast(base + dropped, "success");
                 router.refresh();
@@ -116,7 +116,7 @@ export function NewOrderModal({ onClose }: { onClose: () => void }) {
             onBack={() => setStep("upload")}
             onSaved={(orderId) => {
               onClose();
-              showToast("Comandă adăugată în Așteaptă asignare.", "success");
+              showToast("Ordine aggiunto in Da assegnare.", "success");
               router.push(`/admin?created=${orderId}`);
               router.refresh();
             }}

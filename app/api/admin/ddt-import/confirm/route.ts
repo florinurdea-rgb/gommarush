@@ -83,7 +83,7 @@ async function findExistingOrder(processed: ProcessedDocumentWithMatch): Promise
  * confirmDdtDocument again) still needs its status advanced if an earlier
  * attempt created it but died before reaching that step — otherwise every
  * retry keeps returning the same order stuck at 'expected' forever, and it
- * never actually shows up in "De pregătit". advanceDdtOrderToStored is a
+ * never actually shows up in "Da preparare". advanceDdtOrderToStored is a
  * no-op if the order already moved past 'expected', so this is safe to call
  * on every recovery, not just the first.
  */
@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
 
     try {
       // READY documents are allowed to be retried safely. Explicit duplicate
-      // flows keep their existing human-decision behaviour ("Adaugă din nou").
+      // flows keep their existing human-decision behaviour ("Aggiungi di nuovo").
       if (processed.status !== "DUPLICATE" && processed.status !== "POSSIBLE_DUPLICATE") {
         const existing = await findExistingOrder(processed);
         if (existing) {
@@ -169,12 +169,12 @@ export async function POST(request: NextRequest) {
           message.includes("normalized_document_number")
         ) {
           logError("ddt_confirm_duplicate_race", error, { sourceDocumentId: parsed.data.sourceDocumentId });
-          return fail(409, "ALREADY_IMPORTED", ["Acest document a fost deja importat ca o altă comandă."]);
+          return fail(409, "ALREADY_IMPORTED", ["Questo documento è già stato importato come un altro ordine."]);
         }
       }
 
       if (pgError?.message?.includes("NOTHING_IMPORTABLE")) {
-        return fail(400, "NOTHING_IMPORTABLE", ["Nicio linie cu cantitate citibilă — completează manual."]);
+        return fail(400, "NOTHING_IMPORTABLE", ["Nessuna riga con quantità leggibile — inserisci manualmente."]);
       }
 
       logError("ddt_confirm_failed", error, { sourceDocumentId: parsed.data.sourceDocumentId });

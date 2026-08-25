@@ -20,7 +20,7 @@ function escapeHtml(value: string): string {
 /**
  * The "Vezi livrările" modal: the period's delivered orders, searchable and
  * filterable client-side (the full list was already fetched for the Sumar
- * page — no extra round trip). "Printează" opens a plain print-friendly
+ * page — no extra round trip). "Stampa" opens a plain print-friendly
  * window and calls window.print() — there's no existing report-printing
  * infrastructure to reuse (print_jobs is thermal barcode labels, a
  * different system), so this is the smallest addition that covers it.
@@ -84,7 +84,7 @@ export function DeliveriesModal({
       )
       .join("");
 
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>GommaRush — Livrări</title>
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>GommaRush — Consegne</title>
       <style>
         body { font-family: -apple-system, sans-serif; color: #152238; padding: 24px; }
         h1 { font-size: 20px; margin: 0 0 4px; }
@@ -95,15 +95,15 @@ export function DeliveriesModal({
         th, td { border-bottom: 1px solid #e2e8f0; padding: 6px 8px; text-align: left; }
         th { text-transform: uppercase; font-size: 10px; color: #4A5568; }
       </style></head><body>
-      <h1>GommaRush — Livrări</h1>
-      <p class="period">Perioadă: ${escapeHtml(periodLabel)}</p>
+      <h1>GommaRush — Consegne</h1>
+      <p class="period">Periodo: ${escapeHtml(periodLabel)}</p>
       <div class="summary">
         <div>Comenzi<strong>${filtered.length}</strong></div>
         <div>Anvelope<strong>${totalTyres}</strong></div>
         <div>Profit<strong>€${totalProfit.toLocaleString("ro-RO")}</strong></div>
       </div>
       <table>
-        <thead><tr><th>Data</th><th>Comandă</th><th>Client</th><th>Supplier</th><th>Mașină</th><th>Nr. anvelope</th><th>Status</th></tr></thead>
+        <thead><tr><th>Data</th><th>Ordine</th><th>Client</th><th>Supplier</th><th>Veicolo</th><th>Nr. pneumatici</th><th>Status</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
       </body></html>`;
@@ -117,15 +117,15 @@ export function DeliveriesModal({
   }
 
   return (
-    <Modal onClose={onClose} size="xl" label="Livrări">
-      <ModalHeader title={`Livrări — ${periodLabel}`} onClose={onClose} />
+    <Modal onClose={onClose} size="xl" label="Consegne">
+      <ModalHeader title={`Consegne — ${periodLabel}`} onClose={onClose} />
       <div className="p-6">
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <input
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Caută comandă / client"
+            placeholder="Cerca ordine / cliente"
             className="h-10 flex-1 min-w-[12rem] rounded-lg border border-ink/15 px-3 text-sm text-ink outline-none focus:border-accent"
           />
           {supplierOptions.length > 1 && (
@@ -134,7 +134,7 @@ export function DeliveriesModal({
               onChange={(event) => setSupplierFilter(event.target.value)}
               className="h-10 rounded-lg border border-ink/15 px-2 text-sm text-ink"
             >
-              <option value="all">Toți furnizorii</option>
+              <option value="all">Tutti i fornitori</option>
               {supplierOptions.map((name) => (
                 <option key={name} value={name}>
                   {name}
@@ -148,7 +148,7 @@ export function DeliveriesModal({
               onChange={(event) => setVehicleFilter(event.target.value)}
               className="h-10 rounded-lg border border-ink/15 px-2 text-sm text-ink"
             >
-              <option value="all">Toate mașinile</option>
+              <option value="all">Tutti i veicoli</option>
               {vehicleOptions.map((name) => (
                 <option key={name} value={name}>
                   {name}
@@ -161,22 +161,22 @@ export function DeliveriesModal({
             onClick={handlePrint}
             className="h-10 rounded-lg bg-accent px-4 text-sm font-bold text-white hover:bg-accent-dark"
           >
-            Printează
+            Stampa
           </button>
         </div>
 
         {filtered.length === 0 ? (
-          <p className="py-10 text-center text-sm text-ink-soft">Nu există livrări pentru perioada selectată.</p>
+          <p className="py-10 text-center text-sm text-ink-soft">Nessuna consegna nel periodo selezionato.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-ink/10 text-left text-xs uppercase text-ink-soft">
                   <th className="py-2 pr-3">Data</th>
-                  <th className="py-2 pr-3">Comandă</th>
+                  <th className="py-2 pr-3">Ordine</th>
                   <th className="py-2 pr-3">Client</th>
                   <th className="py-2 pr-3">Supplier</th>
-                  <th className="py-2 pr-3">Mașină</th>
+                  <th className="py-2 pr-3">Veicolo</th>
                   <th className="py-2 pr-3 text-right">Anvelope</th>
                   <th className="py-2">Status</th>
                 </tr>

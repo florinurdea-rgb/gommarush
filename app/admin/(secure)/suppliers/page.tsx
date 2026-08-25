@@ -3,7 +3,7 @@ import { listSuppliersWithCounts } from "@/lib/server/suppliers";
 import { PageHeading } from "@/components/logistics/AdminShell";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Furnizori" };
+export const metadata = { title: "Fornitori" };
 
 /**
  * The supplier list — the profile behind every DDT/invoice import
@@ -21,23 +21,23 @@ export default async function SuppliersPage({
 
   return (
     <>
-      <PageHeading title="Furnizori" description="Profilul fiecărui furnizor de anvelope." />
+      <PageHeading title="Fornitori" description="La scheda di ogni fornitore di pneumatici." />
 
       <form className="mb-5 flex max-w-md gap-2" action="/admin/suppliers">
         <input
           name="q"
           defaultValue={q ?? ""}
-          placeholder="Caută după denumire sau cod fiscal…"
+          placeholder="Cerca per ragione sociale o codice fiscale…"
           className="h-11 flex-1 rounded-lg border border-ink/15 px-3 text-sm outline-none focus:border-accent"
         />
         <button type="submit" className="h-11 rounded-lg bg-accent px-4 text-sm font-semibold text-white">
-          Caută
+          Cerca
         </button>
       </form>
 
       {suppliers.length === 0 ? (
         <div className="rounded-xl border border-dashed border-ink/20 bg-white px-6 py-12 text-center text-ink-soft">
-          Niciun furnizor găsit.
+          Nessun fornitore trovato.
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-ink/10 bg-white shadow-card">

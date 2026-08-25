@@ -7,7 +7,7 @@ import { VAN_DOT_CLASS } from "@/lib/logistics/vehicle-colors";
 import type { VehicleRow } from "@/lib/types/logistics";
 
 /**
- * "Gestionează mașinile" — add/rename/reorder/remove vans (redesign brief
+ * "Gestisci i veicoli" — add/rename/reorder/remove vans (redesign brief
  * §12-24). Vehicles are no longer assumed to always be "Van 1, Van 2, Van
  * 3": the fleet is a real, persistent list the admin can reshape.
  *
@@ -68,13 +68,13 @@ export function FleetManagementModal({
       });
       const payload = (await response.json()) as { ok: boolean };
       if (payload.ok) {
-        showToast("Mașină redenumită.", "success");
+        showToast("Veicolo rinominato.", "success");
         refresh();
       } else {
-        showToast("Redenumirea nu a putut fi salvată.", "error");
+        showToast("Rinomina non salvata.", "error");
       }
     } catch {
-      showToast("Eroare de rețea.", "error");
+      showToast("Errore di rete.", "error");
     } finally {
       setBusyId(null);
       setRenamingId(null);
@@ -89,16 +89,16 @@ export function FleetManagementModal({
       if (payload.ok) {
         showToast(
           payload.reassignedOrders
-            ? `Mașină eliminată. ${payload.reassignedOrders} ${payload.reassignedOrders === 1 ? "comandă mutată" : "comenzi mutate"} în Neasignate.`
-            : "Mașină eliminată.",
+            ? `Veicolo eliminato. ${payload.reassignedOrders} ${payload.reassignedOrders === 1 ? "ordine spostato" : "ordini spostati"} in Non assegnati.`
+            : "Veicolo eliminato.",
           "success"
         );
         refresh();
       } else {
-        showToast("Eliminarea nu a putut fi salvată.", "error");
+        showToast("Rimozione non salvata.", "error");
       }
     } catch {
-      showToast("Eroare de rețea.", "error");
+      showToast("Errore di rete.", "error");
     } finally {
       setBusyId(null);
       setRemoveConfirmId(null);
@@ -121,9 +121,9 @@ export function FleetManagementModal({
       });
       const payload = (await response.json()) as { ok: boolean };
       if (payload.ok) refresh();
-      else showToast("Reordonarea nu a putut fi salvată.", "error");
+      else showToast("Riordino non salvato.", "error");
     } catch {
-      showToast("Eroare de rețea.", "error");
+      showToast("Errore di rete.", "error");
     } finally {
       setBusyId(null);
     }
@@ -140,17 +140,17 @@ export function FleetManagementModal({
       });
       const payload = (await response.json()) as { ok: boolean; code?: string; details?: string[] };
       if (payload.ok) {
-        showToast(`${name} adăugată.`, "success");
+        showToast(`${name} aggiunto.`, "success");
         setAddName("");
         setAddRegistration("");
         setAddingOpen(false);
         refresh();
       } else {
         const detail = [payload.code, ...(payload.details ?? [])].filter(Boolean).join(" — ");
-        showToast(`Adăugarea nu a putut fi salvată.${detail ? ` (${detail})` : ""}`, "error");
+        showToast(`Aggiunta non salvata.${detail ? ` (${detail})` : ""}`, "error");
       }
     } catch {
-      showToast("Eroare de rețea.", "error");
+      showToast("Errore di rete.", "error");
     } finally {
       setAddBusy(false);
     }
@@ -160,11 +160,11 @@ export function FleetManagementModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4" role="dialog" aria-modal="true">
       <div className="flex max-h-[85vh] w-full max-w-md flex-col rounded-2xl bg-white shadow-modal">
         <div className="flex items-center justify-between border-b border-ink/10 px-5 py-4">
-          <h2 className="text-base font-bold text-ink">Mașini</h2>
+          <h2 className="text-base font-bold text-ink">Veicoli</h2>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Închide"
+            aria-label="Chiudi"
             className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-soft hover:bg-surface-soft hover:text-ink"
           >
             ✕
@@ -172,7 +172,7 @@ export function FleetManagementModal({
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-3">
-          {ordered.length === 0 && <p className="py-6 text-center text-sm text-ink-soft">Nicio mașină încă.</p>}
+          {ordered.length === 0 && <p className="py-6 text-center text-sm text-ink-soft">Nessun veicolo ancora.</p>}
 
           <ul className="divide-y divide-ink/10">
             {ordered.map((vehicle, index) => {
@@ -198,14 +198,14 @@ export function FleetManagementModal({
                         onClick={() => void submitRename(vehicle.id)}
                         className="h-9 rounded-lg bg-accent px-3 text-xs font-bold text-white disabled:opacity-50"
                       >
-                        Salvează
+                        Salva
                       </button>
                       <button
                         type="button"
                         onClick={() => setRenamingId(null)}
                         className="h-9 rounded-lg px-2 text-xs font-semibold text-ink-soft"
                       >
-                        Anulează
+                        Annulla
                       </button>
                     </div>
                   ) : removeConfirmId === vehicle.id ? (
@@ -213,15 +213,15 @@ export function FleetManagementModal({
                       {count > 0 ? (
                         <>
                           <p className="text-sm font-semibold text-ink">
-                            {vehicle.name} are {count} {count === 1 ? "comandă asignată" : "comenzi asignate"}
+                            {vehicle.name} ha {count} {count === 1 ? "ordine assegnato" : "ordini assegnati"}
                           </p>
                           <p className="mt-1 text-xs text-ink-soft">
-                            Dacă elimini această mașină, {count === 1 ? "comanda va fi mutată" : "toate comenzile vor fi mutate"} în
-                            Neasignate.
+                            Se elimini questo veicolo, {count === 1 ? "l'ordine verrà spostato" : "tutti gli ordini verranno spostati"} in
+                            Non assegnati.
                           </p>
                         </>
                       ) : (
-                        <p className="text-sm font-semibold text-ink">Ștergi {vehicle.name}?</p>
+                        <p className="text-sm font-semibold text-ink">Eliminare {vehicle.name}?</p>
                       )}
                       <div className="mt-2.5 flex gap-2">
                         <button
@@ -230,7 +230,7 @@ export function FleetManagementModal({
                           onClick={() => setRemoveConfirmId(null)}
                           className="flex-1 rounded-lg border border-ink/15 bg-white px-3 py-2 text-xs font-semibold text-ink disabled:opacity-50"
                         >
-                          Anulează
+                          Annulla
                         </button>
                         <button
                           type="button"
@@ -238,7 +238,7 @@ export function FleetManagementModal({
                           onClick={() => void submitRemove(vehicle.id)}
                           className="flex-1 rounded-lg bg-state-danger px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
                         >
-                          {busy ? "Se elimină…" : count > 0 ? "Mută comenzile și elimină mașina" : "Elimină"}
+                          {busy ? "Rimozione…" : count > 0 ? "Sposta gli ordini ed elimina il veicolo" : "Elimina"}
                         </button>
                       </div>
                     </div>
@@ -252,7 +252,7 @@ export function FleetManagementModal({
                         <div className="truncate text-sm font-semibold text-ink">{vehicle.name}</div>
                         <div className="text-xs text-ink-soft">
                           {vehicle.registration ? `${vehicle.registration} · ` : ""}
-                          {count} {count === 1 ? "comandă" : "comenzi"}
+                          {count} {count === 1 ? "ordine" : "ordini"}
                         </div>
                       </div>
                       <div className="flex flex-none items-center gap-0.5">
@@ -260,7 +260,7 @@ export function FleetManagementModal({
                           type="button"
                           disabled={busy || index === 0}
                           onClick={() => void move(vehicle.id, -1)}
-                          aria-label="Mută mai sus"
+                          aria-label="Sposta su"
                           className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-soft hover:bg-surface-soft disabled:opacity-30"
                         >
                           ↑
@@ -269,7 +269,7 @@ export function FleetManagementModal({
                           type="button"
                           disabled={busy || index === ordered.length - 1}
                           onClick={() => void move(vehicle.id, 1)}
-                          aria-label="Mută mai jos"
+                          aria-label="Sposta giù"
                           className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-soft hover:bg-surface-soft disabled:opacity-30"
                         >
                           ↓
@@ -280,7 +280,7 @@ export function FleetManagementModal({
                             setRenamingId(vehicle.id);
                             setRenameValue(vehicle.name);
                           }}
-                          aria-label={`Redenumește ${vehicle.name}`}
+                          aria-label={`Rinomina ${vehicle.name}`}
                           className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-soft hover:bg-surface-soft"
                         >
                           ✎
@@ -288,7 +288,7 @@ export function FleetManagementModal({
                         <button
                           type="button"
                           onClick={() => setRemoveConfirmId(vehicle.id)}
-                          aria-label={`Elimină ${vehicle.name}`}
+                          aria-label={`Elimina ${vehicle.name}`}
                           className="flex h-7 w-7 items-center justify-center rounded-lg text-state-danger hover:bg-state-danger-soft"
                         >
                           🗑
@@ -315,7 +315,7 @@ export function FleetManagementModal({
               <input
                 value={addRegistration}
                 onChange={(event) => setAddRegistration(event.target.value)}
-                placeholder="Nr. înmatriculare (opțional)"
+                placeholder="Targa (opzionale)"
                 className="h-10 w-full rounded-lg border border-ink/15 px-3 text-sm text-ink outline-none focus:border-accent"
               />
               <div className="flex gap-2">
@@ -324,7 +324,7 @@ export function FleetManagementModal({
                   onClick={() => setAddingOpen(false)}
                   className="flex-1 rounded-lg border border-ink/15 px-3 py-2 text-sm font-semibold text-ink"
                 >
-                  Anulează
+                  Annulla
                 </button>
                 <button
                   type="button"
@@ -332,7 +332,7 @@ export function FleetManagementModal({
                   onClick={() => void submitAdd()}
                   className="flex-1 rounded-lg bg-accent px-3 py-2 text-sm font-bold text-white disabled:opacity-50"
                 >
-                  {addBusy ? "Se adaugă…" : "Adaugă"}
+                  {addBusy ? "Aggiunta…" : "Aggiungi"}
                 </button>
               </div>
             </div>
@@ -345,7 +345,7 @@ export function FleetManagementModal({
               }}
               className="flex h-11 w-full items-center justify-center rounded-xl border border-dashed border-ink/20 text-sm font-semibold text-accent hover:bg-accent-light"
             >
-              + Adaugă mașină
+              + Aggiungi veicolo
             </button>
           )}
         </div>

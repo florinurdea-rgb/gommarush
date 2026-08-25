@@ -137,9 +137,9 @@ export function OrderActionsMenu({
             <div className="px-4 py-3">
               <p className="text-sm font-semibold text-ink">Anulezi {orderLabel}?</p>
               <p className="mt-1 text-xs leading-relaxed text-ink-soft">
-                Comanda va fi marcată <strong>Anulată</strong> și scoasă din lista
-                activă. Produsele, obiectele fizice și istoricul scanărilor se
-                păstrează.
+                L&apos;ordine verrà segnato <strong>Annullato</strong> e tolto dalla lista
+                attiva. Prodotti, articoli fisici e storico delle scansioni vengono
+                conservati.
               </p>
               <div className="mt-3 flex gap-2">
                 <button

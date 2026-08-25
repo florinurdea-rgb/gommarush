@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { isManuallySettableStatus, MANUAL_STATUS_EXCLUDED } from "@/lib/logistics/order-status-rules";
 
 /**
- * The Livrări board's "Schimbă statusul" menu (and setOrderStatusManually()
+ * The Consegne board's "Cambia stato" menu (and setOrderStatusManually()
  * on the server, which shares this exact predicate) is restricted to
  * statuses whose transition has no required side effect it would skip.
  * 'loaded' needs a vehicle + loaded_at (gorush_mark_order_loaded);

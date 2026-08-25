@@ -9,7 +9,7 @@ import { DriverHome } from "@/components/logistics/DriverHome";
 import type { DriverRouteStop } from "@/components/logistics/DriverRouteMapModal";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Șofer" };
+export const metadata = { title: "Autista" };
 
 /**
  * /driver — the driver's home screen.

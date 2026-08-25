@@ -233,17 +233,17 @@ export function processExtractedDocument(input: {
   const blockingIssues: string[] = [];
   if (!extracted.supplier.name) blockingIssues.push("Furnizor neidentificat");
   if (!extracted.customer.companyName) blockingIssues.push("Client neidentificat");
-  if (importableItemCount === 0) blockingIssues.push("Niciun produs cu cantitate citibilă");
+  if (importableItemCount === 0) blockingIssues.push("Nessun prodotto con quantità leggibile");
 
   const reviewIssues: string[] = [];
-  if (!extracted.document.documentNumber) reviewIssues.push("Număr DDT neidentificat");
+  if (!extracted.document.documentNumber) reviewIssues.push("Numero DDT non identificato");
   if (unreadableQuantityLines.length > 0) {
     reviewIssues.push(
-      `${unreadableQuantityLines.length} linii cu cantitate necitibilă — nu vor fi adăugate, completează manual din pagina comenzii`
+      `${unreadableQuantityLines.length} righe con quantità non leggibile — non verranno aggiunte, inseriscile manualmente dalla pagina dell'ordine`
     );
   }
   if (tyreCountValidation === "TYRE_COUNT_REVIEW_REQUIRED") {
-    reviewIssues.push("Numărul de anvelope nu poate fi confirmat față de Nr. Colli");
+    reviewIssues.push("Il numero di pneumatici non è confermabile rispetto al Nr. Colli");
   }
 
   let status: DocumentStatus;
@@ -252,10 +252,10 @@ export function processExtractedDocument(input: {
 
   if (exactDuplicate) {
     status = "DUPLICATE";
-    reasons.push(`Document deja importat — comanda existentă ${exactDuplicate.id}`);
+    reasons.push(`Documento già importato — ordine esistente ${exactDuplicate.id}`);
   } else if (fingerprintMatch) {
     status = "POSSIBLE_DUPLICATE";
-    reasons.push("Document foarte asemănător cu o comandă existentă — verifică înainte de import");
+    reasons.push("Documento molto simile a un ordine esistente — verifica prima di importare");
   } else if (blocked) {
     status = "NEEDS_REVIEW";
     reasons.push(...blockingIssues, ...reviewIssues);
@@ -265,10 +265,10 @@ export function processExtractedDocument(input: {
   } else {
     const missingOptional: string[] = [];
     if (!extracted.customer.phone) missingOptional.push("telefon");
-    if (!extracted.customer.postalCode) missingOptional.push("cod poștal");
+    if (!extracted.customer.postalCode) missingOptional.push("CAP");
     if (missingOptional.length > 0) {
       status = "READY_MISSING_OPTIONAL";
-      reasons.push(`Lipsesc date opționale: ${missingOptional.join(", ")}`);
+      reasons.push(`Dati facoltativi mancanti: ${missingOptional.join(", ")}`);
     } else {
       status = "READY";
     }

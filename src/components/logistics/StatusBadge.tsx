@@ -1,7 +1,6 @@
 import type { StatusTone } from "@/lib/i18n/logistics";
 import {
   orderStatusMeta,
-  printJobStatusMeta,
   unitStatusMeta,
 } from "@/lib/i18n/logistics";
 
@@ -47,7 +46,3 @@ export function UnitStatusBadge({ status, size }: { status: string; size?: "sm" 
   return <Badge label={meta.label} tone={meta.tone} size={size} />;
 }
 
-export function PrintJobStatusBadge({ status, size }: { status: string; size?: "sm" | "md" }) {
-  const meta = printJobStatusMeta(status);
-  return <Badge label={meta.label} tone={meta.tone} size={size} />;
-}

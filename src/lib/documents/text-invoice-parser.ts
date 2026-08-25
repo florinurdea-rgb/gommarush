@@ -290,7 +290,7 @@ export function parseInvoiceText(text: string, provider: string): AnalysisResult
   if (supplierName) fieldConfidence["supplier.name"] = 0.45;
   else notes.push("Furnizorul nu a putut fi identificat automat.");
   if (documentNumber) fieldConfidence["supplier.documentNumber"] = 0.6;
-  else notes.push("Numărul documentului nu a fost găsit.");
+  else notes.push("Numero del documento non trovato.");
 
   // --- Customer ---------------------------------------------------------
   const delivery = extractDeliveryBlock(lines);
@@ -307,9 +307,9 @@ export function parseInvoiceText(text: string, provider: string): AnalysisResult
   };
 
   if (delivery.companyName) fieldConfidence["customer.companyName"] = 0.4;
-  else notes.push("Clientul final nu a putut fi identificat automat — completează manual.");
+  else notes.push("Il cliente finale non è stato identificato automaticamente — inseriscilo manualmente.");
   if (!delivery.addressLine1 && !delivery.city) {
-    notes.push("Adresa de livrare nu a fost găsită în document.");
+    notes.push("L'indirizzo di consegna non è stato trovato nel documento.");
   }
 
   // --- Payment ----------------------------------------------------------
@@ -326,17 +326,17 @@ export function parseInvoiceText(text: string, provider: string): AnalysisResult
   };
 
   if (cashOnDelivery && payment.amountToCollect === null) {
-    notes.push("Plata la livrare a fost detectată, dar suma nu a putut fi citită.");
+    notes.push("Il pagamento alla consegna è stato rilevato, ma l'importo non è leggibile.");
   }
 
   // --- Products ---------------------------------------------------------
   const products = extractProductLines(lines);
   if (products.length === 0) {
-    notes.push("Nicio linie de produs nu a putut fi extrasă — adaugă produsele manual.");
+    notes.push("Nessuna riga prodotto estratta — aggiungi i prodotti manualmente.");
   } else {
     fieldConfidence["products"] = 0.5;
     notes.push(
-      `${products.length} linii de produs extrase automat — verifică cantitățile și dimensiunile.`
+      `${products.length} righe prodotto estratte automaticamente — controlla quantità e misure.`
     );
   }
 
