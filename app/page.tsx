@@ -1,5 +1,6 @@
 import { GlobalHeader } from "@/components/site/GlobalHeader";
 import { Hero } from "@/components/site/Hero";
+import { BrandMarquee } from "@/components/site/BrandMarquee";
 import { WhyGommaRush } from "@/components/site/WhyGommaRush";
 
 /**
@@ -16,6 +17,7 @@ export default function Landing() {
       <GlobalHeader />
       <main className="flex flex-1 flex-col">
         <Hero />
+        <BrandMarquee />
         <WhyGommaRush />
       </main>
     </div>
