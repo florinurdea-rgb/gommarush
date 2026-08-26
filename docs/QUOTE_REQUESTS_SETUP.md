@@ -19,10 +19,12 @@ transactional function it calls don't exist yet.
    `supabase/migrations/20260826000000_quote_requests.sql`, press **Run**.
 3. Then paste `supabase/migrations/20260827000000_quote_requests_production.sql`
    and press **Run**.
+4. Then paste `supabase/migrations/20260829000000_delivery_48h.sql` and press
+   **Run** — this renames the fast delivery option from 24h to 48h.
 
 The second file adds the `GR-YYMMDD-NNNN` reference, the full quotation
 lifecycle, notification tracking, the event log and the realtime broadcast.
-Run them in this order; the second builds on the first.
+Run them in this order; each builds on the one before.
 
 The file is written to be safe to re-run: every statement is
 `create ... if not exists`, `create or replace`, or a guarded `do` block. If
@@ -198,7 +200,7 @@ is idempotent — a redelivered event changes nothing.
    Switch back to Italian.
 3. Click **Richiedi un'offerta**.
 4. Add a tyre: `205 / 55 / R16`, index `91V`, quantity `4`, *Miglior prezzo*,
-   *24 ore* → **Aggiungi**.
+   *48 ore* → **Aggiungi**.
 5. Add another: `225 / 45 / R17`, quantity `2`, *Marca specifica* → `Michelin`,
    *7 giorni*.
 6. Add **Altro prodotto**: `Valvole TR414`, quantity `20`, *7 giorni*.

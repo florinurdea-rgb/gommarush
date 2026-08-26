@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   // Formulata come "tutta la provincia + 50 km oltre i confini", mai come un
   // raggio da un centro: è la stessa distinzione che fa la homepage.
   description:
-    "GommaRush fornisce pneumatici a gommisti, officine e aziende del settore automotive in tutta la provincia di Vicenza e fino a 50 km oltre i confini provinciali, con consegna in 24 ore o entro 7 giorni.",
+    "GommaRush fornisce pneumatici a gommisti, officine e aziende del settore automotive in tutta la provincia di Vicenza e fino a 50 km oltre i confini provinciali, con consegna in 48 ore o entro 7 giorni.",
   icons: {
     icon: "/images/logo.jpg",
   },

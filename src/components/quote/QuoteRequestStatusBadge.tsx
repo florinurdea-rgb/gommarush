@@ -1,9 +1,12 @@
+"use client";
+
 import {
   NOTIFICATION_STATUS_LABELS,
   QUOTE_STATUS_LABELS,
   type NotificationStatus,
   type QuoteRequestStatus,
 } from "@/lib/types/quote-request";
+import { useTr } from "@/lib/i18n/tr";
 
 /**
  * Status indicators for the quote pipeline.
@@ -34,13 +37,14 @@ export function QuoteRequestStatusBadge({
   status: QuoteRequestStatus;
   size?: "sm" | "md";
 }) {
+  const tr = useTr();
   return (
     <span
       className={`inline-flex flex-none items-center rounded-full font-semibold ${
         size === "md" ? "px-3 py-1 text-sm" : "px-2.5 py-0.5 text-xs"
       } ${STATUS_CLASS[status]}`}
     >
-      {QUOTE_STATUS_LABELS[status]}
+      {tr(QUOTE_STATUS_LABELS[status])}
     </span>
   );
 }
@@ -65,12 +69,13 @@ export function NotificationStatusBadge({
   status: NotificationStatus;
   title?: string | null;
 }) {
+  const tr = useTr();
   return (
     <span
       title={title ?? undefined}
       className={`inline-flex flex-none items-center rounded px-1.5 py-0.5 text-[11px] font-semibold ${NOTIFICATION_CLASS[status]}`}
     >
-      {NOTIFICATION_STATUS_LABELS[status]}
+      {tr(NOTIFICATION_STATUS_LABELS[status])}
     </span>
   );
 }

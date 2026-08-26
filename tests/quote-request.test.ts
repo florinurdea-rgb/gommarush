@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createQuoteRequestSchema, toRpcItem } from "@/lib/validation/quote-request";
+import {
+  createQuoteRequestSchema,
+  listQuoteRequestsQuerySchema,
+  toRpcItem,
+} from "@/lib/validation/quote-request";
 import { formatTyreSize } from "@/lib/types/quote-request";
 import { safeFileName } from "@/lib/excel/file-name";
 
@@ -18,7 +22,7 @@ const validTyre = {
   loadSpeedIndex: "91V",
   quantity: 4,
   preferenceType: "best_price" as const,
-  deliverySpeed: "24h" as const,
+  deliverySpeed: "48h" as const,
 };
 
 function payload(overrides: Record<string, unknown> = {}) {
@@ -191,5 +195,36 @@ describe("safeFileName", () => {
     expect(safeFileName("///", "2026-08-25T10:12:00.000Z")).toBe(
       "Offerta_Cliente_2026-08-25.xlsx"
     );
+  });
+});
+
+describe("delivery options", () => {
+  /**
+   * The fast option is 48 hours, and '24h' is retired. The stored value and
+   * the label have to agree — a value saying one thing while the UI says
+   * another is how the wrong promise reaches a customer.
+   */
+  it("offers exactly 48h and 7d", async () => {
+    const { DELIVERY_SPEEDS, DELIVERY_LABELS } = await import("@/lib/types/quote-request");
+    expect([...DELIVERY_SPEEDS]).toEqual(["48h", "7d"]);
+    expect(DELIVERY_LABELS["48h"]).toBe("48 ore");
+    expect(DELIVERY_LABELS["7d"]).toBe("7 giorni");
+  });
+
+  it("accepts 48h and rejects the retired 24h", () => {
+    const with48 = createQuoteRequestSchema.safeParse(
+      payload({ items: [{ ...validTyre, deliverySpeed: "48h" }] })
+    );
+    expect(with48.success).toBe(true);
+
+    const with24 = createQuoteRequestSchema.safeParse(
+      payload({ items: [{ ...validTyre, deliverySpeed: "24h" }] })
+    );
+    expect(with24.success).toBe(false);
+  });
+
+  it("rejects 24h on the admin list filter too", () => {
+    expect(listQuoteRequestsQuerySchema.safeParse({ delivery: "48h" }).success).toBe(true);
+    expect(listQuoteRequestsQuerySchema.safeParse({ delivery: "24h" }).success).toBe(false);
   });
 });

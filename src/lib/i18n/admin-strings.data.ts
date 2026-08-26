@@ -343,4 +343,25 @@ export const EN_STRINGS: Record<string, string> = {
   "Eliminazione non riuscita. Riprova.": "Deletion failed. Please try again.",
   "Questa richiesta non esiste più.": "This request no longer exists.",
   "Azioni": "Actions",
+
+  // --- status / delivery / season label maps -----------------------------
+  // These render straight from the label Records in types/quote-request.ts,
+  // so they need entries here or the badges stay Italian in English.
+  "Nuova": "New",
+  "In revisione": "In review",
+  "Preparazione offerta": "Preparing offer",
+  "Offerta pronta": "Offer ready",
+  "Inviata": "Sent",
+  "Accettata": "Accepted",
+  "Rifiutata": "Declined",
+  "Scaduta": "Expired",
+  "Archiviata": "Archived",
+  "In invio": "Sending",
+  "Consegnata": "Delivered",
+  "Invio non riuscito": "Send failed",
+  "48 ore": "48 hours",
+  "7 giorni": "7 days",
+  "Estivo": "Summer",
+  "Invernale": "Winter",
+  "Quattro stagioni": "All season",
 };

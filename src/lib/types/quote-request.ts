@@ -7,7 +7,7 @@
 
 export type ProductType = "tyre" | "other";
 export type PreferenceType = "best_price" | "specific_brand";
-export type DeliverySpeed = "24h" | "7d";
+export type DeliverySpeed = "48h" | "7d";
 export type Season = "summer" | "winter" | "all_season";
 export type QuoteLanguage = "it" | "en";
 
@@ -35,7 +35,7 @@ export type NotificationStatus = "pending" | "sending" | "sent" | "delivered" | 
 
 export const PRODUCT_TYPES: readonly ProductType[] = ["tyre", "other"];
 export const PREFERENCE_TYPES: readonly PreferenceType[] = ["best_price", "specific_brand"];
-export const DELIVERY_SPEEDS: readonly DeliverySpeed[] = ["24h", "7d"];
+export const DELIVERY_SPEEDS: readonly DeliverySpeed[] = ["48h", "7d"];
 export const SEASONS: readonly Season[] = ["summer", "winter", "all_season"];
 
 export const QUOTE_REQUEST_STATUSES: readonly QuoteRequestStatus[] = [
@@ -256,7 +256,7 @@ export const NOTIFICATION_STATUS_LABELS: Record<NotificationStatus, string> = {
 };
 
 export const DELIVERY_LABELS: Record<DeliverySpeed, string> = {
-  "24h": "24 ore",
+  "48h": "48 ore",
   "7d": "7 giorni",
 };
 

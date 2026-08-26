@@ -100,7 +100,7 @@ export function QuoteRequestFilters({ total }: { total: number }) {
             <option value="">{tr("Tutti gli stati")}</option>
             {QUOTE_REQUEST_STATUSES.map((status) => (
               <option key={status} value={status}>
-                {QUOTE_STATUS_LABELS[status]}
+                {tr(QUOTE_STATUS_LABELS[status])}
               </option>
             ))}
           </select>
@@ -116,7 +116,7 @@ export function QuoteRequestFilters({ total }: { total: number }) {
             <option value="">{tr("Tutte le notifiche")}</option>
             {NOTIFICATION_STATUSES.map((status) => (
               <option key={status} value={status}>
-                {NOTIFICATION_STATUS_LABELS[status]}
+                {tr(NOTIFICATION_STATUS_LABELS[status])}
               </option>
             ))}
           </select>
@@ -130,8 +130,8 @@ export function QuoteRequestFilters({ total }: { total: number }) {
             className={selectClass}
           >
             <option value="">{tr("Tutte le consegne")}</option>
-            <option value="24h">{DELIVERY_LABELS["24h"]}</option>
-            <option value="7d">{DELIVERY_LABELS["7d"]}</option>
+            <option value="48h">{tr(DELIVERY_LABELS["48h"])}</option>
+            <option value="7d">{tr(DELIVERY_LABELS["7d"])}</option>
           </select>
         </label>
       </div>

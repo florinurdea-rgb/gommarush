@@ -232,7 +232,7 @@ export default async function QuoteRequestsPage({
                     </td>
                     <td className="px-4 py-3 tabular-nums text-ink-soft">{row.item_count}</td>
                     <td className="px-4 py-3 text-ink-soft">
-                      {row.delivery_preference ? DELIVERY_LABELS[row.delivery_preference] : "—"}
+                      {row.delivery_preference ? tr(DELIVERY_LABELS[row.delivery_preference]) : "—"}
                     </td>
                     <td className="px-4 py-3">
                       <QuoteRequestStatusBadge status={row.status} />

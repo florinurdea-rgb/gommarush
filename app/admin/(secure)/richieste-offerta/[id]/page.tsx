@@ -175,7 +175,7 @@ export default async function QuoteRequestDetailPage({ params }: { params: { id:
           <div className="flex gap-2">
             <dt className="w-24 flex-none text-ink-soft">{tr("Consegna")}</dt>
             <dd className="font-semibold">
-              {request.delivery_preference ? DELIVERY_LABELS[request.delivery_preference] : "—"}
+              {request.delivery_preference ? tr(DELIVERY_LABELS[request.delivery_preference]) : "—"}
             </dd>
           </div>
           <div className="flex gap-2">
@@ -224,11 +224,11 @@ export default async function QuoteRequestDetailPage({ params }: { params: { id:
                 </td>
                 <td className="px-4 py-3 font-mono text-ink-soft">{item.load_speed_index ?? "—"}</td>
                 <td className="px-4 py-3 text-ink-soft">
-                  {item.season ? SEASON_LABELS[item.season] : "—"}
+                  {item.season ? tr(SEASON_LABELS[item.season]) : "—"}
                 </td>
                 <td className="px-4 py-3 text-ink-soft">{describePreference(item)}</td>
                 <td className="px-4 py-3 text-ink-soft">
-                  {DELIVERY_LABELS[item.delivery_speed] ?? item.delivery_speed}
+                  {tr(DELIVERY_LABELS[item.delivery_speed]) ?? item.delivery_speed}
                 </td>
                 <td className="px-4 py-3 text-right font-bold tabular-nums text-ink">
                   {item.quantity}
@@ -256,9 +256,9 @@ export default async function QuoteRequestDetailPage({ params }: { params: { id:
               </div>
             </div>
             <div className="mt-2 border-t border-ink/5 pt-2 text-xs text-ink-soft">
-              {item.season ? `${SEASON_LABELS[item.season]} · ` : ""}
+              {item.season ? `${tr(SEASON_LABELS[item.season])} · ` : ""}
               {describePreference(item)} ·{" "}
-              {DELIVERY_LABELS[item.delivery_speed] ?? item.delivery_speed}
+              {tr(DELIVERY_LABELS[item.delivery_speed]) ?? item.delivery_speed}
             </div>
           </li>
         ))}

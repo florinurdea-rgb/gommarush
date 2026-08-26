@@ -210,7 +210,7 @@ export function QuoteItemEditor({
           onChange={(deliverySpeed) => onChange({ deliverySpeed })}
           error={errors.deliverySpeed}
           options={[
-            { value: "24h", label: copy.within24h },
+            { value: "48h", label: copy.within48h },
             { value: "7d", label: copy.within7d },
           ]}
         />

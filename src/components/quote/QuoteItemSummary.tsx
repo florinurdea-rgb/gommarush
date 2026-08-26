@@ -6,7 +6,7 @@ import { summariseDraft, type DraftItem } from "@/components/quote/item-model";
 /**
  * A committed item, collapsed to one line:
  *   205/55 R16 91V
- *   4 pz · Miglior prezzo · 24 ore
+ *   4 pz · Miglior prezzo · 48 ore
  */
 export function QuoteItemSummary({
   item,
@@ -23,7 +23,7 @@ export function QuoteItemSummary({
     item.preferenceType === "specific_brand" && item.preferredBrand.trim()
       ? item.preferredBrand.trim()
       : copy.bestPrice;
-  const delivery = item.deliverySpeed === "24h" ? copy.within24h : copy.within7d;
+  const delivery = item.deliverySpeed === "48h" ? copy.within48h : copy.within7d;
 
   return (
     <li className="flex items-start justify-between gap-3 rounded-2xl border border-ink/10 bg-white p-4">

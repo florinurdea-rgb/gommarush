@@ -13,7 +13,7 @@ import { z } from "zod";
 
 const productTypeSchema = z.enum(["tyre", "other"]);
 const preferenceTypeSchema = z.enum(["best_price", "specific_brand"]);
-const deliverySpeedSchema = z.enum(["24h", "7d"]);
+const deliverySpeedSchema = z.enum(["48h", "7d"]);
 const seasonSchema = z.enum(["summer", "winter", "all_season"]);
 const languageSchema = z.enum(["it", "en"]);
 
@@ -145,7 +145,7 @@ export const listQuoteRequestsQuerySchema = z
       "archived",
     ]).nullish(),
     notification: z.enum(["pending", "sending", "sent", "delivered", "failed"]).nullish(),
-    delivery: z.enum(["24h", "7d"]).nullish(),
+    delivery: z.enum(["48h", "7d"]).nullish(),
     /** Free text matched against reference, company and e-mail. */
     q: z.string().trim().max(120).nullish(),
     /** ISO dates (inclusive) bounding created_at. */

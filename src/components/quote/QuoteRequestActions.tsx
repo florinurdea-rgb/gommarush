@@ -138,7 +138,7 @@ export function QuoteRequestActions({
           >
             {pending === nextStatus
               ? tr("Aggiornamento…")
-              : `Segna: ${QUOTE_STATUS_LABELS[nextStatus]}`}
+              : `Segna: ${tr(QUOTE_STATUS_LABELS[nextStatus])}`}
           </button>
         )}
 
@@ -152,7 +152,7 @@ export function QuoteRequestActions({
           >
             {ALL_STATUSES.map((value) => (
               <option key={value} value={value}>
-                {QUOTE_STATUS_LABELS[value]}
+                {tr(QUOTE_STATUS_LABELS[value])}
               </option>
             ))}
           </select>

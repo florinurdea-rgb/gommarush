@@ -42,7 +42,7 @@ const VALID_BODY = {
       rim: 16,
       quantity: 4,
       preferenceType: "best_price",
-      deliverySpeed: "24h",
+      deliverySpeed: "48h",
     },
   ],
 };
