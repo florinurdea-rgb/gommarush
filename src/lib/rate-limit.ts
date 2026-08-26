@@ -49,3 +49,58 @@ export function getClientIp(headers: Headers): string {
   }
   return headers.get("x-real-ip") ?? "unknown";
 }
+
+/**
+ * Dedicated limiter for the admin login endpoint.
+ *
+ * Deliberately separate from isRateLimited() above: that one counts every
+ * request (right for a public submission form). Login must only count
+ * *failed* attempts — counting successful logins or page loads means a
+ * legitimate admin can get locked out just by using the product, which is
+ * the opposite of what a brute-force guard is for.
+ */
+const LOGIN_WINDOW_MS = readPositiveIntEnv("LOGIN_RATE_LIMIT_WINDOW_MINUTES", 15) * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = readPositiveIntEnv("LOGIN_RATE_LIMIT_MAX_ATTEMPTS", 10);
+
+const loginFailures = new Map<string, number[]>();
+
+function readPositiveIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  const parsed = raw ? Number(raw) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+export interface LoginRateLimitStatus {
+  limited: boolean;
+  /** Seconds until the oldest counted failure ages out of the window. */
+  retryAfterSeconds: number;
+}
+
+export function checkLoginRateLimit(key: string): LoginRateLimitStatus {
+  const now = Date.now();
+  const timestamps = (loginFailures.get(key) ?? []).filter((t) => now - t < LOGIN_WINDOW_MS);
+
+  if (timestamps.length < LOGIN_MAX_ATTEMPTS) {
+    return { limited: false, retryAfterSeconds: 0 };
+  }
+
+  const retryAfterSeconds = Math.max(1, Math.ceil((LOGIN_WINDOW_MS - (now - timestamps[0])) / 1000));
+  return { limited: true, retryAfterSeconds };
+}
+
+/** Call after a failed sign-in. Never call this for a successful login. */
+export function recordLoginFailure(key: string): void {
+  const now = Date.now();
+  const timestamps = (loginFailures.get(key) ?? []).filter((t) => now - t < LOGIN_WINDOW_MS);
+  timestamps.push(now);
+  loginFailures.set(key, timestamps);
+}
+
+/** Call after a successful login so a past run of typos doesn't linger. */
+export function resetLoginFailures(key: string): void {
+  loginFailures.delete(key);
+}
+
+// The public barcode-lookup limiter lived here until the "Cerca cauciuc"
+// feature was removed. It was the only consumer, so both it and its
+// BARCODE_LOOKUP_RATE_LIMIT_* env vars went with it.
