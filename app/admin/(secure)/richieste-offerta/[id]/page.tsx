@@ -7,6 +7,7 @@ import {
 } from "@/components/quote/QuoteRequestStatusBadge";
 import { QuoteRequestActions } from "@/components/quote/QuoteRequestActions";
 import { ResendNotificationButton } from "@/components/quote/ResendNotificationButton";
+import { DeleteQuoteRequestButton } from "@/components/quote/DeleteQuoteRequestButton";
 import { describeEmailConfig } from "@/lib/email/send-quote-request";
 import { getTr } from "@/lib/i18n/tr-server";
 import {
@@ -300,6 +301,21 @@ export default async function QuoteRequestDetailPage({ params }: { params: { id:
         {!notificationFailed && !notificationPending && (
           <ResendNotificationButton requestId={request.id} subdued />
         )}
+
+        {/* Deliberately last, and visually separated: a permanent delete
+            has no business sitting next to the buttons someone presses all
+            day. */}
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-ink/10 pt-4">
+          <p className="text-xs text-ink-soft">
+            {tr("Elimina la richiesta, i prodotti richiesti e la cronologia. Non è reversibile.")}
+          </p>
+          <DeleteQuoteRequestButton
+            requestId={request.id}
+            reference={request.public_reference}
+            companyName={request.company_name}
+            redirectTo="/admin/richieste-offerta"
+          />
+        </div>
 
         {events.length > 0 && (
           <details className="mt-4">

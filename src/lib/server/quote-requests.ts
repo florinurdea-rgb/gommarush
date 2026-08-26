@@ -11,7 +11,12 @@ import type {
   QuoteRequestRow,
   QuoteRequestStatus,
 } from "@/lib/types/quote-request";
-import { OPEN_QUOTE_STATUSES } from "@/lib/types/quote-request";
+import {
+  OPEN_QUOTE_STATUSES,
+  QUOTE_GROUPS,
+  QUOTE_GROUP_STATUSES,
+  type QuoteRequestGroup,
+} from "@/lib/types/quote-request";
 
 /**
  * Server-side data access for quote requests.
@@ -161,6 +166,8 @@ export async function logQuoteEvent(
 export interface ListQuoteRequestsOptions {
   page?: number;
   perPage?: number;
+  /** Which tab. Narrows to that group's statuses. */
+  group?: QuoteRequestGroup | null;
   status?: QuoteRequestStatus | null;
   notification?: NotificationStatus | null;
   delivery?: DeliverySpeed | null;
@@ -204,7 +211,13 @@ export async function listQuoteRequests(
     .order("created_at", { ascending: false })
     .range(offset, offset + perPage - 1);
 
-  if (options.status) query = query.eq("status", options.status);
+  // The explicit status filter wins: picking one inside a tab should show
+  // exactly that status, not the tab's whole set.
+  if (options.status) {
+    query = query.eq("status", options.status);
+  } else if (options.group) {
+    query = query.in("status", QUOTE_GROUP_STATUSES[options.group] as unknown as string[]);
+  }
   if (options.notification) query = query.eq("notification_status", options.notification);
   if (options.delivery) query = query.eq("delivery_preference", options.delivery);
   if (options.from) query = query.gte("created_at", `${options.from}T00:00:00Z`);
@@ -257,6 +270,81 @@ export async function listQuoteRequests(
     perPage,
     pageCount,
   };
+}
+
+/**
+ * How many requests sit in each tab.
+ *
+ * Three head-only counting queries rather than loading rows: the tab bar
+ * needs numbers, not data, and this runs on every list render.
+ */
+export async function countQuoteRequestsByGroup(): Promise<Record<QuoteRequestGroup, number>> {
+  const supabase = createSupabaseAdminClient();
+
+  const counts = await Promise.all(
+    QUOTE_GROUPS.map(async (group) => {
+      const { count, error } = await supabase
+        .from("quote_requests")
+        .select("id", { count: "exact", head: true })
+        .in("status", QUOTE_GROUP_STATUSES[group] as unknown as string[]);
+      if (error) throw error;
+      return [group, count ?? 0] as const;
+    })
+  );
+
+  return Object.fromEntries(counts) as Record<QuoteRequestGroup, number>;
+}
+
+/**
+ * Deletes a request and everything attached to it, permanently.
+ *
+ * This is a genuine hard delete, not an archive: the lifecycle already has
+ * an `archived` status for "keep it but hide it", so a separate soft delete
+ * would just be a second way to do the same thing. Items and events are
+ * removed by ON DELETE CASCADE.
+ *
+ * Before deleting, a summary is written to quote_request_events with a NULL
+ * request id — the row therefore survives the cascade, so the audit trail
+ * records that this reference existed and who removed it, without keeping
+ * the customer's contact details.
+ */
+export async function deleteQuoteRequest(
+  requestId: string,
+  actor: string
+): Promise<{ deleted: boolean; reference: string | null }> {
+  const supabase = createSupabaseAdminClient();
+
+  const { data: existing, error: readError } = await supabase
+    .from("quote_requests")
+    .select("id, public_reference, company_name, status")
+    .eq("id", requestId)
+    .maybeSingle();
+  if (readError) throw readError;
+  if (!existing) return { deleted: false, reference: null };
+
+  const row = existing as {
+    public_reference: string;
+    company_name: string;
+    status: string;
+  };
+
+  await logQuoteEvent("request_deleted", {
+    requestId: null,
+    meta: {
+      reference: row.public_reference,
+      status: row.status,
+      actor,
+      // Deliberately no contact e-mail or notes: the point of deleting is
+      // that the customer's data goes away.
+      company: row.company_name,
+    },
+  });
+
+  const { error } = await supabase.from("quote_requests").delete().eq("id", requestId);
+  if (error) throw error;
+
+  logEvent("quote_request_deleted", { requestId, reference: row.public_reference, actor });
+  return { deleted: true, reference: row.public_reference };
 }
 
 /** How many requests still need action — drives the nav badge. */

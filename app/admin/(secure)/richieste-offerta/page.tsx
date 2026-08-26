@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { PageHeading } from "@/components/logistics/AdminShell";
-import { listQuoteRequests } from "@/lib/server/quote-requests";
+import { countQuoteRequestsByGroup, listQuoteRequests } from "@/lib/server/quote-requests";
 import { getBusinessMetrics } from "@/lib/server/quote-metrics";
 import {
   NotificationStatusBadge,
@@ -10,7 +10,9 @@ import { QuoteRequestFilters } from "@/components/quote/QuoteRequestFilters";
 import { DashboardLiveRefresh } from "@/components/logistics/DashboardLiveRefresh";
 import { describeEmailConfig } from "@/lib/email/send-quote-request";
 import { listQuoteRequestsQuerySchema } from "@/lib/validation/quote-request";
-import { DELIVERY_LABELS } from "@/lib/types/quote-request";
+import { DELIVERY_LABELS, type QuoteRequestGroup } from "@/lib/types/quote-request";
+import { QuoteRequestTabs } from "@/components/quote/QuoteRequestTabs";
+import { DeleteQuoteRequestButton } from "@/components/quote/DeleteQuoteRequestButton";
 import { checkQuoteSchema } from "@/lib/server/quote-schema-check";
 import { SchemaStatusPanel } from "@/components/quote/SchemaStatusPanel";
 import { logError } from "@/lib/logger";
@@ -73,11 +75,15 @@ export default async function QuoteRequestsPage({
   // page must still render — it is where the operator comes to find out WHY
   // customers are seeing an error, so it is the last screen allowed to
   // break. `checkQuoteSchema` never throws and explains what is missing.
+  // "Da rispondere" is the default: it is the tab with work in it.
+  const tab: QuoteRequestGroup = filters.tab ?? "to_answer";
+
   const empty = { rows: [], total: 0, page: 1, perPage: 25, pageCount: 1 };
-  const [result, metrics] = await Promise.all([
+  const [result, metrics, tabCounts] = await Promise.all([
     listQuoteRequests({
       page: filters.page ?? 1,
       perPage: filters.perPage ?? 25,
+      group: tab,
       status: filters.status ?? null,
       notification: filters.notification ?? null,
       delivery: filters.delivery ?? null,
@@ -91,6 +97,10 @@ export default async function QuoteRequestsPage({
     getBusinessMetrics("30d").catch((error) => {
       logError("admin_quote_metrics_failed", error);
       return { period: "30d" as const, newRequests: 0, toProcess: 0, offersSent: 0, accepted: 0, rejected: 0 };
+    }),
+    countQuoteRequestsByGroup().catch((error) => {
+      logError("admin_quote_tab_counts_failed", error);
+      return { to_answer: 0, offer_sent: 0, closed: 0 };
     }),
   ]);
 
@@ -154,6 +164,8 @@ export default async function QuoteRequestsPage({
         </div>
       )}
 
+      <QuoteRequestTabs active={tab} counts={tabCounts} />
+
       <QuoteRequestFilters total={total} />
 
       {rows.length === 0 ? (
@@ -161,7 +173,9 @@ export default async function QuoteRequestsPage({
           <p className="text-base font-semibold text-ink">{tr("Nessuna richiesta trovata")}</p>
           <p className="mt-1 text-sm text-ink-soft">
             {total === 0
-              ? tr("Le nuove richieste inviate dal sito appariranno qui.")
+              ? tab === "to_answer"
+                ? tr("Le nuove richieste inviate dal sito appariranno qui.")
+                : tr("Nessuna richiesta in questa scheda.")
               : tr("Nessun risultato per questi filtri. Prova ad azzerarli.")}
           </p>
         </div>
@@ -179,6 +193,9 @@ export default async function QuoteRequestsPage({
                   <th scope="col" className="px-4 py-3 font-semibold">{tr("Consegna")}</th>
                   <th scope="col" className="px-4 py-3 font-semibold">{tr("Stato")}</th>
                   <th scope="col" className="px-4 py-3 font-semibold">{tr("Email")}</th>
+                  <th scope="col" className="px-4 py-3 text-right font-semibold">
+                    <span className="sr-only">{tr("Azioni")}</span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-ink/5">
@@ -224,6 +241,14 @@ export default async function QuoteRequestsPage({
                       <NotificationStatusBadge
                         status={row.notification_status}
                         title={row.last_notification_error}
+                      />
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <DeleteQuoteRequestButton
+                        requestId={row.id}
+                        reference={row.public_reference}
+                        companyName={row.company_name}
+                        variant="row"
                       />
                     </td>
                   </tr>

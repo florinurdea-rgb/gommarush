@@ -327,4 +327,20 @@ export const EN_STRINGS: Record<string, string> = {
     "Authentication via Supabase Auth. The account is created from the Supabase dashboard → Authentication → Users.",
   "L'account si crea dal dashboard Supabase → Authentication → Users, con lo stesso indirizzo email presente nella scheda dell'autista.":
     "The account is created from the Supabase dashboard → Authentication → Users, using the same email address as on the driver's record.",
+
+  // --- tabs and deletion -------------------------------------------------
+  "Da rispondere": "To answer",
+  "Offerta inviata": "Sent offer",
+  "Accettate / Rifiutate": "Accepted / Denied",
+  "Nessuna richiesta in questa scheda.": "No requests in this tab.",
+  "Elimina definitivamente": "Delete permanently",
+  "Eliminare definitivamente questa richiesta?": "Delete this request permanently?",
+  "Vengono eliminati la richiesta, i prodotti richiesti e la cronologia. L'operazione non può essere annullata.":
+    "This deletes the request, the products requested and the history. It cannot be undone.",
+  "Elimina la richiesta, i prodotti richiesti e la cronologia. Non è reversibile.":
+    "Deletes the request, the products requested and the history. This cannot be reversed.",
+  "Eliminazione…": "Deleting…",
+  "Eliminazione non riuscita. Riprova.": "Deletion failed. Please try again.",
+  "Questa richiesta non esiste più.": "This request no longer exists.",
+  "Azioni": "Actions",
 };

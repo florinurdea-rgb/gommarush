@@ -58,6 +58,49 @@ export const NOTIFICATION_STATUSES: readonly NotificationStatus[] = [
   "failed",
 ];
 
+/**
+ * The three working buckets the admin list is split into.
+ *
+ * The nine lifecycle statuses are the record; these are how a salesperson
+ * actually thinks about the pipe — what still needs an answer, what has
+ * gone out and is waiting on the customer, and what is finished. Moving a
+ * request's status therefore moves it between tabs automatically: the tab
+ * is derived from the status, never stored alongside it, so the two can
+ * never disagree.
+ */
+export type QuoteRequestGroup = "to_answer" | "offer_sent" | "closed";
+
+export const QUOTE_GROUPS: readonly QuoteRequestGroup[] = ["to_answer", "offer_sent", "closed"];
+
+export const QUOTE_GROUP_STATUSES: Record<QuoteRequestGroup, readonly QuoteRequestStatus[]> = {
+  // Everything before the offer leaves the building.
+  to_answer: ["submitted", "reviewing", "quote_preparing", "quote_ready"],
+  // Sent, and the ball is in the customer's court.
+  offer_sent: ["sent"],
+  // Finished, one way or another. Expired and archived sit here too: they
+  // are outcomes, not work in progress.
+  closed: ["accepted", "rejected", "expired", "archived"],
+};
+
+export const QUOTE_GROUP_LABELS: Record<QuoteRequestGroup, string> = {
+  to_answer: "Da rispondere",
+  offer_sent: "Offerta inviata",
+  closed: "Accettate / Rifiutate",
+};
+
+export function groupOfStatus(status: QuoteRequestStatus): QuoteRequestGroup {
+  for (const group of QUOTE_GROUPS) {
+    if ((QUOTE_GROUP_STATUSES[group] as readonly string[]).includes(status)) return group;
+  }
+  // Unreachable while the map covers the union, but a new status must not
+  // silently vanish from every tab.
+  return "to_answer";
+}
+
+export function isQuoteGroup(value: unknown): value is QuoteRequestGroup {
+  return typeof value === "string" && (QUOTE_GROUPS as readonly string[]).includes(value);
+}
+
 /** Statuses that still need someone to act. Drives the nav badge. */
 export const OPEN_QUOTE_STATUSES: readonly QuoteRequestStatus[] = [
   "submitted",

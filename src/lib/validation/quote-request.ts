@@ -131,6 +131,8 @@ export const updateQuoteStatusSchema = z
  */
 export const listQuoteRequestsQuerySchema = z
   .object({
+    /** Which tab is open. Derived from status, never stored. */
+    tab: z.enum(["to_answer", "offer_sent", "closed"]).nullish(),
     status: z.enum([
       "submitted",
       "reviewing",
