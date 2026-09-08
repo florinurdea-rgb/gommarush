@@ -19,6 +19,9 @@ export const SUPPORTED_UPLOAD_MIME_TYPES = [
   "image/heif",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
   "application/msword",
+  // Supplier catalogue workbooks (see src/lib/catalogue/). Read server-side
+  // only, by a reader that evaluates nothing — never opened in the browser.
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
 ] as const;
 
 export const SUPPORTED_UPLOAD_EXTENSIONS = [
@@ -30,6 +33,7 @@ export const SUPPORTED_UPLOAD_EXTENSIONS = [
   ".heic",
   ".heif",
   ".docx",
+  ".xlsx",
 ] as const;
 
 export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;

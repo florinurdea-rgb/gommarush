@@ -33,6 +33,7 @@ const SECONDARY_NAV: NavItem[] = [
   { href: QUOTES_HREF, label: "Richieste di offerta" },
   { href: "/admin/customers", label: "Clienti" },
   { href: "/admin/suppliers", label: "Fornitori" },
+  { href: "/admin/catalogue", label: "Catalogo" },
   { href: "/admin/sistema", label: "Sistema" },
 ];
 
