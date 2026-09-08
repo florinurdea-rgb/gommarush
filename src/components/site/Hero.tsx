@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { HeroBackground } from "@/components/HeroBackground";
 import { useLocale } from "@/components/site/LocaleProvider";
+import { TyreFinder } from "@/components/site/TyreFinder";
 
 /**
  * The homepage hero. One dominant CTA ("Richiedi un'offerta") and nothing
@@ -31,12 +32,20 @@ export function Hero() {
           {copy.heroSubtitle}
         </h2>
 
-        <Link
-          href="/richiedi-offerta"
-          className="mt-8 inline-flex min-h-[52px] items-center justify-center rounded-xl bg-accent px-8 text-base font-bold text-white shadow-sm transition-all duration-150 hover:bg-accent-dark active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 sm:text-lg"
-        >
-          {copy.heroCta}
-        </Link>
+        {/* Two actions, not two equals: "Richiedi un'offerta" keeps the
+            solid accent fill, the finder is outlined. Someone who already
+            has a tyre in their hand needs the finder; everyone else needs
+            the quote, and the visual weight says so. */}
+        <div className="mt-8 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+          <Link
+            href="/richiedi-offerta"
+            className="inline-flex min-h-[52px] items-center justify-center rounded-xl bg-accent px-8 text-base font-bold text-white shadow-sm transition-all duration-150 hover:bg-accent-dark active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 sm:text-lg"
+          >
+            {copy.heroCta}
+          </Link>
+
+          <TyreFinder />
+        </div>
       </div>
     </section>
   );

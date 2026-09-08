@@ -101,6 +101,37 @@ export function resetLoginFailures(key: string): void {
   loginFailures.delete(key);
 }
 
-// The public barcode-lookup limiter lived here until the "Cerca cauciuc"
-// feature was removed. It was the only consumer, so both it and its
-// BARCODE_LOOKUP_RATE_LIMIT_* env vars went with it.
+/**
+ * The public tyre-finder limiter.
+ *
+ * A limiter like this existed before, went away with the old AI-backed
+ * "Caută cauciuc" feature (7957484), and is back because the finder is
+ * again a public, unauthenticated endpoint that reaches the database.
+ *
+ * Deliberately far more generous than isRateLimited(): that one guards a
+ * form somebody submits once, while a tyre shop checking a delivery will
+ * legitimately scan a few dozen barcodes in a row. Too tight a limit here
+ * does not stop a scraper — it stops a customer mid-job.
+ */
+const LOOKUP_WINDOW_MS = readPositiveIntEnv("TYRE_LOOKUP_RATE_LIMIT_WINDOW_MINUTES", 5) * 60 * 1000;
+const LOOKUP_MAX_REQUESTS = readPositiveIntEnv("TYRE_LOOKUP_RATE_LIMIT_MAX_REQUESTS", 60);
+
+const lookupHits = new Map<string, number[]>();
+
+export function isTyreLookupRateLimited(key: string): boolean {
+  const now = Date.now();
+
+  if (lookupHits.size >= 500) {
+    for (const [existing, timestamps] of lookupHits) {
+      const recent = timestamps.filter((t) => now - t < LOOKUP_WINDOW_MS);
+      if (recent.length === 0) lookupHits.delete(existing);
+      else lookupHits.set(existing, recent);
+    }
+  }
+
+  const timestamps = (lookupHits.get(key) ?? []).filter((t) => now - t < LOOKUP_WINDOW_MS);
+  timestamps.push(now);
+  lookupHits.set(key, timestamps);
+
+  return timestamps.length > LOOKUP_MAX_REQUESTS;
+}
