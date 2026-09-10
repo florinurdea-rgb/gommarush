@@ -335,10 +335,38 @@ the constraint name matches a document-number index it returns
 - Indexes: `orders_supplier_doc_number_key` (unique), `orders_fingerprint_idx`,
   `orders_source_hash_idx`, `document_charges_order_idx`
 
-`supabase/migrations/20260831000000_ddt_scanner_fixes.sql`:
+`supabase/migrations/20260901000000_document_pipeline_core.sql`:
 
-- `document_charges_order_line_key` unique index on `(order_id, line_number)`,
-  which is what makes charge writes idempotent.
+- `orders` order-type columns; `document_analyses`; `document_extracted_lines`;
+  `document_party_mappings`; `document_import_idempotency`;
+  `order_documents.source_hash` (unique); `document_charges_order_line_key`
+  unique index on `(order_id, line_number)`, which makes charge writes
+  idempotent.
+
+`supabase/migrations/20260902000000_document_analysis_queue.sql`:
+
+- Retry columns on `document_analyses`, plus four functions:
+  `gorush_enqueue_document_analysis` (race-safe file idempotency),
+  `gorush_lease_document_analysis` (`FOR UPDATE SKIP LOCKED`),
+  `gorush_store_document_analysis_result` (atomic result + lines, and it
+  REFUSES a payload whose line count disagrees with its declared total), and
+  `gorush_fail_document_analysis` (bounded backoff; deterministic errors are
+  never retried).
+
+## 8a. Asynchronous processing
+
+`/api/cron/document-analysis` is the worker, scheduled every two minutes by
+`vercel.json` and authorised by `Authorization: Bearer $CRON_SECRET`. With
+`CRON_SECRET` unset the route refuses everything rather than defaulting open.
+It drains at most three jobs per invocation — an unbounded drain would be
+killed mid-job, which is the failure the queue exists to remove.
+
+`/api/admin/ddt-import/status?analysisId=` is what the review UI polls. It
+returns the status and the line tally only, never the raw extraction.
+
+Provider budgets now fit inside the route's: Anthropic 110s, OpenAI 40s, job
+step 150s, lease 300s. The lease deliberately outlives the run, so a killed
+invocation cannot hold a row locked longer than it actually ran.
 
 ## 9. Test coverage
 
