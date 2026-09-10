@@ -17,3 +17,78 @@
     outline-offset: 2px;
   }
 }
+
+@layer components {
+  /* ---------------------------------------------------------------------
+     Brand marquee (src/components/site/BrandMarquee.tsx)
+     ------------------------------------------------------------------ */
+
+  /* Full-bleed out of the centred content column, with the edges faded so
+     logos enter and leave instead of being chopped by the viewport. */
+  .gr-marquee-viewport {
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(
+      90deg,
+      transparent 0,
+      #000 6%,
+      #000 94%,
+      transparent 100%
+    );
+    mask-image: linear-gradient(90deg, transparent 0, #000 6%, #000 94%, transparent 100%);
+  }
+
+  .gr-marquee {
+    display: flex;
+    width: max-content;
+  }
+
+  /* Two identical tracks side by side, each translating by exactly its own
+     width. When the first has fully exited, the second occupies the position
+     the first started from — so the reset is invisible with no JS. */
+  /* Sized purely by its content. An explicit min-width here would pad the
+     track with trailing empty space, which then scrolls past as a gap. */
+  .gr-marquee-track {
+    display: flex;
+    flex: none;
+    align-items: center;
+    animation: gr-marquee-scroll var(--gr-duration, 45s) linear infinite;
+    /* Promotes to its own layer: without this the browser repaints the whole
+       row of images on every frame. */
+    will-change: transform;
+  }
+
+  .gr-marquee-track--reverse {
+    animation-direction: reverse;
+  }
+
+  .gr-marquee:hover .gr-marquee-track {
+    animation-play-state: paused;
+  }
+
+  @keyframes gr-marquee-scroll {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-100%);
+    }
+  }
+
+  /* Motion is decoration here; the brands are the content. With motion
+     reduced the belts stand still and become a normal scrollable strip, so
+     every logo is still reachable. */
+  @media (prefers-reduced-motion: reduce) {
+    .gr-marquee-viewport {
+      overflow-x: auto;
+    }
+
+    .gr-marquee-track {
+      animation: none;
+    }
+
+    /* The duplicate copy is redundant once nothing moves. */
+    .gr-marquee-track[aria-hidden="true"] {
+      display: none;
+    }
+  }
+}
