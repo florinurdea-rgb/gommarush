@@ -51,13 +51,23 @@ export function parseModelJson(text: string): unknown {
   }
 }
 
+/**
+ * Coerces one model line.
+ *
+ * Returns a line even when `rawDescription` is missing. Dropping the whole
+ * object because one field was absent is the first link in the silent-loss
+ * chain the accounting invariant exists to break: the line disappeared here,
+ * so nothing downstream could count it or flag it. `rawDescription` is
+ * therefore nullable, and an unnamed line becomes an UNRESOLVED row that
+ * blocks confirmation rather than a row that never existed.
+ */
 function coerceLine(raw: unknown): ExtractedLine | null {
-  const line = (raw ?? {}) as Record<string, unknown>;
+  if (raw === null || raw === undefined || typeof raw !== "object") return null;
+  const line = raw as Record<string, unknown>;
   const rawDescription = asString(line.rawDescription);
-  if (!rawDescription) return null;
 
   return {
-    rawDescription,
+    rawDescription: rawDescription ?? "",
     itemTypeHint: asItemTypeHint(line.itemTypeHint),
     supplierArticleCode: asString(line.supplierArticleCode),
     manufacturerCode: asString(line.manufacturerCode),
@@ -124,7 +134,10 @@ export function coerceDocument(raw: unknown): ExtractedDocument {
     },
     paymentText: asString(root.paymentText),
     lines: rawLines.map(coerceLine).filter((line): line is ExtractedLine => line !== null),
-    confidence: asNumber(root.confidence) ?? 0.5,
+    // Missing confidence is ZERO, not a middling 0.5. A model that omitted
+    // the field told us nothing, and scoring that as half-certain is how an
+    // unassessed document came to look as trustworthy as a checked one.
+    confidence: asNumber(root.confidence) ?? 0,
     warnings: asStringArray(root.warnings),
   };
 }

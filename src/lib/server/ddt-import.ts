@@ -1,7 +1,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/server-admin";
 import { downloadDocumentBytes, recordUploadedDocument } from "@/lib/server/documents";
-import { findOrCreateSupplier } from "@/lib/server/reference";
+import { findExistingSupplier, findOrCreateSupplier } from "@/lib/server/reference";
 import { matchCustomerFromDocument, resolveCustomerForOrder } from "@/lib/server/customers";
 import type { ResolveCustomerInput } from "@/lib/server/customers";
 import { createOrder } from "@/lib/server/orders";
@@ -182,6 +182,8 @@ export async function analyzeDdtUpload(input: {
   }
 
   const recentFingerprints = await getRecentFingerprints();
+  // Maps a supplier name to its resolved id, or "" for "looked up and not
+  // found" — so a missing supplier is not re-queried once per document.
   const supplierCache = new Map<string, string>();
   // A multi-DDT upload very often has several documents from the same
   // supplier (see this function's own callers) — without this cache,
@@ -192,18 +194,28 @@ export async function analyzeDdtUpload(input: {
   const processed: ProcessedDocumentWithMatch[] = [];
 
   for (const extracted of extraction.documents) {
+    // ANALYZE CREATES NO MASTER DATA.
+    //
+    // This used to call findOrCreateSupplier(), so merely previewing a
+    // document — and then abandoning it — permanently created a supplier row.
+    // That is the origin of the junk and near-duplicate suppliers in
+    // production ("asdas", "Name", FIN TYRE SPA vs FINTYRE SPA). Analysis now
+    // only RESOLVES against existing suppliers; creation is an explicit
+    // operator act at confirm time.
     let supplierId: string | null = null;
     if (extracted.supplier.name) {
       const cacheKey = extracted.supplier.name.trim().toLowerCase();
-      supplierId = supplierCache.get(cacheKey) ?? null;
-      if (!supplierId) {
-        const supplier = await findOrCreateSupplier({
+      if (supplierCache.has(cacheKey)) {
+        supplierId = supplierCache.get(cacheKey) ?? null;
+      } else {
+        const existing = await findExistingSupplier({
           name: extracted.supplier.name,
           vatNumber: extracted.supplier.vatNumber,
         });
-        supplierId = supplier.id;
-        supplierCache.set(cacheKey, supplierId);
+        supplierId = existing?.id ?? null;
+        supplierCache.set(cacheKey, supplierId ?? "");
       }
+      if (supplierId === "") supplierId = null;
     }
 
     let existingOrders: Awaited<ReturnType<typeof getExistingOrderIdentities>> = [];
@@ -293,24 +305,20 @@ export interface ConfirmDdtDocumentResult {
 }
 
 /**
- * Advances a DDT-confirmed order from 'expected' to 'stored' ("De
- * pregătit") — a scanned document should be immediately visible/actionable
- * there instead of sitting in "In attesa merce". Idempotent by design and
- * exported (not inlined in confirmDdtDocument) because the confirm route's
- * retry-recovery path (findExistingOrder in
- * app/api/admin/ddt-import/confirm/route.ts) can return a PREVIOUSLY
- * created order instead of running confirmDdtDocument again — without this
- * being callable from there too, an order whose first confirm attempt
- * created it but failed partway through the status advance (a schema-cache
- * hiccup, a dropped connection, …) would stay stuck at 'expected' forever:
- * every retry would just keep returning the same never-advanced order.
+ * Records the DDT metadata on a confirmed order, WITHOUT advancing its status.
  *
- * Checks the order's CURRENT status first and no-ops if it's already past
- * 'expected' — both so calling this twice is harmless, and so it never
- * rolls a further-progressed order (already 'sorting', 'ready_for_loading',
- * …) backward to 'stored'.
+ * This replaces advanceDdtOrderToStored(), which moved the order
+ * expected -> stored and marked every inventory unit stored, purely because a
+ * document had been read. Reading a PDF is not receiving goods: nobody had
+ * seen, counted or shelved anything, yet the warehouse board showed the stock
+ * as on hand. The order now stays 'expected' and the physical progression
+ * (received -> sorting -> stored -> loaded -> delivered) is driven only by
+ * physical evidence.
+ *
+ * Idempotent: writing the same metadata twice is harmless, so the confirm
+ * route's retry-recovery path can call it on every attempt.
  */
-export async function advanceDdtOrderToStored(input: {
+export async function recordDdtMetadata(input: {
   orderId: string;
   processed: ProcessedDocumentWithMatch;
   ratePerTyre: number;
@@ -321,29 +329,9 @@ export async function advanceDdtOrderToStored(input: {
   const { extracted } = processed;
   const supabase = createSupabaseAdminClient();
 
-  const { data: current, error: currentError } = await supabase
-    .from("orders")
-    .select("status")
-    .eq("id", orderId)
-    .maybeSingle();
-  if (currentError) {
-    logError("ddt_confirm_status_lookup_failed", currentError, { orderId });
-    return;
-  }
-  if (!current || (current as { status: string }).status !== "expected") {
-    // Already advanced (by this same call on an earlier attempt, or by the
-    // real warehouse flow since) — nothing to do.
-    return;
-  }
-
-  const receivedAt = new Date().toISOString();
-
   const { error: updateError } = await supabase
     .from("orders")
     .update({
-      status: "stored",
-      received_at: receivedAt,
-      stored_at: receivedAt,
       normalized_document_number: processed.normalizedDocumentNumber,
       tracking_number: extracted.document.trackingNumber,
       giro: extracted.document.giro,
@@ -358,40 +346,66 @@ export async function advanceDdtOrderToStored(input: {
       fingerprint: processed.fingerprint,
       extraction_confidence: extracted.confidence,
     })
-    .eq("id", orderId)
-    .eq("status", "expected");
+    .eq("id", orderId);
 
   if (isMissingSchemaError(updateError)) {
+    // The DDT-specific columns may genuinely not exist yet if a migration has
+    // not run. That is not a reason to fail the import — the order and its
+    // items are already safely created.
     logError("ddt_import_columns_missing_on_confirm", updateError, { orderId });
-    // The DDT-specific columns above may be genuinely missing, but status/
-    // received_at/stored_at are base columns that have always existed —
-    // still worth trying to advance those on their own so the order isn't
-    // stuck at "In attesa merce" just because a later migration hasn't run.
-    const { error: statusOnlyError } = await supabase
-      .from("orders")
-      .update({ status: "stored", received_at: receivedAt, stored_at: receivedAt })
-      .eq("id", orderId)
-      .eq("status", "expected");
-    if (statusOnlyError) logError("ddt_confirm_status_fallback_failed", statusOnlyError, { orderId });
   } else if (updateError) {
-    logError("ddt_import_order_update_failed", updateError, { orderId });
+    logError("ddt_import_order_metadata_failed", updateError, { orderId });
   }
 
-  const { error: unitsError } = await supabase
-    .from("inventory_units")
-    .update({ status: "stored", received_at: receivedAt, stored_at: receivedAt })
-    .eq("order_id", orderId)
-    .eq("status", "expected");
-  if (unitsError) logError("ddt_confirm_units_update_failed", unitsError, { orderId });
-
+  // An audit line recording that a document produced this order. Status is
+  // deliberately unchanged: expected -> expected, with the note carrying the
+  // reason, so the timeline shows the import without claiming a receipt.
   const { error: historyError } = await supabase.from("order_status_history").insert({
     order_id: orderId,
     old_status: "expected",
-    new_status: "stored",
+    new_status: "expected",
     changed_by_label: changedBy,
-    notes: "ddt_import_received",
+    notes: "ddt_import_document_confirmed",
   });
   if (historyError) logError("ddt_confirm_history_insert_failed", historyError, { orderId });
+}
+
+/**
+ * Writes a document's charge lines. Idempotent by (order_id, line_number),
+ * which is what lets the retry path call it safely.
+ *
+ * Charges used to be inserted after the order transaction with the error only
+ * logged, so an order could exist with its PFU and fee lines silently
+ * missing — the money on the document and the money in the database
+ * disagreeing with nothing to indicate it. Now a failure throws: the order
+ * exists, the operator sees an error, and the retry path re-upserts.
+ */
+export async function writeDocumentCharges(input: {
+  orderId: string;
+  charges: ProcessedDocumentWithMatch["charges"];
+}): Promise<void> {
+  if (input.charges.length === 0) return;
+  const supabase = createSupabaseAdminClient();
+
+  const rows = input.charges.map((charge, index) => ({
+    order_id: input.orderId,
+    charge_type: CHARGE_TYPES.has(charge.lineType) ? charge.lineType : "OTHER_FEE",
+    description: charge.raw.rawDescription,
+    raw_description: charge.raw.rawDescription,
+    quantity: charge.raw.quantity,
+    unit_amount: charge.raw.unitPrice,
+    total_amount: charge.raw.lineTotal,
+    line_number: index + 1,
+  }));
+
+  const { error } = await supabase
+    .from("document_charges")
+    .upsert(rows, { onConflict: "order_id,line_number" });
+
+  if (error) {
+    logError("document_charges_write_failed", error, { orderId: input.orderId });
+    throw error;
+  }
 }
 
 /**
@@ -406,9 +420,27 @@ export async function confirmDdtDocument(input: ConfirmDdtDocumentInput): Promis
   const { processed, changedBy } = input;
   const { extracted } = processed;
 
+  // Supplier creation happens HERE, not during analysis.
+  //
+  // Analysis resolves against existing suppliers only, so a document from an
+  // unknown supplier arrives with supplierId === null. Clicking confirm is
+  // the explicit operator act that authorises creating the master-data row —
+  // which is why an abandoned preview now leaves nothing behind.
+  let supplierId = processed.supplierId;
+  if (!supplierId) {
+    if (!extracted.supplier.name) {
+      throw new Error("SUPPLIER_REQUIRED: the document has no readable supplier name");
+    }
+    const supplier = await findOrCreateSupplier({
+      name: extracted.supplier.name,
+      vatNumber: extracted.supplier.vatNumber,
+    });
+    supplierId = supplier.id;
+  }
+
   const resolvedCustomer = await resolveCustomerForOrder({
     ...input.customerResolution,
-    supplierId: processed.supplierId,
+    supplierId,
     address: {
       recipient_name: extracted.customer.deliveryRecipient,
       address_line1: extracted.customer.addressLine1 ?? "",
@@ -465,7 +497,7 @@ export async function confirmDdtDocument(input: ConfirmDdtDocumentInput): Promis
 
   const created = await createOrder(
     {
-      supplier_id: processed.supplierId ?? undefined,
+      supplier_id: supplierId,
       supplier_document_number: extracted.document.documentNumber,
       supplier_reference: extracted.document.supplierOrderReference,
       supplier_document_date: extracted.document.documentDate,
@@ -491,25 +523,16 @@ export async function confirmDdtDocument(input: ConfirmDdtDocumentInput): Promis
   const ratePerTyre = await getTransportRatePerTyre();
   const transportRevenue = calculateTransportRevenue(processed.tyreCount, ratePerTyre);
 
-  const supabase = createSupabaseAdminClient();
+  await writeDocumentCharges({ orderId: created.orderId, charges: processed.charges });
 
-  if (processed.charges.length > 0) {
-    const { error: chargesError } = await supabase.from("document_charges").insert(
-      processed.charges.map((charge, index) => ({
-        order_id: created.orderId,
-        charge_type: CHARGE_TYPES.has(charge.lineType) ? charge.lineType : "OTHER_FEE",
-        description: charge.raw.rawDescription,
-        raw_description: charge.raw.rawDescription,
-        quantity: charge.raw.quantity,
-        unit_amount: charge.raw.unitPrice,
-        total_amount: charge.raw.lineTotal,
-        line_number: index + 1,
-      }))
-    );
-    if (chargesError) logError("document_charges_insert_failed", chargesError, { orderId: created.orderId });
-  }
-
-  await advanceDdtOrderToStored({
+  // DOCUMENT IMPORT IS NOT PHYSICAL RECEIPT.
+  //
+  // This previously called advanceDdtOrderToStored(), which moved the order
+  // expected -> stored and marked every inventory unit stored, purely because
+  // a PDF had been read. The goods had not been seen, counted or put
+  // anywhere. The order now stays at 'expected' and the warehouse advances it
+  // through received -> sorting -> stored on physical evidence.
+  await recordDdtMetadata({
     orderId: created.orderId,
     processed,
     ratePerTyre,

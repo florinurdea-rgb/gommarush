@@ -261,6 +261,43 @@ export async function removeVehicle(
  * master data, so auto-creating one from a document is safe — unlike customers,
  * where a wrong guess corrupts delivery addresses.
  */
+/**
+ * Resolves a supplier WITHOUT creating one.
+ *
+ * The read-only half of findOrCreateSupplier, extracted because document
+ * ANALYSIS must never write master data: previewing a document and walking
+ * away used to leave a permanent supplier row behind. Analysis calls this;
+ * only an explicit operator confirmation calls findOrCreateSupplier.
+ */
+export async function findExistingSupplier(input: {
+  name: string;
+  vatNumber?: string | null;
+}): Promise<SupplierRow | null> {
+  const supabase = createSupabaseAdminClient();
+  const name = input.name.trim();
+  const vat = input.vatNumber?.replace(/[^A-Za-z0-9]/g, "").toUpperCase() ?? null;
+
+  // VAT first: it is an identity, whereas a name is a label.
+  if (vat && vat.length >= 8) {
+    const { data } = await supabase
+      .from("suppliers")
+      .select("id, name, legal_name, vat_number, fiscal_code, website, email, phone, notes, active")
+      .ilike("vat_number", `%${vat.replace(/^[A-Z]{2}/, "")}%`)
+      .limit(1)
+      .maybeSingle();
+    if (data) return data as unknown as SupplierRow;
+  }
+
+  const { data: byName } = await supabase
+    .from("suppliers")
+    .select("id, name, legal_name, vat_number, fiscal_code, website, email, phone, notes, active")
+    .ilike("name", name)
+    .limit(1)
+    .maybeSingle();
+
+  return (byName as unknown as SupplierRow | null) ?? null;
+}
+
 export async function findOrCreateSupplier(input: {
   name: string;
   vatNumber?: string | null;

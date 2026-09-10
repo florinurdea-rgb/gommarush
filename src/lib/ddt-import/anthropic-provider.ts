@@ -7,7 +7,17 @@ import type { ExtractionResult } from "@/lib/ddt-import/types";
 const API_URL = "https://api.anthropic.com/v1/messages";
 const API_VERSION = "2023-06-01";
 const DEFAULT_MODEL = "claude-sonnet-5";
-const REQUEST_TIMEOUT_MS = 170_000;
+/**
+ * Deliberately BELOW the analyze route's maxDuration (170s).
+ *
+ * These were equal, which meant Vercel killed the function at the same moment
+ * this timeout fired: the provider's own failure never became a recordable
+ * error, so the OpenAI fallback and the text-layer fallback below it never ran
+ * on a slow Anthropic call. The whole fallback chain has to fit inside the
+ * route's budget — 110s here plus 40s for OpenAI leaves ~20s for the text
+ * layer and the response.
+ */
+const REQUEST_TIMEOUT_MS = 110_000;
 
 /** Sends the whole PDF as a native `document` content block — same technique as src/lib/documents/anthropic-analyzer.ts. */
 export async function extractViaAnthropic(

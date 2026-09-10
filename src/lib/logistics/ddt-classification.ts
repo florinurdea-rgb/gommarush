@@ -20,7 +20,10 @@ export const CLASSIFIED_LINE_TYPES = [
   "DISCOUNT",
   "VAT",
   "OTHER_FEE",
-  "TEXT_NOTE",
+  // Note: there is deliberately no TEXT_NOTE member. One was declared here
+  // for a long time and classifyLine() could never return it — dead surface
+  // that made the union look like it covered a case it did not. A genuine
+  // free-text line classifies as UNKNOWN and is reported as unclassified.
   "UNKNOWN",
 ] as const;
 
@@ -57,17 +60,35 @@ const LOGISTICS_FEE_PATTERNS: RegExp[] = [
   /\blogistics?\b/i,
 ];
 
+/**
+ * Transport CHARGES, not products that mention transport.
+ *
+ * A bare /\btrasporto\b/ used to be in this list, which reclassified any
+ * product line whose description happened to contain the word — a tyre
+ * described as "gomma per trasporto leggero" became a transport fee and
+ * vanished from the physical items. Every pattern here now requires the
+ * word to appear in a charge construction ("spese di trasporto", "costo
+ * trasporto"), so a description that merely mentions transport stays a
+ * product.
+ */
 const TRANSPORT_FEE_PATTERNS: RegExp[] = [
   /spese\s+di\s+trasport/i,
-  /\btrasporto\b/i,
-  /\bshipping\b/i,
+  /spes[ea]\s+trasport/i,
+  /cost[oi]\s+(?:di\s+)?trasport/i,
+  /addebito\s+trasport/i,
+  /contributo\s+trasport/i,
+  /\btrasporto\s*:/i,
+  /\bshipping\s*(?:cost|fee|charge)/i,
   /\btransport\s*fee\b/i,
   /spese\s+accessori/i,
 ];
 
 const DISCOUNT_PATTERNS: RegExp[] = [/\bsconto\b/i, /\bdiscount\b/i];
 
-const VAT_PATTERNS: RegExp[] = [/\bIVA\b/, /\bVAT\b/, /\bbolli\b/i];
+// Every pattern in this file is case-insensitive. IVA and VAT were the two
+// exceptions, so a line captioned "iva" or "Iva" fell through to UNKNOWN and
+// was dropped entirely rather than recorded as a tax charge.
+const VAT_PATTERNS: RegExp[] = [/\bIVA\b/i, /\bVAT\b/i, /\bbolli\b/i];
 
 /** Order matters: PFU is checked first so it can never be shadowed by a broader fee pattern. */
 const FEE_RULES: { patterns: RegExp[]; type: ClassifiedLineType }[] = [

@@ -13,7 +13,8 @@ import type { ExtractionResult } from "@/lib/ddt-import/types";
  */
 const API_URL = "https://api.openai.com/v1/responses";
 const DEFAULT_MODEL = "gpt-4.1";
-const REQUEST_TIMEOUT_MS = 60_000;
+/** Second in the chain — see the note in anthropic-provider.ts on the budget. */
+const REQUEST_TIMEOUT_MS = 40_000;
 
 interface OpenAIResponsePayload {
   output_text?: string;
@@ -50,7 +51,10 @@ export async function extractViaOpenAI(
   const model = process.env.OPENAI_MODEL?.trim() || DEFAULT_MODEL;
   const base64 = input.bytes.toString("base64");
   const fileContent = isPdf
-    ? { type: "input_file", filename: input.fileName, file_data: base64 }
+    // file_data must be a DATA URI, not bare base64. It was bare, which the
+    // Responses API rejects — so this provider was almost certainly dead for
+    // PDFs, the exact input it exists to cover as the Anthropic fallback.
+    ? { type: "input_file", filename: input.fileName, file_data: `data:application/pdf;base64,${base64}` }
     : { type: "input_image", image_url: `data:${input.mimeType};base64,${base64}` };
 
   const controller = new AbortController();

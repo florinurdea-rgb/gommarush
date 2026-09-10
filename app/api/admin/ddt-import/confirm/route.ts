@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { locationResolutionSchema } from "@/lib/validation/logistics";
-import { advanceDdtOrderToStored, confirmDdtDocument } from "@/lib/server/ddt-import";
+import { confirmDdtDocument, recordDdtMetadata, writeDocumentCharges } from "@/lib/server/ddt-import";
 import type { ProcessedDocumentWithMatch } from "@/lib/server/ddt-import";
 import type { CustomerInput } from "@/lib/server/customers";
 import { createSupabaseAdminClient } from "@/lib/supabase/server-admin";
@@ -83,14 +83,20 @@ async function findExistingOrder(processed: ProcessedDocumentWithMatch): Promise
  * confirmDdtDocument again) still needs its status advanced if an earlier
  * attempt created it but died before reaching that step — otherwise every
  * retry keeps returning the same order stuck at 'expected' forever, and it
- * never actually shows up in "Da preparare". advanceDdtOrderToStored is a
- * no-op if the order already moved past 'expected', so this is safe to call
- * on every recovery, not just the first.
+ * never receives its DDT metadata or its charge lines. Both calls below are
+ * idempotent, so this is safe on every recovery, not just the first.
+ *
+ * Note the order deliberately stays at 'expected' — see recordDdtMetadata.
  */
 async function recoverExistingOrder(processed: ProcessedDocumentWithMatch, existing: ExistingOrder, changedBy: string) {
   const ratePerTyre = await getTransportRatePerTyre();
   const transportRevenue = calculateTransportRevenue(processed.tyreCount, ratePerTyre);
-  await advanceDdtOrderToStored({ orderId: existing.id, processed, ratePerTyre, transportRevenue, changedBy });
+  // Both are idempotent, so a recovered order gets the metadata and the
+  // charges an interrupted first attempt may never have written. Without the
+  // charge call here, a retry recovered the order but its PFU/fee lines
+  // stayed missing forever.
+  await recordDdtMetadata({ orderId: existing.id, processed, ratePerTyre, transportRevenue, changedBy });
+  await writeDocumentCharges({ orderId: existing.id, charges: processed.charges });
 
   return {
     orderId: existing.id,
