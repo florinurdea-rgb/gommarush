@@ -1,6 +1,7 @@
 import { parseAmount } from "@/lib/documents/pipeline/money";
 import { validateGtin } from "@/lib/catalogue/gtin";
 import {
+  amountForStorage,
   checkAmountConsistency,
   classifyPaymentTerms,
   type PaymentOperationalStatus,
@@ -390,8 +391,30 @@ function validateDelivery(delivery: ExtractedDelivery, index: number): DeliveryV
   // Only a collecting status may carry an amount at all. On a non-collecting
   // document any figure the model returned is discarded here, which is what
   // stops a taxable total (the Zuin 63,74) reaching a driver as a COD.
-  const amountToCollectCents =
-    classification.mustDriverCollect === true ? parsedAmount.cents : classification.status === "UNKNOWN_REVIEW_REQUIRED" ? null : 0;
+  //
+  // Discarding means null, not 0: "the carrier collects nothing because
+  // settlement is by bank draft" and "the carrier collects a zero amount" are
+  // different facts, and only the second one is a collection event.
+  const amountToCollectCents = amountForStorage({
+    status: classification.status,
+    amountToCollectCents: parsedAmount.cents,
+  });
+
+  // Discarding is correct, but it should not be invisible. If the model
+  // supplied a figure on a document where nothing is collected, say so -- on
+  // the Zuin sample that figure is the taxable total, and an operator seeing
+  // "63,74 ignorato" learns something useful about the extraction.
+  if (parsedAmount.cents !== null && amountToCollectCents === null && classification.mustDriverCollect === false) {
+    issues.push(
+      issue(
+        "WARNING",
+        "COLLECTION_AMOUNT_DISCARDED",
+        `Importo ${parsedAmount.raw ?? parsedAmount.cents} ignorato: il documento non prevede incasso alla consegna.`,
+        path("payment.amountToCollect"),
+        index
+      )
+    );
+  }
 
   for (const consistency of checkAmountConsistency({
     status: resolvedPaymentStatus,

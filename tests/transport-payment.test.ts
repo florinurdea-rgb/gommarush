@@ -23,9 +23,17 @@ describe("classifyPaymentTerms - the Zuin acceptance case", () => {
     expect(result.evidence).toBe("RIBA 30 gg FM");
   });
 
-  it("stores exactly zero for the Zuin case, never null", () => {
+  it("stores null for the Zuin case, because collection does not apply", () => {
+    // Not 0: a zero would assert a zero-value collection event. Nothing is
+    // collected here at all -- settlement is by bank draft weeks later.
     const { status } = classifyPaymentTerms("RIBA 30 gg FM");
-    expect(amountForStorage({ status, amountToCollectCents: null })).toBe(0);
+    expect(amountForStorage({ status, amountToCollectCents: null })).toBeNull();
+  });
+
+  it("discards a document total rather than storing it", () => {
+    const { status } = classifyPaymentTerms("RIBA 30 gg FM");
+    // 63,74 is the taxable total on the real document.
+    expect(amountForStorage({ status, amountToCollectCents: 6374 })).toBeNull();
   });
 
   it("does not claim the invoice is paid", () => {
@@ -155,7 +163,7 @@ describe("checkAmountConsistency", () => {
     expect(checkAmountConsistency({ status: "COLLECT_CASH", amountToCollectCents: 6374 })).toEqual([]);
   });
 
-  it("blocks a non-zero amount when nothing is collected", () => {
+  it("blocks any amount when nothing is collected", () => {
     // This is the Zuin failure mode: 63,74 leaking in as a COD amount.
     const issues = checkAmountConsistency({
       status: "NO_COLLECTION_REQUIRED",
@@ -164,9 +172,17 @@ describe("checkAmountConsistency", () => {
     expect(issues.map((i) => i.code)).toContain("NO_COLLECTION_BUT_AMOUNT_SET");
   });
 
-  it("accepts zero when nothing is collected", () => {
-    expect(checkAmountConsistency({ status: "NO_COLLECTION_REQUIRED", amountToCollectCents: 0 })).toEqual([]);
-    expect(checkAmountConsistency({ status: "ALREADY_PAID_EXPLICIT", amountToCollectCents: 0 })).toEqual([]);
+  it("rejects zero when nothing is collected, because zero means a real zero collection", () => {
+    // 0 and null carry different claims. 0 asserts "we collected nothing on a
+    // collection that applied"; null says collection never applied.
+    expect(
+      checkAmountConsistency({ status: "NO_COLLECTION_REQUIRED", amountToCollectCents: 0 }).map((i) => i.code)
+    ).toContain("NO_COLLECTION_BUT_AMOUNT_SET");
+  });
+
+  it("accepts null when nothing is collected", () => {
+    expect(checkAmountConsistency({ status: "NO_COLLECTION_REQUIRED", amountToCollectCents: null })).toEqual([]);
+    expect(checkAmountConsistency({ status: "ALREADY_PAID_EXPLICIT", amountToCollectCents: null })).toEqual([]);
   });
 
   it("always blocks while the status is unresolved", () => {

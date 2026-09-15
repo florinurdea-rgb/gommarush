@@ -27,13 +27,18 @@ import { PROMPT_VERSION, TRANSPORT_EXTRACTION_SYSTEM_PROMPT, buildUserInstructio
 /**
  * Model ids come from the environment with these as defaults.
  *
- * They are configurable deliberately: they were supplied to this project
- * without being verifiable against OpenAI's own documentation (which is
- * unreachable from the build environment), so if the API rejects one it is a
- * Vercel configuration change rather than a code change and a redeploy.
+ * These two are long-established and safe to default to. The previously
+ * configured gpt-5.6-* ids were withdrawn because they could not be proven to
+ * exist: they came from third-party aggregator pages that also listed several
+ * mutually contradictory names, and OpenAI's own documentation is unreachable
+ * from this environment. Nothing here may default to an unverified id.
+ *
+ * Both stay overridable so a newer, cheaper model can be adopted by changing
+ * a Vercel variable -- but only after verifyModelAvailability() confirms the
+ * configured key can actually reach it.
  */
-const DEFAULT_PRIMARY_MODEL = "gpt-5.6-luna";
-const DEFAULT_ESCALATION_MODEL = "gpt-5.6-terra";
+const DEFAULT_PRIMARY_MODEL = "gpt-4.1-mini";
+const DEFAULT_ESCALATION_MODEL = "gpt-4.1";
 
 /** Below the route's own budget, so a timeout here still leaves time to respond. */
 const REQUEST_TIMEOUT_MS = 90_000;

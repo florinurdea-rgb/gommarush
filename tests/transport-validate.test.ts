@@ -208,9 +208,10 @@ describe("validateExtraction - Zuin acceptance case", () => {
     expect(result.totalTyres).toBe(1);
   });
 
-  it("resolves payment to no-collection with a zero amount", () => {
+  it("resolves payment to no-collection with a null amount", () => {
     expect(result.deliveries[0].resolvedPaymentStatus).toBe("NO_COLLECTION_REQUIRED");
-    expect(result.deliveries[0].amountToCollectCents).toBe(0);
+    // null, not 0: collection does not apply to this document at all.
+    expect(result.deliveries[0].amountToCollectCents).toBeNull();
   });
 
   it("raises no blocking issues", () => {
@@ -235,8 +236,10 @@ describe("validateExtraction - Zuin acceptance case", () => {
         deliveries: [zuinDelivery({ payment: { amountToCollect: 63.74 } as never })],
       })
     );
-    expect(contaminated.deliveries[0].amountToCollectCents).toBe(0);
+    expect(contaminated.deliveries[0].amountToCollectCents).toBeNull();
     expect(contaminated.deliveries[0].canConfirm).toBe(true);
+    // Discarded, but visibly so.
+    expect(codesOf(contaminated.deliveries[0].issues)).toContain("COLLECTION_AMOUNT_DISCARDED");
   });
 });
 
@@ -392,7 +395,7 @@ describe("validateExtraction - warnings that do not block", () => {
     expect(codesOf(result.deliveries[0].issues)).toContain("PAYMENT_STATUS_DISAGREEMENT");
     // The document wins.
     expect(result.deliveries[0].resolvedPaymentStatus).toBe("NO_COLLECTION_REQUIRED");
-    expect(result.deliveries[0].amountToCollectCents).toBe(0);
+    expect(result.deliveries[0].amountToCollectCents).toBeNull();
   });
 
   it("warns on an invalid recipient VAT without blocking the delivery", () => {

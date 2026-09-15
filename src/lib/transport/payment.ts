@@ -231,10 +231,18 @@ export interface AmountConsistencyIssue {
 /**
  * Enforces the amount/status consistency rules.
  *
- * `amountToCollectCents` is integer cents. A null means "the document did not
- * state an amount", which is NOT the same as zero -- on a COD document a
- * missing amount is a blocking problem, because the driver would have to
- * invent the figure at the customer's counter.
+ * `amountToCollectCents` is integer cents, and THREE states are distinct:
+ *
+ *   a number > 0  -- collect exactly this
+ *   0             -- a known, deliberate zero collection
+ *   null          -- collection is not applicable, or not specified
+ *
+ * Keeping 0 and null apart is what makes the data honest. "The carrier
+ * collects nothing because settlement is by bank draft" is not the same fact
+ * as "the carrier collects a zero amount", and storing the first as 0 would
+ * assert a collection event that never existed. On a COD document a null is a
+ * blocking problem, because the driver would otherwise have to invent the
+ * figure at the customer's counter.
  */
 export function checkAmountConsistency(input: {
   status: PaymentOperationalStatus;
@@ -266,11 +274,13 @@ export function checkAmountConsistency(input: {
     return issues;
   }
 
-  // NO_COLLECTION_REQUIRED or ALREADY_PAID_EXPLICIT: the amount must be zero.
-  if (amountToCollectCents !== null && amountToCollectCents !== 0) {
+  // NO_COLLECTION_REQUIRED or ALREADY_PAID_EXPLICIT: collection does not
+  // apply, so the amount must be null. A 0 here would claim a zero-value
+  // collection took place, which is a different and untrue statement.
+  if (amountToCollectCents !== null) {
     issues.push({
       code: "NO_COLLECTION_BUT_AMOUNT_SET",
-      message: "Nessun incasso previsto: l'importo da riscuotere deve essere zero.",
+      message: "Nessun incasso previsto: l'importo da riscuotere deve restare vuoto.",
     });
   }
 
@@ -279,14 +289,15 @@ export function checkAmountConsistency(input: {
 
 /**
  * Normalises the amount for storage once the status is settled.
- * Non-collecting statuses store exactly 0, never null, so a driver screen can
- * never render an ambiguous blank where money is concerned.
+ *
+ * Only a collecting status carries a figure. Everything else stores null,
+ * which is why a document total like "TOTALE IMPONIBILE 63,74" cannot survive
+ * into a driver's collection instruction: on a non-collecting document the
+ * value is discarded here regardless of what the model returned.
  */
 export function amountForStorage(input: {
   status: PaymentOperationalStatus;
   amountToCollectCents: number | null;
 }): number | null {
-  if (requiresDriverCollection(input.status)) return input.amountToCollectCents;
-  if (input.status === "UNKNOWN_REVIEW_REQUIRED") return null;
-  return 0;
+  return requiresDriverCollection(input.status) ? input.amountToCollectCents : null;
 }
