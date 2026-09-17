@@ -4,26 +4,41 @@ import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { HamburgerMenu } from "@/components/site/HamburgerMenu";
 import { useLocale } from "@/components/site/LocaleProvider";
+import { BUTTON_STYLES } from "@/components/site/Section";
+import { ROUTES, REGISTER_HREF } from "@/lib/site-routes";
 
 /**
- * The public header: logo on the left, hamburger on the right, nothing else.
- * Used on every public page so navigation is identical everywhere.
+ * The public header: logo, marketing navigation, the primary CTA, and the
+ * hamburger.
  *
- * `showBack` adds a back control for sub-pages (the quote form), keeping the
- * logo as a permanent route home from anywhere.
+ * The hamburger is rendered at EVERY breakpoint, not just on mobile. It is the
+ * only route to the admin dashboard, the driver area and the language switch,
+ * and hiding it behind a media query on desktop would make three working
+ * operational entry points unreachable for the audience most likely to use
+ * them. The marketing nav sits alongside it from `lg` rather than replacing it.
+ *
+ * `showBack` is preserved from the previous header for sub-pages such as the
+ * quote form.
  */
 export function GlobalHeader({ showBack = false }: { showBack?: boolean }) {
   const { copy } = useLocale();
 
+  const nav = [
+    { href: ROUTES.tyres, label: copy.navTyres },
+    { href: ROUTES.howItWorks, label: copy.navHowItWorks },
+    { href: ROUTES.why, label: copy.navWhy },
+    { href: ROUTES.suppliers, label: copy.navSuppliers },
+  ];
+
   return (
-    <header className="border-b border-ink/10 bg-white">
-      <div className="mx-auto flex w-full max-w-content items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
+    <header className="sticky top-0 z-40 border-b border-steel-soft bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
+      <div className="mx-auto flex w-full max-w-shell items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8 lg:py-4">
         <div className="flex min-w-0 items-center gap-2 sm:gap-4">
           {showBack && (
             <Link
-              href="/"
+              href={ROUTES.home}
               aria-label={copy.back}
-              className="inline-flex h-11 w-11 flex-none items-center justify-center rounded-lg border border-ink/15 text-ink-soft transition-colors hover:border-accent hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+              className="inline-flex h-11 w-11 flex-none items-center justify-center rounded-lg border border-steel text-ink-soft transition-colors hover:border-accent hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
             >
               <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4" fill="none">
                 <path
@@ -39,18 +54,40 @@ export function GlobalHeader({ showBack = false }: { showBack?: boolean }) {
 
           {/* The logo is always a link home, on every page. */}
           <Link
-            href="/"
+            href={ROUTES.home}
             aria-label={copy.siteName}
             className="min-w-0 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
           >
-            <Logo
-              iconClassName="h-10 w-10 sm:h-12 sm:w-12"
-              textClassName="text-xl sm:text-2xl"
-            />
+            <Logo iconClassName="h-9 w-9 sm:h-11 sm:w-11" textClassName="text-lg sm:text-xl" />
           </Link>
         </div>
 
-        <HamburgerMenu />
+        {/* Marketing navigation, desktop only. Additive: the same destinations
+            plus the operational ones stay in the hamburger. */}
+        <nav aria-label={copy.footerNavTitle} className="hidden lg:block">
+          <ul className="flex items-center gap-1">
+            {nav.map((item) => (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  className="inline-flex min-h-[40px] items-center rounded-lg px-3 text-[14.5px] font-semibold text-ink-soft transition-colors hover:bg-surface-soft hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+                >
+                  {item.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        <div className="flex flex-none items-center gap-2 sm:gap-3">
+          <Link
+            href={REGISTER_HREF}
+            className={`${BUTTON_STYLES.primary} hidden !min-h-[40px] !px-4 !text-[14.5px] sm:inline-flex`}
+          >
+            {copy.ctaRegister}
+          </Link>
+          <HamburgerMenu />
+        </div>
       </div>
     </header>
   );

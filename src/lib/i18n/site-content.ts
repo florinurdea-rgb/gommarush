@@ -196,6 +196,7 @@ const it = {
   homeHeroLede: "Prezzi competitivi. Ordini semplici. Consegne affidabili.",
   homeHeroBody:
     "GommaRush aiuta gommisti e officine a trovare e ordinare pneumatici senza perdere tempo fra pi\u00f9 fornitori. Assistenza rapida e tempi di consegna chiari, comunicati prima di ordinare.",
+  heroImageAlt: "Furgoni GommaRush pronti per le consegne di pneumatici",
   heroStatusLabel: "Ordine confermato",
   heroStatusValue: "Consegna prevista: 48 ore",
 
@@ -519,6 +520,7 @@ const en: SiteCopy = {
   homeHeroLede: "Competitive prices. Simple ordering. Dependable delivery.",
   homeHeroBody:
     "GommaRush helps tyre shops and garages find and order tyres without working through several suppliers. Responsive support, and delivery times made clear before you order.",
+  heroImageAlt: "GommaRush vans ready for tyre deliveries",
   heroStatusLabel: "Order confirmed",
   heroStatusValue: "Expected delivery: 48 hours",
 

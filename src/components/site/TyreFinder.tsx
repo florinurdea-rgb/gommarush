@@ -46,7 +46,7 @@ type State =
   | { kind: "invalid" }
   | { kind: "error"; message: string };
 
-export function TyreFinder() {
+export function TyreFinder({ triggerClassName }: { triggerClassName?: string } = {}) {
   const { copy } = useLocale();
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState("");
@@ -149,7 +149,10 @@ export function TyreFinder() {
         ref={openerRef}
         type="button"
         onClick={() => setOpen(true)}
-        className="mt-4 inline-flex min-h-[52px] items-center justify-center gap-2 rounded-xl border-2 border-ink/15 bg-white/90 px-7 text-base font-bold text-ink shadow-sm backdrop-blur transition-all duration-150 hover:border-accent hover:text-accent active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 sm:mt-0 sm:text-lg"
+        className={
+          triggerClassName ??
+          "mt-4 inline-flex min-h-[52px] items-center justify-center gap-2 rounded-xl border-2 border-ink/15 bg-white/90 px-7 text-base font-bold text-ink shadow-sm backdrop-blur transition-all duration-150 hover:border-accent hover:text-accent active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 sm:mt-0 sm:text-lg"
+        }
       >
         <SearchIcon />
         {copy.finderCta}
