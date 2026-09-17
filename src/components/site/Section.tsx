@@ -19,10 +19,14 @@ export type SectionTone = "white" | "soft" | "ink";
 
 const TONE_CLASS: Record<SectionTone, string> = {
   white: "bg-white",
-  soft: "bg-surface-soft",
+  // Gradient rather than flat: these are the two largest uninterrupted areas
+  // on the page, and a ~2% luminance drift is the difference between a
+  // section that has air in it and one that reads as a printed band. The
+  // gradients themselves live in tailwind.config.js.
+  soft: "bg-gr-soft",
   // Inverted band, used sparingly -- the final conversion block and the
   // supplier hero. More than twice on a page and it stops carrying weight.
-  ink: "bg-ink text-white",
+  ink: "bg-gr-ink text-white",
 };
 
 interface SectionProps {
@@ -58,8 +62,16 @@ export function Section({
     <Tag
       id={id}
       aria-labelledby={ariaLabelledBy}
-      className={`${TONE_CLASS[tone]} ${bordered ? "border-t border-steel-soft" : ""} ${className}`}
+      className={`relative ${TONE_CLASS[tone]} ${className}`}
     >
+      {/*
+        A hairline that fades at both ends rather than a full-bleed border
+        butting into the viewport edge. Drawn as an element because a
+        border-image gradient cannot be expressed as a Tailwind border.
+      */}
+      {bordered && (
+        <div aria-hidden="true" className="absolute inset-x-0 top-0 h-px bg-gr-rule" />
+      )}
       <div
         className={`mx-auto w-full max-w-shell px-4 sm:px-6 lg:px-8 ${
           compact ? "py-10 sm:py-12" : "py-16 sm:py-20 lg:py-24"
@@ -145,11 +157,16 @@ export function SectionHeading({
  * minimum touch target then hold everywhere by construction rather than by
  * each caller remembering.
  */
+// `transition-colors` covers colour, background-colour and border-colour but
+// NOT box-shadow, so the primary CTA's hover lift would snap. Listed
+// explicitly instead. (A background-image swap is discrete and cannot be
+// transitioned at all -- that is why the two accent gradients are only one
+// shade apart: the change has to be imperceptible, not animated.)
 const BUTTON_BASE =
-  "inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-5 text-[15px] font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2";
+  "inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-5 text-[15px] font-bold transition-[color,background-color,border-color,box-shadow] duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2";
 
 export const BUTTON_STYLES = {
-  primary: `${BUTTON_BASE} bg-accent text-white hover:bg-accent-dark focus-visible:ring-accent`,
+  primary: `${BUTTON_BASE} bg-gr-accent text-white shadow-cta hover:bg-gr-accent-hover hover:shadow-ctaHover focus-visible:ring-accent`,
   secondary: `${BUTTON_BASE} border border-steel text-ink hover:border-accent hover:text-accent focus-visible:ring-accent`,
   onInk: `${BUTTON_BASE} bg-white text-ink hover:bg-accent-light focus-visible:ring-white focus-visible:ring-offset-ink`,
   ghostOnInk: `${BUTTON_BASE} border border-white/30 text-white hover:border-white hover:bg-white/10 focus-visible:ring-white focus-visible:ring-offset-ink`,

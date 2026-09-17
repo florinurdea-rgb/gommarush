@@ -35,7 +35,11 @@ export function Hero() {
   const { copy } = useLocale();
 
   return (
-    <Section>
+    // The hero keeps its white ground and adds the faint accent wash on top:
+    // `bg-white` sets the colour, `bg-gr-hero` the image, so they compose
+    // rather than compete. At ~5% peak opacity in the top-right corner it is
+    // not read as a colour, it just stops that corner being dead white.
+    <Section className="bg-gr-hero">
       <div className="grid items-center gap-10 lg:grid-cols-[1.05fr_1fr] lg:gap-14">
         <div>
           <h1 className="text-balance text-4xl font-extrabold leading-[1.05] tracking-[-0.025em] text-ink sm:text-5xl lg:text-[3.5rem]">
