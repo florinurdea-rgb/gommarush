@@ -34,6 +34,15 @@ module.exports = {
           neutral: "#475569",
           "neutral-soft": "#F1F5F9",
         },
+        // The metallic edge of the shield in the logo. The palette had navy,
+        // road-blue and white but no cool grey, so marketing borders and muted
+        // marks were borrowing ink at low opacity -- legible, but never
+        // deliberate. These two are the only additions to the brand colours;
+        // everything else above is untouched.
+        steel: {
+          DEFAULT: "#8C98A8",
+          soft: "#E3E8EF",
+        },
       },
       fontFamily: {
         sans: [
@@ -51,8 +60,14 @@ module.exports = {
         modal: "0 20px 60px rgba(21, 34, 56, 0.25)",
       },
       maxWidth: {
+        // 900px, unchanged: the quote form and the public order views are
+        // reading-width pages and must not get wider.
         content: "900px",
         admin: "1400px",
+        // The marketing surface needs room for a four-step horizontal journey
+        // and a four-up value strip. Added rather than widening `content`, so
+        // no existing page shifts.
+        shell: "1200px",
       },
     },
   },

@@ -179,6 +179,171 @@ const it = {
   failTitle: "Non siamo riusciti a inviare la richiesta.",
   failBody: "Riprova tra qualche istante. I dati che hai inserito sono stati conservati.",
   retry: "Riprova",
+
+  // --- nav / CTA (redesign) ---------------------------------------------
+  navTyres: "Pneumatici",
+  navHowItWorks: "Come funziona",
+  navWhy: "Perch\u00e9 GommaRush",
+  navSuppliers: "Per fornitori",
+  navClientArea: "Area clienti",
+  ctaRegister: "Registrati",
+  ctaRegisterFree: "Registrati gratuitamente",
+  ctaDiscoverHow: "Scopri come funziona",
+  ctaTalk: "Parliamo",
+
+  // --- homepage hero (redesign) ----------------------------------------
+  homeHeroTitle: "Pneumatici senza complicazioni.",
+  homeHeroLede: "Prezzi competitivi. Ordini semplici. Consegne affidabili.",
+  homeHeroBody:
+    "GommaRush aiuta gommisti e officine a trovare e ordinare pneumatici senza perdere tempo fra pi\u00f9 fornitori. Assistenza rapida e tempi di consegna chiari, comunicati prima di ordinare.",
+  heroStatusLabel: "Ordine confermato",
+  heroStatusValue: "Consegna prevista: 48 ore",
+
+  // --- value strip -------------------------------------------------------
+  valueStripTitle: "In sintesi",
+  value48Title: "48 ore",
+  value48Body: "Consegna rapida",
+  value7Title: "7 giorni",
+  value7Body: "Pi\u00f9 possibilit\u00e0",
+  valuePriceTitle: "Prezzi B2B",
+  valuePriceBody: "Competitivi",
+  valueSupportTitle: "Supporto",
+  valueSupportBody: "Rapido e umano",
+
+  // --- ordering simplicity ----------------------------------------------
+  simpleEyebrow: "Semplice",
+  simpleTitle: "Ordinare pneumatici dovrebbe essere semplice.",
+  simpleLede:
+    "Meno telefonate per capire chi ha cosa, meno tempo davanti a listini diversi. Il tempo che recuperi lo dedichi ai tuoi clienti.",
+  step1Label: "Trova",
+  step1Body: "Cerchi la misura che ti serve.",
+  step2Label: "Scegli",
+  step2Body: "Vedi prezzo e disponibilit\u00e0.",
+  step3Label: "Ordina",
+  step3Body: "Confermi in pochi passaggi.",
+  step4Label: "Ricevi",
+  step4Body: "Consegna affidabile alla tua attivit\u00e0.",
+
+  // --- conceptual product visual ----------------------------------------
+  mockupSizeLabel: "Misura",
+  mockupResultsLabel: "Disponibilit\u00e0",
+  mockupOrderCta: "Ordina",
+  mockupDisclaimer:
+    "Esempio illustrativo. Prezzi e disponibilit\u00e0 effettivi sono visibili dopo la registrazione.",
+
+  // --- sourcing proposition ---------------------------------------------
+  sourcingEyebrow: "Disponibilit\u00e0",
+  sourcingTitle: "Pi\u00f9 possibilit\u00e0. Meno ricerche.",
+  sourcingBody:
+    "Lavoriamo con pi\u00f9 fonti di fornitura, cos\u00ec non devi controllarle una per una. Tu chiedi una misura: a cercarla ci pensiamo noi.",
+  sourcingFlowSuppliers: "Pi\u00f9 fornitori",
+  sourcingFlowUs: "GommaRush",
+  sourcingFlowYou: "La tua attivit\u00e0",
+  sourcingNote:
+    "Non promettiamo di avere sempre il prezzo pi\u00f9 basso del mercato: promettiamo di dirti subito e con chiarezza che cosa possiamo darti e quando.",
+
+  // --- delivery certainty ------------------------------------------------
+  deliveryEyebrow: "Consegne",
+  deliveryTitle: "Sai quanto costa. Sai quando arriva.",
+  deliveryBody:
+    "Il tempo di consegna \u00e8 indicato sull\u2019offerta, prima di confermare l\u2019ordine. Senza stime vaghe e senza richiamare per sapere dove sono i tuoi pneumatici.",
+  delivery48Title: "48 ore",
+  delivery48Body: "Consegna rapida sulle misure pi\u00f9 richieste.",
+  delivery7Title: "7 giorni",
+  delivery7Body: "Pi\u00f9 possibilit\u00e0 di scelta, con una data chiara.",
+  deliveryFlowSupply: "Fornitura",
+  deliveryFlowDepot: "Deposito GommaRush",
+  deliveryFlowShop: "Gommista",
+
+  // --- human support -----------------------------------------------------
+  supportEyebrow: "Assistenza",
+  supportTitle: "Tecnologia quando vuoi velocit\u00e0. Persone quando hai bisogno di aiuto.",
+  supportBody:
+    "Per un ordine di routine non serve parlare con nessuno. Quando invece qualcosa non torna, risponde una persona che conosce il tuo lavoro e la tua zona.",
+  supportPointMessage: "Scrivici e ti rispondiamo.",
+  supportPointPhone: "Al telefono, quando serve davvero.",
+  supportPointPerson: "Sempre la stessa squadra, non un call center.",
+
+  // --- why pillars -------------------------------------------------------
+  pillarsEyebrow: "Perch\u00e9 GommaRush",
+  pillarsTitle: "Un solo partner. Pi\u00f9 disponibilit\u00e0.",
+  pillarSimpleTitle: "Ordini semplici",
+  pillarSimpleBody: "Trovi, scegli e confermi senza passaggi inutili.",
+  pillarPriceTitle: "Prezzi competitivi",
+  pillarPriceBody: "Condizioni pensate per chi lavora nel settore.",
+  pillarAvailabilityTitle: "Pi\u00f9 disponibilit\u00e0",
+  pillarAvailabilityBody: "Pi\u00f9 fonti di fornitura, una sola richiesta.",
+  pillarDeliveryTitle: "Consegne chiare",
+  pillarDeliveryBody: "48 ore o 7 giorni, detto prima di ordinare.",
+  pillarSupportTitle: "Supporto rapido",
+  pillarSupportBody: "Persone raggiungibili quando serve.",
+  pillarPartnerTitle: "Partner affidabile",
+  pillarPartnerBody: "Logistica nostra, dal deposito alla tua porta.",
+
+  // --- final conversion --------------------------------------------------
+  finalTitle: "Meno tempo a cercare pneumatici.",
+  finalTitleSecond: "Pi\u00f9 tempo per i tuoi clienti.",
+  finalBody:
+    "Registrati per vedere prezzi e disponibilit\u00e0 dedicati alla tua attivit\u00e0.",
+
+  // --- registration (interim) -------------------------------------------
+  registerPageTitle: "Registrazione in arrivo",
+  registerPageLede:
+    "Stiamo completando l\u2019area riservata ai clienti professionali. Nel frattempo puoi richiedere un\u2019offerta: ti rispondiamo con prezzi e tempi di consegna.",
+  registerPageQuoteHint: "Il modo pi\u00f9 rapido per iniziare oggi",
+
+  // --- come funziona page ------------------------------------------------
+  howPageTitle: "Come funziona",
+  howPageLede:
+    "Dalla registrazione alla consegna, senza passaggi che ti fanno perdere tempo.",
+  howStepRegisterLabel: "Registrati",
+  howStepRegisterBody: "Apri l\u2019account della tua attivit\u00e0.",
+  howClosing: "Il risultato: meno lavoro nella tua giornata.",
+
+  // --- perche page -------------------------------------------------------
+  whyPageTitle: "Perch\u00e9 GommaRush",
+  whyPageLede:
+    "Non siamo il distributore pi\u00f9 grande d\u2019Italia. Siamo quello con cui \u00e8 pi\u00f9 semplice lavorare.",
+  whyPageOrderingTitle: "Ordinare senza attriti",
+  whyPageOrderingBody:
+    "Una misura, una richiesta, una risposta. Niente giri di telefonate per scoprire chi ha quel pneumatico in magazzino.",
+  whyPagePriceTitle: "Prezzi da professionista",
+  whyPagePriceBody:
+    "Condizioni B2B costruite sul lavoro reale di un gommista, con margini che restano sostenibili per entrambi.",
+  whyPageSourcingTitle: "Pi\u00f9 fonti, una sola richiesta",
+  whyPageSourcingBody:
+    "Controlliamo noi le disponibilit\u00e0. Se una misura non c\u2019\u00e8 da una parte, la cerchiamo dall\u2019altra.",
+  whyPageDeliveryTitle: "Tempi dichiarati, non stimati",
+  whyPageDeliveryBody:
+    "48 ore o 7 giorni, indicato sull\u2019offerta. Sai quando pianificare l\u2019appuntamento con il tuo cliente.",
+  whyPageSupportTitle: "Persone, non ticket",
+  whyPageSupportBody:
+    "Quando chiami risponde chi conosce la tua zona e i tuoi ordini precedenti.",
+  whyPageLogisticsTitle: "Logistica nostra",
+  whyPageLogisticsBody:
+    "Deposito e mezzi sono nostri: l\u2019ultimo chilometro non lo subappaltiamo a nessuno.",
+
+  // --- supplier page -----------------------------------------------------
+  supPageTitle: "Hai pneumatici da consegnare?",
+  supPageLede: "Pensiamo noi all\u2019ultimo miglio.",
+  supPageBody:
+    "Ritiriamo dal tuo deposito o riceviamo la merce nel nostro, smistiamo e consegniamo al tuo cliente finale. Tu mantieni il rapporto commerciale, noi ci occupiamo del trasporto.",
+  supFlowSupplier: "Fornitore",
+  supFlowUs: "GommaRush",
+  supFlowCustomer: "Cliente finale",
+  supPointHandlingTitle: "Merce trattata con cura",
+  supPointHandlingBody: "Carico, smistamento e consegna gestiti da personale nostro.",
+  supPointDepotTitle: "Deposito e smistamento",
+  supPointDepotBody: "Riceviamo, controlliamo le quantit\u00e0 e prepariamo il giro.",
+  supPointLastMileTitle: "Ultimo miglio affidabile",
+  supPointLastMileBody: "Consegne tracciate, con prova di consegna al destinatario.",
+
+  // --- footer ------------------------------------------------------------
+  footerTagline: "Il modo pi\u00f9 semplice per acquistare pneumatici.",
+  footerNavTitle: "Navigazione",
+  footerCompanyTitle: "Azienda",
+  footerAccessTitle: "Accessi",
+  footerRights: "Tutti i diritti riservati.",
 } as const;
 
 export type SiteCopyKey = keyof typeof it;
@@ -337,6 +502,169 @@ const en: SiteCopy = {
   failTitle: "We couldn't send your request.",
   failBody: "Please try again in a moment. Everything you entered has been kept.",
   retry: "Try again",
+
+  // --- nav / CTA (redesign) ---------------------------------------------
+  navTyres: "Tyres",
+  navHowItWorks: "How it works",
+  navWhy: "Why GommaRush",
+  navSuppliers: "For suppliers",
+  navClientArea: "Client area",
+  ctaRegister: "Sign up",
+  ctaRegisterFree: "Sign up for free",
+  ctaDiscoverHow: "See how it works",
+  ctaTalk: "Let\u2019s talk",
+
+  // --- homepage hero (redesign) ----------------------------------------
+  homeHeroTitle: "Tyres, without the hassle.",
+  homeHeroLede: "Competitive prices. Simple ordering. Dependable delivery.",
+  homeHeroBody:
+    "GommaRush helps tyre shops and garages find and order tyres without working through several suppliers. Responsive support, and delivery times made clear before you order.",
+  heroStatusLabel: "Order confirmed",
+  heroStatusValue: "Expected delivery: 48 hours",
+
+  // --- value strip -------------------------------------------------------
+  valueStripTitle: "At a glance",
+  value48Title: "48 hours",
+  value48Body: "Fast delivery",
+  value7Title: "7 days",
+  value7Body: "More choice",
+  valuePriceTitle: "Trade prices",
+  valuePriceBody: "Competitive",
+  valueSupportTitle: "Support",
+  valueSupportBody: "Quick and human",
+
+  // --- ordering simplicity ----------------------------------------------
+  simpleEyebrow: "Simple",
+  simpleTitle: "Ordering tyres should be simple.",
+  simpleLede:
+    "Fewer calls to work out who has what, less time across different price lists. The time you get back goes to your customers.",
+  step1Label: "Find",
+  step1Body: "Search the size you need.",
+  step2Label: "Choose",
+  step2Body: "See price and availability.",
+  step3Label: "Order",
+  step3Body: "Confirm in a few steps.",
+  step4Label: "Receive",
+  step4Body: "Dependable delivery to your business.",
+
+  // --- conceptual product visual ----------------------------------------
+  mockupSizeLabel: "Size",
+  mockupResultsLabel: "Availability",
+  mockupOrderCta: "Order",
+  mockupDisclaimer:
+    "Illustrative example. Actual prices and availability are visible after you sign up.",
+
+  // --- sourcing proposition ---------------------------------------------
+  sourcingEyebrow: "Availability",
+  sourcingTitle: "More options. Less searching.",
+  sourcingBody:
+    "We work with several supply sources, so you do not have to check them one by one. You ask for a size; finding it is our job.",
+  sourcingFlowSuppliers: "Several suppliers",
+  sourcingFlowUs: "GommaRush",
+  sourcingFlowYou: "Your business",
+  sourcingNote:
+    "We do not claim to always have the lowest price on the market. We do promise to tell you clearly and quickly what we can supply, and when.",
+
+  // --- delivery certainty ------------------------------------------------
+  deliveryEyebrow: "Delivery",
+  deliveryTitle: "You know the price. You know when it arrives.",
+  deliveryBody:
+    "The delivery time is shown on the offer, before you confirm the order. No vague estimates, and no calling back to find out where your tyres are.",
+  delivery48Title: "48 hours",
+  delivery48Body: "Fast delivery on the most requested sizes.",
+  delivery7Title: "7 days",
+  delivery7Body: "More choice, with a clear date.",
+  deliveryFlowSupply: "Supply",
+  deliveryFlowDepot: "GommaRush depot",
+  deliveryFlowShop: "Tyre shop",
+
+  // --- human support -----------------------------------------------------
+  supportEyebrow: "Support",
+  supportTitle: "Technology when you want speed. People when you need help.",
+  supportBody:
+    "A routine order needs no conversation at all. When something does not add up, you reach a person who understands your trade and your area.",
+  supportPointMessage: "Message us and we reply.",
+  supportPointPhone: "On the phone when it genuinely matters.",
+  supportPointPerson: "The same team every time, not a call centre.",
+
+  // --- why pillars -------------------------------------------------------
+  pillarsEyebrow: "Why GommaRush",
+  pillarsTitle: "One partner. More availability.",
+  pillarSimpleTitle: "Simple ordering",
+  pillarSimpleBody: "Find, choose and confirm with no wasted steps.",
+  pillarPriceTitle: "Competitive prices",
+  pillarPriceBody: "Terms built for people working in the trade.",
+  pillarAvailabilityTitle: "More availability",
+  pillarAvailabilityBody: "Several supply sources, one request.",
+  pillarDeliveryTitle: "Clear delivery",
+  pillarDeliveryBody: "48 hours or 7 days, told to you before you order.",
+  pillarSupportTitle: "Quick support",
+  pillarSupportBody: "People you can reach when you need them.",
+  pillarPartnerTitle: "Dependable partner",
+  pillarPartnerBody: "Our own logistics, from the depot to your door.",
+
+  // --- final conversion --------------------------------------------------
+  finalTitle: "Less time sourcing tyres.",
+  finalTitleSecond: "More time for your customers.",
+  finalBody: "Sign up to see prices and availability for your business.",
+
+  // --- registration (interim) -------------------------------------------
+  registerPageTitle: "Sign-up opening soon",
+  registerPageLede:
+    "We are finishing the account area for trade customers. In the meantime you can request a quote and we will come back with prices and delivery times.",
+  registerPageQuoteHint: "The quickest way to get started today",
+
+  // --- come funziona page ------------------------------------------------
+  howPageTitle: "How it works",
+  howPageLede: "From sign-up to delivery, without the steps that waste your time.",
+  howStepRegisterLabel: "Sign up",
+  howStepRegisterBody: "Open your business account.",
+  howClosing: "The result: less work in your day.",
+
+  // --- perche page -------------------------------------------------------
+  whyPageTitle: "Why GommaRush",
+  whyPageLede:
+    "We are not Italy\u2019s largest distributor. We are the one that is simplest to work with.",
+  whyPageOrderingTitle: "Ordering without friction",
+  whyPageOrderingBody:
+    "One size, one request, one answer. No round of phone calls to discover who has that tyre in stock.",
+  whyPagePriceTitle: "Trade pricing",
+  whyPagePriceBody:
+    "B2B terms built around how a tyre shop actually works, with margins that stay sustainable on both sides.",
+  whyPageSourcingTitle: "Several sources, one request",
+  whyPageSourcingBody:
+    "We check availability for you. If a size is not there from one source, we look to another.",
+  whyPageDeliveryTitle: "Stated times, not estimates",
+  whyPageDeliveryBody:
+    "48 hours or 7 days, shown on the offer. So you know when to book your customer in.",
+  whyPageSupportTitle: "People, not tickets",
+  whyPageSupportBody:
+    "When you call, you reach someone who knows your area and your previous orders.",
+  whyPageLogisticsTitle: "Our own logistics",
+  whyPageLogisticsBody:
+    "The depot and the vans are ours: we do not subcontract the last mile to anyone.",
+
+  // --- supplier page -----------------------------------------------------
+  supPageTitle: "Got tyres to deliver?",
+  supPageLede: "We will handle the last mile.",
+  supPageBody:
+    "We collect from your depot or receive the goods at ours, sort them and deliver to your end customer. You keep the commercial relationship; we handle the transport.",
+  supFlowSupplier: "Supplier",
+  supFlowUs: "GommaRush",
+  supFlowCustomer: "End customer",
+  supPointHandlingTitle: "Goods handled with care",
+  supPointHandlingBody: "Loading, sorting and delivery by our own staff.",
+  supPointDepotTitle: "Depot and sorting",
+  supPointDepotBody: "We receive, check the quantities and prepare the round.",
+  supPointLastMileTitle: "Reliable last mile",
+  supPointLastMileBody: "Tracked deliveries, with proof of delivery to the recipient.",
+
+  // --- footer ------------------------------------------------------------
+  footerTagline: "The simplest way to buy tyres.",
+  footerNavTitle: "Navigation",
+  footerCompanyTitle: "Company",
+  footerAccessTitle: "Access",
+  footerRights: "All rights reserved.",
 };
 
 const DICTIONARIES: Record<Locale, SiteCopy> = { it, en };
