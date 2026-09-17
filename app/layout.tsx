@@ -23,7 +23,10 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     description: copy.metaHomeDesc,
     icons: {
-      icon: "/images/logo.jpg",
+      // The shield alone, with alpha. The full artwork carries the wordmark
+      // too, which is illegible at 16px, and being a JPEG it drew a white
+      // square in a dark browser tab.
+      icon: "/images/logo-mark.png",
     },
   };
 }
