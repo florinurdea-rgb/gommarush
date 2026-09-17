@@ -30,7 +30,16 @@ const RATIO_CLASS: Record<PlaceholderRatio, string> = {
 };
 
 interface ImagePlaceholderProps {
-  /** What should eventually be photographed here. Rendered visibly. */
+  /**
+   * What should eventually be photographed here.
+   *
+   * NOT rendered as visible text. It stays in the source as the brief for
+   * whoever commissions the shoot, and it becomes the image's accessible
+   * label, so a screen reader hears something meaningful instead of nothing.
+   * It used to render on the page, which is right for a staging review and
+   * wrong once real visitors see it -- a paragraph of bracketed developer
+   * notation on a conversion page reads as unfinished.
+   */
   intent: string;
   ratio?: PlaceholderRatio;
   className?: string;
@@ -46,6 +55,8 @@ export function ImagePlaceholder({
 }: ImagePlaceholderProps) {
   return (
     <div
+      role="img"
+      aria-label={intent}
       className={`relative w-full overflow-hidden rounded-2xl border border-steel-soft bg-surface-soft ${RATIO_CLASS[ratio]} ${className}`}
     >
       {/* A faint diagonal rule so an empty box reads as "reserved" rather than
@@ -59,11 +70,11 @@ export function ImagePlaceholder({
         }}
       />
 
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
-        <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white text-steel shadow-[0_1px_2px_rgba(21,34,56,0.06)]">
+      {/* A single quiet mark, centred. Enough to say "image", nothing more. */}
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-white/70 text-steel">
           <ImageIcon aria-hidden="true" className="h-5 w-5" strokeWidth={1.6} />
         </span>
-        <p className="max-w-sm text-[13px] font-medium leading-snug text-ink-soft">{intent}</p>
       </div>
 
       {children}
