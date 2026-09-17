@@ -80,9 +80,16 @@ export function GlobalHeader({ showBack = false }: { showBack?: boolean }) {
         </nav>
 
         <div className="flex flex-none items-center gap-2 sm:gap-3">
+          {/*
+            Visible at every breakpoint, including the narrowest phone. The
+            header is sticky, so hiding this below `sm` meant that once a
+            mobile visitor scrolled past the hero there was no way to register
+            until the footer -- on the one surface where the brief asks for an
+            obvious Register CTA. It shrinks rather than disappearing.
+          */}
           <Link
             href={REGISTER_HREF}
-            className={`${BUTTON_STYLES.primary} hidden !min-h-[40px] !px-4 !text-[14.5px] sm:inline-flex`}
+            className={`${BUTTON_STYLES.primary} !min-h-[40px] !px-3 !text-[13.5px] sm:!px-4 sm:!text-[14.5px]`}
           >
             {copy.ctaRegister}
           </Link>

@@ -67,12 +67,28 @@ function chunk<T>(items: T[], count: number): T[][] {
 function Logo({ brand }: { brand: Brand }) {
   return (
     <li className="flex flex-none items-center justify-center px-5 sm:px-7">
+      {/*
+        Explicit width/height are a space RESERVATION, not a display size --
+        the CSS below still sizes the logo. Without them the intrinsic width of
+        a not-yet-loaded image is 0, so all 108 flex items collapsed and the
+        whole marquee track measured zero wide until the images arrived, then
+        snapped to full height. That is a visible layout shift on a lazy-loaded
+        strip well below the fold. A 4:1 hint suits a wordmark; object-contain
+        and max-w keep every real logo correctly proportioned inside it.
+
+        Grayscale by default, colour on hover: 27 manufacturer logos at full
+        saturation is a wall of competing reds and blues that pulls attention
+        off the page's own accent, and the brief asked for a restrained,
+        visually consistent strip.
+      */}
       <img
         src={`/images/brands/${brand.slug}.png`}
         alt={brand.name}
+        width={160}
+        height={40}
         loading="lazy"
         decoding="async"
-        className="h-7 w-auto max-w-[130px] object-contain sm:h-9 sm:max-w-[160px]"
+        className="h-7 w-auto max-w-[130px] object-contain opacity-70 grayscale transition duration-200 hover:opacity-100 hover:grayscale-0 sm:h-9 sm:max-w-[160px]"
       />
     </li>
   );
@@ -118,7 +134,7 @@ export function BrandMarquee() {
   const fourRows = chunk(BRANDS, 4);
 
   return (
-    <section aria-labelledby="brands-title" className="border-t border-ink/10 bg-white">
+    <section aria-labelledby="brands-title" className="border-t border-steel-soft bg-white">
       <div className="mx-auto w-full max-w-content px-4 pb-6 pt-10 sm:px-6 sm:pb-8 sm:pt-14">
         <h2
           id="brands-title"

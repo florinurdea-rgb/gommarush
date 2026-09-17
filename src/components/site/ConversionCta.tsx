@@ -28,6 +28,9 @@ export function ConversionCta() {
         <div>
           <h2 className="text-balance text-3xl font-extrabold leading-[1.1] tracking-[-0.02em] text-white sm:text-4xl lg:text-[2.75rem]">
             {copy.finalTitle}
+            {/* Explicit space: the second half is a block-level span, so
+                without it textContent reads "pneumatici.Piu" as one word to a
+                screen reader even though it renders on two lines. */}{" "}
             <span className="mt-1 block text-accent-light">{copy.finalTitleSecond}</span>
           </h2>
 
