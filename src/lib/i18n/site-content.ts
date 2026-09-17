@@ -229,6 +229,10 @@ const it = {
   mockupSizeLabel: "Misura",
   mockupResultsLabel: "Disponibilit\u00e0",
   mockupOrderCta: "Ordina",
+  // Short forms for the compact chips. "gg" is giorni and must not survive
+  // into English, which is exactly what happened when these were hardcoded.
+  mockupWindow48: "48h",
+  mockupWindow7: "7 gg",
   mockupDisclaimer:
     "Esempio illustrativo. Prezzi e disponibilit\u00e0 effettivi sono visibili dopo la registrazione.",
 
@@ -553,6 +557,8 @@ const en: SiteCopy = {
   mockupSizeLabel: "Size",
   mockupResultsLabel: "Availability",
   mockupOrderCta: "Order",
+  mockupWindow48: "48h",
+  mockupWindow7: "7 d",
   mockupDisclaimer:
     "Illustrative example. Actual prices and availability are visible after you sign up.",
 

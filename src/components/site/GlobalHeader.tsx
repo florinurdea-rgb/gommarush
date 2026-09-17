@@ -30,8 +30,16 @@ export function GlobalHeader({ showBack = false }: { showBack?: boolean }) {
     { href: ROUTES.suppliers, label: copy.navSuppliers },
   ];
 
+  // Solid white, and deliberately NO backdrop-blur.
+  //
+  // `backdrop-filter` makes an element the containing block for its
+  // fixed-position descendants, so with a blur here the hamburger's
+  // `fixed inset-0` panel resolved against this ~60px header strip instead of
+  // the viewport -- it opened clipped underneath the hero. Any transform,
+  // filter, perspective, contain or will-change on this element would do the
+  // same thing. Do not add one.
   return (
-    <header className="sticky top-0 z-40 border-b border-steel-soft bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
+    <header className="sticky top-0 z-40 border-b border-steel-soft bg-white">
       <div className="mx-auto flex w-full max-w-shell items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8 lg:py-4">
         <div className="flex min-w-0 items-center gap-2 sm:gap-4">
           {showBack && (

@@ -23,10 +23,16 @@ import { Icon } from "@/components/site/icons";
  * commercial relationship that the logo strip does not already imply.
  */
 
+/**
+ * Brand names are proper nouns and stay as they are. The delivery window is
+ * NOT -- it was hardcoded as "48h" / "7 gg", and "gg" is the Italian
+ * abbreviation for giorni, so it stayed Italian after switching to English.
+ * The window now names a copy key.
+ */
 const EXAMPLE_ROWS = [
-  { brand: "Pirelli", window: "48h" },
-  { brand: "Michelin", window: "7 gg" },
-  { brand: "Continental", window: "48h" },
+  { brand: "Pirelli", windowKey: "mockupWindow48" },
+  { brand: "Michelin", windowKey: "mockupWindow7" },
+  { brand: "Continental", windowKey: "mockupWindow48" },
 ] as const;
 
 export function OrderMockup() {
@@ -69,7 +75,7 @@ export function OrderMockup() {
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-lg bg-accent-light px-2.5 py-1 text-[12px] font-bold text-accent">
                   <Icon name="delivery48" className="h-3.5 w-3.5" />
-                  {row.window}
+                  {copy[row.windowKey]}
                 </span>
               </span>
             </li>
