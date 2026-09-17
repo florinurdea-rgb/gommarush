@@ -1,18 +1,27 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
+import { LOCALE_COOKIE, normaliseLocale } from "@/lib/i18n/locale";
+import { getCopy } from "@/lib/i18n/site-content";
 
 /**
  * Metadata lives in a route layout because the page itself is a client
  * component (it reads the locale from context), and a "use client" module
  * cannot export `metadata`.
  *
- * Written in Italian: it is the default locale and the one search engines will
- * index, since the language switch is a cookie rather than a separate URL.
+ * Resolved per request from the locale cookie rather than hardcoded, so the
+ * browser tab follows the language switch. It used to be a fixed Italian
+ * string, which left the tab reading Italian on an otherwise English page.
  */
-export const metadata: Metadata = {
-  title: "Perche GommaRush",
-  description:
-    "Ordini semplici, prezzi competitivi, piu disponibilita e tempi di consegna dichiarati prima di ordinare. Il partner con cui e piu semplice lavorare.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const copy = getCopy(normaliseLocale(cookies().get(LOCALE_COOKIE)?.value));
+  return {
+    // `absolute` bypasses the "%s | GommaRush" template: this page's title
+    // already contains the brand, and the template made it read
+    // "Perche GommaRush | GommaRush".
+    title: { absolute: copy.metaWhyTitle },
+    description: copy.metaWhyDesc,
+  };
+}
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   return children;

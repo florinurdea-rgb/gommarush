@@ -3,20 +3,30 @@ import { cookies } from "next/headers";
 import "./globals.css";
 import { LocaleProvider } from "@/components/site/LocaleProvider";
 import { LOCALE_COOKIE, normaliseLocale } from "@/lib/i18n/locale";
+import { getCopy } from "@/lib/i18n/site-content";
 
-export const metadata: Metadata = {
-  title: {
-    default: "GommaRush | Pneumatici per aziende in provincia di Vicenza",
-    template: "%s | GommaRush",
-  },
-  // Formulata come "tutta la provincia + 50 km oltre i confini", mai come un
-  // raggio da un centro: è la stessa distinzione che fa la homepage.
-  description:
-    "GommaRush fornisce pneumatici a gommisti, officine e aziende del settore automotive in tutta la provincia di Vicenza e fino a 50 km oltre i confini provinciali, con consegna in 48 ore o entro 7 giorni.",
-  icons: {
-    icon: "/images/logo.jpg",
-  },
-};
+/**
+ * Resolved per request from the locale cookie, so the tab title and the
+ * description follow the language switch. These were fixed Italian strings,
+ * which meant an English visitor still saw an Italian tab.
+ *
+ * The template stays outside the dictionary: "%s | GommaRush" is a brand
+ * lockup, not prose, and reads the same in both languages.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const copy = getCopy(normaliseLocale(cookies().get(LOCALE_COOKIE)?.value));
+
+  return {
+    title: {
+      default: copy.metaHomeTitle,
+      template: "%s | GommaRush",
+    },
+    description: copy.metaHomeDesc,
+    icons: {
+      icon: "/images/logo.jpg",
+    },
+  };
+}
 
 /**
  * The locale is read from the cookie HERE, on the server, and handed to the

@@ -1,18 +1,24 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
+import { LOCALE_COOKIE, normaliseLocale } from "@/lib/i18n/locale";
+import { getCopy } from "@/lib/i18n/site-content";
 
 /**
  * Metadata lives in a route layout because the page itself is a client
  * component (it reads the locale from context), and a "use client" module
  * cannot export `metadata`.
  *
- * Written in Italian: it is the default locale and the one search engines will
- * index, since the language switch is a cookie rather than a separate URL.
+ * Resolved per request from the locale cookie rather than hardcoded, so the
+ * browser tab follows the language switch. It used to be a fixed Italian
+ * string, which left the tab reading Italian on an otherwise English page.
  */
-export const metadata: Metadata = {
-  title: "Come funziona",
-  description:
-    "Registrati, trova la misura, scegli prezzo e disponibilita, ordina e ricevi. Acquistare pneumatici per la tua attivita in pochi passaggi.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const copy = getCopy(normaliseLocale(cookies().get(LOCALE_COOKIE)?.value));
+  return {
+    title: copy.metaHowTitle,
+    description: copy.metaHowDesc,
+  };
+}
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   return children;

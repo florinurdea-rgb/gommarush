@@ -349,6 +349,27 @@ const it = {
   footerCompanyTitle: "Azienda",
   footerAccessTitle: "Accessi",
   footerRights: "Tutti i diritti riservati.",
+  // --- page metadata (browser tab + search results) ----------------------
+  // Localised because the <title> is part of "changes everywhere": switching
+  // to English used to leave the tab reading Italian.
+  metaHomeTitle: "GommaRush | Pneumatici per gommisti e officine",
+  metaHomeDesc:
+    "Il modo pi\u00f9 semplice per acquistare pneumatici. Prezzi B2B per gommisti e officine, pi\u00f9 disponibilit\u00e0 da un solo partner e consegne in 48 ore o entro 7 giorni.",
+  metaTyresTitle: "Pneumatici",
+  metaTyresDesc:
+    "Cerca lo pneumatico che ti serve e ordinalo da un solo partner. Prezzi B2B per gommisti e officine, con consegna in 48 ore o entro 7 giorni.",
+  metaHowTitle: "Come funziona",
+  metaHowDesc:
+    "Registrati, trova la misura, scegli prezzo e disponibilit\u00e0, ordina e ricevi. Acquistare pneumatici per la tua attivit\u00e0 in pochi passaggi.",
+  metaWhyTitle: "Perch\u00e9 GommaRush",
+  metaWhyDesc:
+    "Ordini semplici, prezzi competitivi, pi\u00f9 disponibilit\u00e0 e tempi di consegna dichiarati prima di ordinare. Il partner con cui \u00e8 pi\u00f9 semplice lavorare.",
+  metaSuppliersTitle: "Per fornitori",
+  metaSuppliersDesc:
+    "Hai pneumatici da consegnare? Ritiriamo dal tuo deposito o riceviamo nel nostro, smistiamo e consegniamo al tuo cliente finale.",
+  metaRegisterTitle: "Registrati",
+  metaRegisterDesc:
+    "Stiamo completando l\u2019area riservata ai clienti professionali. Nel frattempo puoi richiedere un\u2019offerta con prezzi e tempi di consegna.",
 } as const;
 
 export type SiteCopyKey = keyof typeof it;
@@ -673,6 +694,25 @@ const en: SiteCopy = {
   footerCompanyTitle: "Company",
   footerAccessTitle: "Access",
   footerRights: "All rights reserved.",
+  // --- page metadata (browser tab + search results) ----------------------
+  metaHomeTitle: "GommaRush | Tyres for tyre shops and garages",
+  metaHomeDesc:
+    "The simplest way to buy tyres. Trade pricing for tyre shops and garages, more availability from one partner, and delivery in 48 hours or within 7 days.",
+  metaTyresTitle: "Tyres",
+  metaTyresDesc:
+    "Search the tyre you need and order it from a single partner. Trade pricing for tyre shops and garages, with delivery in 48 hours or within 7 days.",
+  metaHowTitle: "How it works",
+  metaHowDesc:
+    "Sign up, find the size, choose price and availability, order and receive. Buying tyres for your business in a few steps.",
+  metaWhyTitle: "Why GommaRush",
+  metaWhyDesc:
+    "Simple ordering, competitive prices, more availability, and delivery times stated before you order. The partner that is simplest to work with.",
+  metaSuppliersTitle: "For suppliers",
+  metaSuppliersDesc:
+    "Got tyres to deliver? We collect from your depot or receive them at ours, sort them and deliver to your end customer.",
+  metaRegisterTitle: "Sign up",
+  metaRegisterDesc:
+    "We are finishing the account area for trade customers. In the meantime you can request a quote with prices and delivery times.",
 };
 
 const DICTIONARIES: Record<Locale, SiteCopy> = { it, en };
