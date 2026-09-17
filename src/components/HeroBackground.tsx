@@ -4,6 +4,10 @@ const heroVanFleet = "/images/hero-van-fleet.webp";
 // white on the left (behind the copy), and softly on the top/bottom
 // edges, so it reads as a light, subtle backdrop rather than a busy
 // full-strength photo.
+//
+// The wash stays near-opaque out to ~48% because the hero's h2 is a full
+// sentence, not a short line: the copy has to stay legible where it crosses
+// the vans, and the photo is decoration.
 export function HeroBackground() {
   return (
     <div aria-hidden="true" className="absolute inset-0 overflow-hidden">
@@ -17,7 +21,7 @@ export function HeroBackground() {
         className="absolute inset-0"
         style={{
           background:
-            "linear-gradient(90deg, #FFFFFF 0%, #FFFFFF 22%, rgba(255,255,255,0.92) 38%, rgba(255,255,255,0.62) 55%, rgba(255,255,255,0.38) 72%, rgba(255,255,255,0.24) 100%)",
+            "linear-gradient(90deg, #FFFFFF 0%, #FFFFFF 30%, rgba(255,255,255,0.94) 48%, rgba(255,255,255,0.7) 64%, rgba(255,255,255,0.42) 80%, rgba(255,255,255,0.24) 100%)",
         }}
       />
       {/* Text spans the full width below sm, so the photo needs a much stronger wash there to stay readable */}
