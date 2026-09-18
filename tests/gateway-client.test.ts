@@ -125,6 +125,45 @@ describe("gateway error response", () => {
     const { client } = clientWith(respond("upstream down", 502));
     await expect(client.stockByEan("3286347860812")).rejects.toMatchObject({ kind: "http" });
   });
+
+  /**
+   * A bare status is not a diagnosis. A 403 is both what the gateway returns
+   * for a rejected login and what an egress proxy returns for a host it will
+   * not reach, and those call for opposite responses. The body is the only
+   * thing that distinguishes them, so it has to survive into the message.
+   */
+  it("carries the response body into the error message on a non-2xx", async () => {
+    const { client } = clientWith(
+      respond("Host not in allowlist: test-001.inter-sprint.nl.", 403)
+    );
+    await expect(client.stockByEan("3286347860812")).rejects.toThrow(
+      /HTTP 403: Host not in allowlist/
+    );
+  });
+
+  it("collapses and truncates a long error body instead of logging a whole page", async () => {
+    const htmlPage = `<html>\n  <body>\n    ${"upstream failure ".repeat(60)}\n  </body>\n</html>`;
+    const { client } = clientWith(respond(htmlPage, 500));
+
+    let error: Error | null = null;
+    try {
+      await client.stockByEan("3286347860812");
+    } catch (caught) {
+      error = caught as Error;
+    }
+    if (!error) throw new Error("expected the call to reject");
+
+    expect(error.message).toContain("HTTP 500");
+    expect(error.message).toContain("…");
+    // Collapsed to one line, so one failure stays one log record.
+    expect(error.message).not.toContain("\n");
+    expect(error.message.length).toBeLessThan(300);
+  });
+
+  it("does not add a separator when the failing response has no body", async () => {
+    const { client } = clientWith(respond("", 503));
+    await expect(client.stockByEan("3286347860812")).rejects.toThrow(/HTTP 503$/);
+  });
 });
 
 describe("malformed supplier response", () => {
