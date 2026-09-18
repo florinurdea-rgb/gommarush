@@ -80,6 +80,23 @@ export interface GatewayAuditRecord {
 /** Read calls get one retry; orders get none, ever. */
 const MAX_READ_ATTEMPTS = 2;
 
+/** How much of a failed response body travels in the error message. */
+const ERROR_BODY_PREVIEW_CHARS = 200;
+
+/**
+ * Condenses a non-2xx body to one line for an error message.
+ *
+ * Whitespace is collapsed so a multi-line HTML error page does not turn a
+ * log record into twenty, and the result is truncated: enough to identify
+ * who answered, never the whole response.
+ */
+function summariseErrorBody(body: string): string {
+  const flat = body.replace(/\s+/g, " ").trim();
+  return flat.length > ERROR_BODY_PREVIEW_CHARS
+    ? `${flat.slice(0, ERROR_BODY_PREVIEW_CHARS)}…`
+    : flat;
+}
+
 export class InterSprintGatewayClient {
   private readonly config: ResolvedGatewayConfig;
   private readonly fetchFn: typeof fetch;
@@ -249,9 +266,15 @@ export class InterSprintGatewayClient {
       const body = await response.text();
 
       if (!response.ok) {
+        // The body matters most precisely when the status is bad. An HTTP
+        // error on this integration is ambiguous on its own: a 403 is what
+        // the supplier returns for a rejected login AND what an egress proxy
+        // or corporate firewall returns for a host it will not reach, and
+        // "gateway returned HTTP 403" reads as the first while meaning the
+        // second. Truncated because this is a diagnostic, not a payload.
         throw new GatewayError(
           "http",
-          `gateway returned HTTP ${response.status}`,
+          `gateway returned HTTP ${response.status}${body.trim() ? `: ${summariseErrorBody(body)}` : ""}`,
           {
             retryable: response.status >= 500,
             context: this.contextFor(correlationId, protocol),
