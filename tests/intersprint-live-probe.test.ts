@@ -3,6 +3,10 @@ import { InterSprintGatewayClient } from "@/lib/suppliers/gateway/client";
 import { describeGatewayConfig, resolveGatewayConfig } from "@/lib/suppliers/gateway/config";
 import { GATEWAY_PARTNERS, PROTOCOLS, type GatewayPartner } from "@/lib/suppliers/gateway/protocols";
 import { toStockRow } from "@/lib/suppliers/gateway/response";
+import {
+  CATALOGUE_PROBE_SET,
+  sizeMatchesDescription,
+} from "./intersprint-catalogue-fixtures";
 import type { GatewayCallResult } from "@/lib/suppliers/gateway/client";
 
 /**
@@ -25,8 +29,9 @@ import type { GatewayCallResult } from "@/lib/suppliers/gateway/client";
  * Environment:
  *   INTERSPRINT_LIVE_PROBE=1     required, or everything below skips
  *   INTERSPRINT_PROBE_PARTNER    'intersprint' (default) or 'intertyre'
- *   INTERSPRINT_PROBE_EAN        an EAN to look up via protocol 103
- *   INTERSPRINT_PROBE_ARTICLE    an article system number, as an alternative
+ *   INTERSPRINT_PROBE_EAN        optional. One EAN, or a comma-separated
+ *                                list, replacing the five-product proof set
+ *                                in tests/intersprint-catalogue-fixtures.ts
  *
  * Credentials come from the same INTERSPRINT_GATEWAY_* variables the
  * application uses. Nothing here prints one.
@@ -152,39 +157,92 @@ describe.skipIf(!ENABLED)("Inter-Sprint gateway live probe", () => {
     ).not.toBeNull();
   }, 120_000);
 
-  it("looks up stock for a specific article, when one is supplied", async () => {
-    const ean = (process.env.INTERSPRINT_PROBE_EAN ?? "").trim();
-    const article = (process.env.INTERSPRINT_PROBE_ARTICLE ?? "").trim();
+  it("resolves real catalogue EANs to live price and stock", async () => {
+    // The proof set is the five real catalogue_products rows in
+    // tests/intersprint-catalogue-fixtures.ts. An override is accepted so a
+    // single EAN can be chased down without editing the fixture.
+    const override = (process.env.INTERSPRINT_PROBE_EAN ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
 
-    if (!ean && !article) {
-      // Protocol 103 is a LOOKUP: it needs an article identifier. Inventing
-      // an EAN here would produce a meaningless "not found" and call it a
-      // test, so the probe says what it needs instead.
-      console.log(
-        "\n103 stock search: skipped — set INTERSPRINT_PROBE_EAN or INTERSPRINT_PROBE_ARTICLE.\n" +
-          "    Protocol 103 resolves an identifier you already hold; it does not enumerate\n" +
-          "    a catalogue. See the note at the bottom of this file."
-      );
-      return;
-    }
+    const products = override.length
+      ? override.map((ean) => {
+          const known = CATALOGUE_PROBE_SET.find((candidate) => candidate.ean === ean);
+          return (
+            known ?? {
+              ean,
+              brand: "(not in the fixture set)",
+              model: "?",
+              sizeDisplay: "?",
+              loadSpeed: "?",
+              // No expected dimensions, so identity cannot be checked.
+              widthMm: -1,
+              aspectRatio: -1,
+              rimInch: -1,
+              runFlat: false,
+              xl: false,
+              supplierArticleId: "?",
+            }
+          );
+        })
+      : CATALOGUE_PROBE_SET;
 
     const client = new InterSprintGatewayClient(resolveGatewayConfig(partner));
-    console.log(`\n103 stock search ${PROTOCOLS.STOCK_SEARCH.manualRef}`);
+    console.log(`\n103 stock search ${PROTOCOLS.STOCK_SEARCH.manualRef} — ${products.length} catalogue product(s)`);
 
-    const result = ean
-      ? await attempt(`    by EAN ${ean}`, () => client.stockByEan(ean))
-      : await attempt(`    by article ${article}`, () => client.stockBySystemNumber(article));
+    let answered = 0;
 
-    if (result?.outcome.status === "data") {
-      for (const row of result.outcome.rows.slice(0, 5)) {
-        const parsed = toStockRow(row);
+    for (const product of products) {
+      console.log(
+        `\n  ${product.brand} ${product.model} ${product.sizeDisplay} ${product.loadSpeed}` +
+          `${product.runFlat ? " run-flat" : ""}${product.xl ? " XL" : ""}  EAN ${product.ean}`
+      );
+
+      const result = await attempt(`    artc=E=${product.ean}`, () => client.stockByEan(product.ean));
+      if (!result) continue;
+      answered++;
+
+      const { outcome } = result;
+
+      // The parser only reports "data" when *END* was present, so reaching
+      // this branch IS the end-marker check. Stated explicitly because it is
+      // one of the things the proof has to demonstrate.
+      if (outcome.status === "data") {
+        console.log(`    end marker  present (parser requires *END* before classifying as data)`);
+        for (const row of outcome.rows) {
+          const parsed = toStockRow(row);
+          const sizeOk = sizeMatchesDescription(product, parsed.description);
+          console.log(
+            `    row         sys=${parsed.articleSystemNumber} code=${parsed.articleCode} ` +
+              `brand=${parsed.brand} fields=${row.length}\n` +
+              `                desc="${parsed.description}"\n` +
+              `                net=${parsed.netPrice} ${parsed.currency}  gross=${parsed.grossPrice}  ` +
+              `available=${parsed.available}\n` +
+              `                size match: ${sizeOk === null ? "undetermined (empty description)" : sizeOk ? "YES" : "NO — WRONG ARTICLE"}`
+          );
+        }
+      } else if (outcome.status === "error") {
+        // A supplier that does not carry an article is a normal commercial
+        // answer, not a broken integration. Which code means that is not
+        // something to assume: 54 ("invalid item code") is the candidate, and
+        // the real response is what settles it.
         console.log(
-          `      ${parsed.articleSystemNumber} | ${parsed.brand} | ${parsed.description} | ` +
-            `${parsed.netPrice} ${parsed.currency} net | avail ${parsed.available} | ${row.length} fields`
+          `    supplier    code ${outcome.code} — ${outcome.description}\n` +
+            `                treat as a commercial outcome (not carried / not found), not a failure`
         );
+      } else if (outcome.status === "malformed") {
+        console.log(`    MALFORMED   ${outcome.reason} — this IS an integration problem`);
       }
     }
-  }, 120_000);
+
+    // The assertion is about the transport, not about Inter-Sprint's range.
+    // Every EAN coming back "not carried" still proves Protocol 103 works.
+    expect(
+      answered,
+      "no EAN produced any response at all — transport, credentials or egress"
+    ).toBeGreaterThan(0);
+  }, 300_000);
 });
 
 /**
