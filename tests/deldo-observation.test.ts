@@ -5,6 +5,8 @@ import {
   assertCommerciallyUsable,
   excludeTestObservations,
   DELDO_DOCUMENTED_FEED_INTERVAL_MS,
+  classifyObservationForLane,
+  freshnessPolicyForLane,
   type SupplierObservation,
   type FreshnessPolicy,
 } from "@/lib/suppliers/observation";
@@ -24,6 +26,11 @@ function observation(
 ): SupplierObservation {
   return {
     laneCode: "deldo",
+    supplierListingKey: "DELDO:BR6727",
+    supplierArticleId: "BR6727",
+    dotYear: null,
+    demo: false,
+    stockCondition: "normal",
     classification: "live",
     source: "bulk_feed",
     observedAt: new Date("2026-09-21T11:30:00Z"),
