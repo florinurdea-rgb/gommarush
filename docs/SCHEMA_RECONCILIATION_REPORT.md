@@ -206,3 +206,138 @@ now settled by evidence rather than preference:
   exists, so the invariant cannot silently break again.
 
 **Nothing in this report has been applied. No migration was written.**
+
+---
+
+## 8. The baseline: captured, proved, compared (2026-09-21)
+
+The plan in §7 has been carried out. `supabase/baseline/` now contains the
+canonical schema, and `supabase/post-baseline/` the first migration on top of
+it.
+
+### Method
+
+Captured from production by read-only introspection, then applied from empty to
+a disposable **PostgreSQL 17.6** instance — the same minor version production
+runs, so expression deparsing matches. The instance came from
+`@embedded-postgres/linux-x64@17.6.0-beta.15`, which needs neither Docker nor
+root. Neither production nor staging was used as the target.
+
+Supabase's environment was reproduced first: the `extensions` schema with
+pgcrypto and uuid-ossp, `search_path = public, extensions`, and the `anon` /
+`authenticated` / `service_role` roles. Several functions call
+`gen_random_bytes` unqualified and fail without it, and isolating that up front
+keeps "this is not Supabase" out of the results.
+
+### Result: the counts match exactly
+
+| Object | Production | From baseline |
+| --- | --- | --- |
+| Tables | 32 | **32** |
+| Columns | 541 | **541** |
+| Primary keys | 32 | **32** |
+| Foreign keys | 51 | **51** |
+| Check constraints | 56 | **56** |
+| Unique constraints | 12 | **12** |
+| Indexes | 141 | **141** |
+| Functions | 28 | **28** |
+| Triggers | 23 | **23** |
+| RLS-enabled tables | 32 | **32** |
+| RLS policies | 0 | **0** |
+
+### Result: five of six object classes are byte-identical
+
+Comparing md5 fingerprints of the deparsed definitions, read on both sides with
+`search_path = public`:
+
+| Class | Fingerprint match |
+| --- | --- |
+| Columns (type, nullability, default) | ✅ identical |
+| Constraints (all four kinds) | ✅ identical |
+| Indexes | ✅ identical |
+| Triggers | ✅ identical |
+| RLS flags | ✅ identical |
+| Functions | ⚠️ see below |
+
+### The one class that differs: function source text
+
+12 of 28 functions differ textually. **All 28 are semantically identical**, and
+the differences fall into exactly three explained categories:
+
+1. **Comments stripped in production.** The repository's definitions carry
+   their explanatory comments; production's stored copies do not. Production's
+   functions were evidently applied through something that stripped them.
+2. **Whitespace and line wrapping.** `declare v_count integer;` on one line
+   versus two; a `select ... from x where y` wrapped differently.
+3. **One syntactic equivalence.** In `gorush_refresh_order_status`, the
+   repository has `v_target in ('partially_received')` where production has
+   `v_target = 'partially_received'`. A single-element `IN` list is exactly
+   equality in PostgreSQL.
+
+Proof: with comments and all whitespace removed, 27 of 28 hash identically, and
+a full line-by-line diff of the 28th shows only the three differences above.
+
+**The baseline keeps the repository's commented versions.** They are the same
+code, and they carry the reasoning. A baseline whose function bodies had been
+stripped of every explanation would be a worse artefact than the one being
+replaced.
+
+> This is itself a finding: production's functions were not created purely from
+> the repository's migrations. It is consistent with R15 — the schema was
+> changed directly — and is one more reason the practice has to stop.
+
+### Zero unexplained differences
+
+Every difference between a fresh database built from source control and
+production is accounted for above. Nothing was found that could not be
+explained.
+
+---
+
+## 9. Observed inconsistencies, documented rather than tidied
+
+The baseline reproduces production faithfully, including the things that look
+like accidents. Silently "fixing" them would mean a baseline that does not
+match the database it claims to describe. Each needs an owner decision, not an
+agent's judgement.
+
+1. **`orders` has two overlapping unique indexes on the document number.**
+   `orders_supplier_doc_number_key` on `(supplier_id,
+   normalized_document_number)` and `orders_supplier_document_unique` on
+   `(supplier_id, supplier_document_number)`, both partial. The normalized one
+   presumably supersedes the raw one, but both are enforced, so a document
+   number that normalises to a duplicate is rejected twice over — and a
+   supplier who reuses a raw number with different normalisation is rejected by
+   only one. Reproduced as-is.
+
+2. **`print_jobs` and `client_offer_requests` are still present** with
+   retirement migrations in the repository that were never applied.
+   `print_jobs` holds 2 rows, `client_offer_requests` none. Reproduced as-is;
+   retiring them is a separate decision (see §4.4).
+
+3. **`quote_request_items.delivery_speed` allows `'48h'`, not `'24h'`.** The
+   original migration wrote `'24h'`; `20260829000000_delivery_48h.sql` changed
+   it. Production is correct and the constraint is reproduced from production,
+   not from the older file.
+
+4. **The document-analysis tables and functions are absent from the baseline.**
+   Their migrations exist in the repository but have never reached production,
+   so they are not part of the current schema. They stay as pending work, and
+   the live routes that query them still cannot work (R2).
+
+---
+
+## 10. What must happen next
+
+The baseline exists and is proved, but **nothing has been applied to production
+and the ledger has not been reconciled.** Remaining, in order:
+
+1. Owner approves the baseline (this report).
+2. Verified, restorable backup of production — an untested backup is not one.
+3. Reconcile production's migration ledger to the baseline. The expected change
+   is **to the ledger only**; production's schema must not change. Any step
+   that would alter live schema means something above is wrong.
+4. Rebuild staging from the baseline (assessed disposable in §5).
+5. Apply `supabase/post-baseline/0001_deldo_classification.sql`, which unblocks
+   Deldo persistence.
+6. Run `scripts/verify-migration-baseline.sh` in CI so R15 cannot recur.
