@@ -7,6 +7,7 @@ import {
   deldoFileChecksum,
   DeldoImportError,
   DeldoPersistenceUnavailableError,
+  planDeldoListingPersistence,
   DELDO_REQUIRED_SCHEMA,
   CsvStructureError,
   type DeldoImportRequest,
@@ -201,6 +202,29 @@ describe("Deldo import safety", () => {
     expect(result.rejected[0].errors.join(" ")).toContain("Price");
     // The untouched source row survives for audit.
     expect(result.rejected[0].raw.Price).toBe("48,50");
+  });
+});
+
+describe("Deldo exact-key persistence planning", () => {
+  it("plans duplicate-EAN listings independently by supplier listing key", () => {
+    const result = buildDeldoImport(request());
+    const pair = result.listings.filter(
+      (l) => l.row.supplierArticleId === "BR6727" || l.row.supplierArticleId === "BR672722"
+    );
+    const plans = pair.map(planDeldoListingPersistence);
+    expect(plans.map((p) => p.supplierListingKey).sort()).toEqual([
+      "DELDO:BR6727",
+      "DELDO:BR672722",
+    ].sort());
+  });
+
+  it("refuses a detached observation paired to the wrong listing", () => {
+    const result = buildDeldoImport(request());
+    const a = result.listings[0];
+    const b = result.listings[1];
+    expect(() =>
+      planDeldoListingPersistence({ row: a.row, observation: b.observation })
+    ).toThrow(/key mismatch|article id mismatch/);
   });
 });
 
