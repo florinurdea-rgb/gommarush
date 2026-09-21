@@ -14,6 +14,12 @@
 // hostname, which is the one failure mode that could send a real order
 // somewhere unintended.
 
+// The repository's guard for modules that must never reach the browser (47
+// other modules use it). This one holds an API token, so it is exactly the
+// case the guard exists for: importing it from client code is a build error
+// rather than a silently shipped credential.
+import "server-only";
+
 import { DeldoApiError } from "@/lib/suppliers/deldo/get-stock/errors";
 
 export type DeldoEnvironment = "test" | "live";

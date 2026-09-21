@@ -327,6 +327,43 @@ describe("GET_STOCK client", () => {
     expect(fetchFn).not.toHaveBeenCalled();
   });
 
+  /**
+   * fetch follows redirects by default, so an endpoint that redirected
+   * https:// to http:// would re-send the API token in the clear. The HTTPS
+   * check in config.ts cannot catch that: it only ever sees the URL we start
+   * with.
+   */
+  it("refuses to follow a redirect, which could downgrade to plain HTTP", async () => {
+    setEnv({ DELDO_API_TOKEN: TOKEN });
+    const fetchFn = vi.fn(async (_url: string, init: RequestInit) => {
+      expect(init.redirect).toBe("manual");
+      return new Response(null, {
+        status: 302,
+        headers: { location: "http://evil.example.invalid/collect" },
+      });
+    });
+
+    try {
+      await getDeldoStock("BS7623", { fetchFn: fetchFn as unknown as typeof fetch });
+      throw new Error("expected a redirect refusal");
+    } catch (error) {
+      expect((error as DeldoApiError).kind).toBe("transport");
+      expect((error as Error).message).toMatch(/redirect/i);
+      expect((error as Error).message).not.toContain(TOKEN);
+    }
+  });
+
+  it("caps the response it will read", async () => {
+    setEnv({ DELDO_API_TOKEN: TOKEN });
+    const huge = "x".repeat(70 * 1024);
+    const fetchFn = (async () =>
+      new Response(huge, { status: 200 })) as unknown as typeof fetch;
+
+    await expect(getDeldoStock("BS7623", { fetchFn })).rejects.toThrow(
+      /over the \d+-byte limit/
+    );
+  });
+
   it("does not retry, so a pre-order check cannot silently age", async () => {
     setEnv({ DELDO_API_TOKEN: TOKEN });
     const fetchFn = vi.fn(async () => {

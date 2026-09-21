@@ -19,6 +19,8 @@
 //
 // Reads only. There is no code path from this file to CREATE_ORDER.
 
+import "server-only";
+
 import {
   resolveDeldoConfig,
   type ResolvedDeldoConfig,
@@ -117,6 +119,15 @@ function strictNumber(value: unknown, field: string): number {
 
 /** The documented unknown-article message, compared case-insensitively. */
 const UNKNOWN_ARTICLE_MESSAGE = "unknown article";
+
+/**
+ * A cap on the response we will read.
+ *
+ * The documented body is four short fields. Anything approaching this is not
+ * a GET_STOCK response, and reading an unbounded stream into memory because a
+ * proxy returned something unexpected is an avoidable failure mode.
+ */
+const MAX_RESPONSE_BYTES = 64 * 1024;
 
 /**
  * Turns a parsed JSON body into a typed outcome.
@@ -225,6 +236,12 @@ export async function getDeldoStock(
       method: "GET",
       signal: controller.signal,
       headers: { Accept: "application/json" },
+      // Redirects are NOT followed. fetch follows them by default, and a
+      // redirect from the HTTPS endpoint to an http:// one would re-send the
+      // API token in the clear — undoing the HTTPS check in config.ts, which
+      // only ever sees the URL we started with. An unexpected redirect on this
+      // endpoint is a diagnosis, not something to chase.
+      redirect: "manual",
     });
   } catch (caught) {
     const durationMs = Date.now() - startedAt;
@@ -244,7 +261,27 @@ export async function getDeldoStock(
   }
 
   const durationMs = Date.now() - startedAt;
+
+  // 0 is what a manual-redirect fetch reports for an opaque redirect.
+  if (response.status === 0 || (response.status >= 300 && response.status < 400)) {
+    throw new DeldoApiError(
+      "transport",
+      redactToken(
+        `Deldo GET_STOCK was redirected (HTTP ${response.status}) — refusing to follow, ` +
+          `because a redirect to a non-HTTPS host would expose the API token`,
+        config.token
+      )
+    );
+  }
+
   const text = await response.text();
+
+  if (text.length > MAX_RESPONSE_BYTES) {
+    throw new DeldoApiError(
+      "parse",
+      `Deldo GET_STOCK response is ${text.length} bytes, over the ${MAX_RESPONSE_BYTES}-byte limit — not a GET_STOCK response`
+    );
+  }
 
   if (!response.ok) {
     throw new DeldoApiError(
