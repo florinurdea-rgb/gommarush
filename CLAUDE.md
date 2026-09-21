@@ -12,6 +12,8 @@ before implementation work.
 | [`docs/architecture/`](docs/architecture/) | What the system is and is meant to become. Every claim carries a status marker. |
 | [`docs/DATABASE_BASELINE.md`](docs/DATABASE_BASELINE.md) | Schema reality, migration divergence, reconciliation plan, staging assessment |
 | [`docs/SECURITY_FINDINGS.md`](docs/SECURITY_FINDINGS.md) | Known security findings and their classification |
+| [`docs/SCHEMA_RECONCILIATION_REPORT.md`](docs/SCHEMA_RECONCILIATION_REPORT.md) | Evidence: the repo migrations do NOT build the schema from empty |
+| [`docs/DELDO_ACTIVATION.md`](docs/DELDO_ACTIVATION.md) | Owner checklist: what Deldo needs from us and we from them |
 | [`README.md`](README.md) | Stack, setup, environment variables, deployment |
 
 ---
@@ -171,10 +173,16 @@ Run what is relevant to your change and report **actual output**, never a
 prediction. Current gates, all working:
 
 ```
-npx vitest run     # 489 tests, 4 skipped (live probe, gated)
+npx vitest run     # 585 tests, 4 skipped (Inter-Sprint live probe, gated)
 npx tsc --noEmit   # clean
-npx next lint      # clean; 2 pre-existing <img> warnings
+npx next lint      # 0 errors; 7 pre-existing warnings in UI components
 npm run build      # Next.js production build
+```
+
+Schema claims are verified, not asserted:
+
+```
+bash scripts/verify-migration-baseline.sh   # needs a local disposable PostgreSQL
 ```
 
 **Never weaken a test to make it pass.** Investigate the failure. If a failure
