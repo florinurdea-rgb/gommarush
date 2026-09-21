@@ -1,87 +1,105 @@
 {
   "project": "GommaRush",
-  "mission_id": "M2",
-  "mission_title": "Deldo supplier integration foundation",
+  "mission_id": "M3A",
+  "mission_title": "Internal hardening + database reconciliation preparation",
   "status": "READY_FOR_REVIEW",
-  "phase": "Complete. Awaiting independent review. Do not start M3 automatically.",
-  "last_updated": "2026-09-21T18:50:00Z",
-
+  "phase": "Complete. Awaiting independent review. Do not start another mission automatically.",
+  "last_updated": "2026-09-21T19:05:00Z",
   "canonical_branch": "main",
   "working_branch": "claude/confident-albattani-p43rkj",
-
   "entry_points": {
     "working_rules": "CLAUDE.md",
     "authority_model": "docs/AI_WORKFLOW.md",
     "architecture": "docs/architecture/00_README.md",
     "deldo_lane": "docs/architecture/02_SUPPLIER_RULES.md",
     "database_and_migrations": "docs/DATABASE_BASELINE.md",
-    "security": "docs/SECURITY_FINDINGS.md"
+    "security": "docs/SECURITY_FINDINGS.md",
+    "schema_evidence": "docs/SCHEMA_RECONCILIATION_REPORT.md",
+    "deldo_activation": "docs/DELDO_ACTIVATION.md",
+    "verify_baseline": "scripts/verify-migration-baseline.sh"
   },
-
   "source_authority": {
     "deldo": "API documentation.pdf and 26933TEST.csv, supplied by Jan Van Dyck (Deldo NV), subject 'RE: Connect platform and orders for - 026933 (Go Rush Trasporti srl)'. Both inspected directly in this session. GoRush customer number 026933.",
     "note": "The PDF does NOT document the CSV columns ('we send you 1 file in CSV format so that you can examine file header and structure'). The sample file IS the column contract, and every mapping was read off it."
   },
-
   "completed": [
-    "Inspected both supplier files directly before any field mapping.",
-    "CSV structure verified: ';' delimited, pure ASCII, no BOM, LF, no quoting, exactly 35 columns across all 6,730 lines, 6,729 data rows.",
-    "Article is unique (0 duplicates); EAN is NOT unique (35 duplicates, all old-DOT variants).",
-    "Feed parser implemented against the real contract and validated on the FULL file: 0 malformed, 0 rejected, 6,199 clean, 530 flagged for review, 113 old-DOT listings.",
-    "Supplier-generic observation model: provenance, classification, freshness (current / stale / no_usable / test_data).",
-    "Test-data safety boundary implemented and tested: test classification is checked before completeness and before age, so no input combination can report fictional data as current.",
-    "GET_STOCK implemented: documented test endpoint, typed JSON parsing, unknown-article as a commercial outcome, HTTPS enforced, token redacted, fail-closed config, no retry.",
-    "Deldo capability registry with documented vs implemented split; both ordering capabilities unimplemented, asserted by test.",
-    "Deldo lane documented in docs/architecture/02_SUPPLIER_RULES.md; migration specified in docs/DATABASE_BASELINE.md section 7 and deliberately NOT written or applied."
+    "FAIL-CLOSED CLASSIFICATION: replaced M2's `not null default 'live'` with `not null`, no default, using add-nullable then explicit-backfill then set-not-null. Proved on a disposable local PostgreSQL: omission fails, out-of-vocabulary value fails, explicit 'test' succeeds, pre-existing row carries an explicit 'live' backfill.",
+    "RECONCILIATION EVIDENCE: applied all 20 repo migrations to an empty disposable PostgreSQL. 11 fail; 10 of 32 tables are created. 14 production tables including orders, customers and suppliers are never created by any migration in git.",
+    "Full production inventory captured read-only: 32 tables, 541 columns, 32 PK, 51 FK, 56 CHECK, 12 UNIQUE, 141 indexes, 28 functions, 23 triggers, 2 sequences, 0 enums, 5 extensions, RLS enabled on 32/32 tables with 0 policies.",
+    "Object-level classification complete with ZERO unexplained objects. All 28 production functions are defined in the repo; the 8 repo-only functions are either deliberately dropped (stand allocation) or part of the unapplied document pipeline.",
+    "Baseline strategy settled BY EVIDENCE: capture from production. The earlier squash recommendation is rejected - squashing migrations that build 10 of 32 tables yields an equally incomplete baseline.",
+    "scripts/verify-migration-baseline.sh makes the finding reproducible; refuses any non-local PGHOST because it drops databases.",
+    "Deldo importer connected CSV -> parser -> normalized rows -> observations -> persistence boundary. The boundary throws and names the four missing columns rather than no-oping.",
+    "Import refuses to load the supplier's known test file (26933TEST.csv) as live data.",
+    "GET_STOCK hardened: `server-only` guard on the token-holding modules, redirects refused (fetch follows them by default; an https->http redirect would resend the token in clear), response body capped.",
+    "docs/DELDO_ACTIVATION.md written for the owner: seven supplier questions in one reply, FTP provisioning steps, token configuration.",
+    "Corrected an M1 inaccuracy: CLAUDE.md claimed 2 lint warnings; there are 7 (0 errors), none in files these missions touched."
   ],
-
   "in_progress": [],
-
   "tests": {
-    "vitest": "567 passed, 4 skipped (Inter-Sprint live probe, gated by design), 42 files",
-    "new_tests": "78 added across deldo-feed-parse (28), deldo-observation (22), deldo-get-stock (28)",
+    "vitest": "585 passed, 4 skipped (Inter-Sprint live probe, gated by design), 43 files",
+    "new_tests": "18 added this mission: deldo-import (16), GET_STOCK redirect and body-cap (2)",
     "typecheck": "npx tsc --noEmit clean",
-    "lint": "npx next lint clean; 2 pre-existing <img> warnings unrelated to this mission",
+    "lint": "npx next lint: 0 errors, 7 pre-existing warnings in six UI components, none in files any mission touched",
     "build": "npm run build green",
+    "disposable_db": "PostgreSQL 16.13 local. Migration baseline run and fail-closed DDL proof both executed there. Production is 17.6 - sufficient to prove structural defects, NOT sufficient to certify a future baseline byte-for-byte.",
     "not_run": [
-      "Any live Deldo call - BLOCKED: no API token. Requires a request to Jan@deldo.com.",
-      "Any FTP feed delivery - BLOCKED: Deldo pushes to OUR FTP server; no account provisioned for them yet.",
-      "CREATE_ORDER - deliberately not implemented and not called."
+      "Any live Deldo call - no token exists. Deliberately not attempted.",
+      "Any FTP feed delivery - no account provisioned.",
+      "CREATE_ORDER - not implemented, not called.",
+      "Column-level production-vs-repo diff - meaningless while the repo build is missing 22 of 32 tables."
     ]
   },
-
-  "production_changes": "NONE.",
-  "database_changes": "NONE in production or staging. The Deldo migration is specified only; no migration file written or applied.",
-  "external_actions": "NONE. No Deldo endpoint contacted, no order generated or transmitted, no FTP configured, no deployment.",
-
+  "production_changes": "NONE. Read-only introspection only.",
+  "database_changes": "NONE in production or staging. All DDL work was on a disposable local PostgreSQL. No migration file written.",
+  "external_actions": "NONE. No Deldo contact, no email sent, no credential created, no FTP configured, no deployment.",
   "blockers": [
+    {
+      "id": "B8",
+      "blocks": "Writing the canonical baseline migration",
+      "needs": "Capture full DDL from production (32 tables, 51 FKs, 141 indexes, 28 functions, 23 triggers) and prove it on a Supabase project of the SAME major version (17.x). The local disposable instance is 16.13, adequate for finding defects but not for certifying a baseline.",
+      "class": "Gated by OWNER_DECISION D5"
+    },
+    {
+      "id": "B7",
+      "blocks": "Persisting any Deldo observation",
+      "needs": "The classification columns. DDL specified and proved fail-closed locally; gated behind reconciliation.",
+      "class": "Gated by OWNER_DECISION D5"
+    },
     {
       "id": "B5",
       "blocks": "Any live Deldo GET_STOCK call",
-      "needs": "A test-environment API token, requested from Jan@deldo.com. The test URL is documented and already configured.",
+      "needs": "Test-environment API token from Jan@deldo.com. See docs/DELDO_ACTIVATION.md section 1.",
       "class": "PREREQUISITE, not a decision"
     },
     {
       "id": "B6",
       "blocks": "Receiving the hourly Deldo feed",
-      "needs": "An FTP account for Deldo on GommaRush infrastructure, then send Deldo the FTP address, login and password. Deldo pushes to OUR server. An endpoint already exists (infra/ftp, built for Inter-Sprint) and should be reused with directory isolation rather than duplicated.",
+      "needs": "FTP account for Deldo on the existing endpoint, with its own drop directory. See docs/DELDO_ACTIVATION.md section 2.",
       "class": "PREREQUISITE, not a decision"
-    },
-    {
-      "id": "B7",
-      "blocks": "Persisting any Deldo observation",
-      "needs": "The test/live classification column does not exist in the schema. Migration specified in docs/DATABASE_BASELINE.md section 7, gated behind the M1 reconciliation (B4/D5).",
-      "class": "Gated by OWNER_DECISION D5"
     },
     {
       "id": "B3",
-      "blocks": "Any customer-facing price (carried from M1)",
-      "needs": "Inter-Sprint still has no price or stock data. Deldo now supplies both, but only as fictional test values until a live feed arrives.",
+      "blocks": "Any customer-facing price",
+      "needs": "No live commercial data exists in any lane. Inter-Sprint has no price or stock; Deldo has only fictional test values.",
       "class": "PREREQUISITE, not a decision"
     }
   ],
-
   "risks": [
+    {
+      "id": "R15",
+      "severity": "critical",
+      "summary": "The repository does not contain a complete schema history. 14 of 32 production tables - orders, order_items, customers, suppliers, inventory_units, warehouse_zones, order_documents, inventory_scans, inventory_incidents, order_status_history, customer_locations, supplier_locations, supplier_customer_refs, print_jobs - are created by no migration in git.",
+      "impact": "The schema of the live commercial core exists in exactly one place: the production database. There is no reviewable history of it, and a fresh environment cannot be built. Losing production would mean losing the schema definition.",
+      "resolution": "docs/SCHEMA_RECONCILIATION_REPORT.md. Capture the baseline from production; this is now the highest-value remaining infrastructure work."
+    },
+    {
+      "id": "R16",
+      "severity": "medium",
+      "summary": "Production changes were historically applied outside the migration system. A captured baseline fixes the past but not the practice.",
+      "impact": "Without a rule and a check, the divergence recurs and the next baseline is needed in months.",
+      "resolution": "Run scripts/verify-migration-baseline.sh in CI once the baseline exists, and require all schema change to go through migrations."
+    },
     {
       "id": "R10",
       "severity": "medium",
@@ -127,14 +145,8 @@
     {
       "id": "R2",
       "severity": "high",
-      "summary": "Carried from M1, unchanged: document_analyses and document_extracted_lines do not exist in production but are queried by live routes.",
+      "summary": "Carried: document_analyses and document_extracted_lines do not exist in production but are queried by live routes (/api/admin/ddt-import/status, /api/cron/document-analysis). Confirmed again this mission - these 4 tables are the only repo-created tables absent from production.",
       "resolution": "Confirm whether the DDT document-analysis feature is in use."
-    },
-    {
-      "id": "R3",
-      "severity": "high",
-      "summary": "Carried from M1, unchanged: three migration lineages disagree. No migration was added in this mission, deliberately, so the divergence is not deepened.",
-      "resolution": "docs/DATABASE_BASELINE.md section 4."
     },
     {
       "id": "R4",
@@ -143,7 +155,6 @@
       "resolution": "D1, D2."
     }
   ],
-
   "owner_decisions_required": [
     {
       "id": "D7",
@@ -190,34 +201,48 @@
       "question": "Carried from M1: approve the migration reconciliation strategy. Now also blocks persisting Deldo observations (B7)."
     }
   ],
-
   "review_decisions_required": [
-    "Confirm the CSV mapping decisions that were read from data rather than documentation: three-digit Rim as tenths of an inch, Height=0 as no aspect ratio, non-numeric Width as imperial sizing, and only an exact 'XL' treated as extra load.",
-    "Confirm that not implementing CREATE_ORDER XML generation in M2 is the right scope call. The PDF contains a full request example, so it could be built as a pure fixture-tested function whenever wanted."
+    "Confirm the baseline capture approach in docs/SCHEMA_RECONCILIATION_REPORT.md section 7 before any baseline migration is written.",
+    "Confirm whether the DDT document-analysis feature is actually used in production (R2). It decides whether those two migrations are urgent or merely missing.",
+    "Confirm the CSV mapping decisions read from data rather than documentation: three-digit Rim as tenths of an inch, Height=0 as no aspect ratio, non-numeric Width as imperial sizing, exact 'XL' only as extra load."
   ],
-
   "commits": [
-    { "sha": "a92108a", "summary": "Add supplier observation provenance, freshness and the Deldo lane registry" },
-    { "sha": "2583885", "summary": "Add the Deldo price & stock feed parser, mapped from the real file" },
-    { "sha": "85d0169", "summary": "Add Deldo GET_STOCK: the final availability and price verification" },
-    { "sha": "e24838f", "summary": "Document the verified Deldo lane and specify its migration" }
+    {
+      "sha": "090dbdf",
+      "summary": "Prove what the repository migrations actually build from empty"
+    },
+    {
+      "sha": "15441cf",
+      "summary": "Make the Deldo classification design fail-closed"
+    },
+    {
+      "sha": "76ce2e7",
+      "summary": "Connect the Deldo pipeline up to the persistence boundary"
+    },
+    {
+      "sha": "14b6ce1",
+      "summary": "Harden GET_STOCK: server-only, no redirects, bounded response"
+    },
+    {
+      "sha": "a114e3d",
+      "summary": "Add the Deldo activation checklist and correct the lint claim"
+    }
   ],
-
   "not_verified": [
-    "Nothing has ever reached Deldo. No token exists, no endpoint has been called, no FTP account provisioned.",
-    "CREATE_ORDER is not implemented and no XML has been generated or transmitted.",
-    "The parser has never run against a LIVE Deldo feed - only against the supplier's fictional 26933TEST.csv. A live file may differ, which is why the header check is exact.",
-    "No Deldo observation has ever been persisted; the schema cannot yet distinguish test from live data.",
-    "The GET_STOCK request parameter name (article= vs productId=) is unconfirmed - R10.",
-    "Carried from M1: nothing has ever reached Inter-Sprint either."
+    "Nothing has ever reached Deldo. No token, no endpoint call, no FTP account, no email sent.",
+    "The parser has never seen a LIVE Deldo feed - only the supplier's fictional sample.",
+    "No Deldo observation has ever been persisted; the persistence boundary deliberately throws.",
+    "The canonical baseline has not been captured, written or tested. Only the NEED for it is proven.",
+    "The fail-closed DDL is proved on PostgreSQL 16.13 locally, not on Supabase 17.6.",
+    "The GET_STOCK request parameter name (article= vs productId=) remains unconfirmed - R10.",
+    "Carried: nothing has ever reached Inter-Sprint either."
   ],
-
   "next_recommended_mission": {
-    "id": "M3",
-    "title": "Close the Deldo prerequisites, then persist observations",
-    "rationale": "The Deldo lane is built as far as it can go without the supplier. Three of the four remaining items are one email to Jan@deldo.com (token, Discount meaning, pricing mode and currency, plus the article= confirmation), and the fourth is an FTP account. None is engineering work.",
-    "scope": "Send the supplier questions (D7, D8, R10) and request the test token (B5). Provision Deldo's FTP account on the existing endpoint (D9). Then, once the M1 reconciliation gate opens, apply the classification migration (B7) and wire the import run so Deldo observations can be persisted with provenance.",
-    "explicitly_out_of_scope": "Markup, selling price, PFU, customer catalogue, checkout, sourcing, CREATE_ORDER.",
+    "id": "M3B",
+    "title": "Capture the canonical schema baseline",
+    "rationale": "R15 is now the highest-value remaining infrastructure work and is fully independent of Deldo. The commercial core's schema exists only inside the production database, with no reviewable history and no way to rebuild a fresh environment. Everything else - Deldo persistence, the classification migration, any future schema change - queues behind it.",
+    "scope": "Capture full production DDL, commit it as a dated baseline, prove it on a throwaway Supabase project of the same major version, then reconcile the ledger. Requires D5 and a verified restorable backup.",
+    "parallel_track": "The owner's Deldo activation checklist needs no engineering and can proceed independently.",
     "do_not_start_automatically": true
   }
 }
