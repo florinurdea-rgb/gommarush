@@ -1,10 +1,10 @@
 {
   "project": "GommaRush",
-  "mission_id": "M3B",
-  "mission_title": "Canonical database baseline",
+  "mission_id": "M4-PARTIAL",
+  "mission_title": "Autonomous development runner V1 — STOPPED BY OWNER before implementation",
   "status": "READY_FOR_REVIEW",
-  "phase": "Complete. Awaiting independent review. Do not start another mission automatically.",
-  "last_updated": "2026-09-21T19:25:00Z",
+  "phase": "M4 implementation NOT started, by owner instruction. This commit records approved commercial decisions only.",
+  "last_updated": "2026-09-21T19:45:00Z",
   "canonical_branch": "main",
   "working_branch": "claude/confident-albattani-p43rkj",
   "entry_points": {
@@ -25,32 +25,19 @@
     "note": "The PDF does NOT document the CSV columns ('we send you 1 file in CSV format so that you can examine file header and structure'). The sample file IS the column contract, and every mapping was read off it."
   },
   "completed": [
-    "CANONICAL BASELINE CAPTURED. supabase/baseline/ reproduces production's schema from empty: 32 tables, 541 columns, 32 PK, 51 FK, 56 CHECK, 12 UNIQUE, 141 indexes, 28 functions, 23 triggers, RLS on 32/32 with 0 policies.",
-    "PROVED on a disposable PostgreSQL 17.6 - the exact minor version production runs - obtained via npm (@embedded-postgres/linux-x64) because Docker and the PGDG apt repo were both unavailable. Neither production nor staging was used as the target.",
-    "Every object count matches production exactly.",
-    "Five of six object classes byte-identical by md5 of deparsed definitions: columns, constraints, indexes, triggers, RLS flags.",
-    "Functions: 12 of 28 differed textually; all 28 proved SEMANTICALLY IDENTICAL. Differences are (a) comments stripped in production, (b) whitespace/line wrapping, (c) one `IN ('x')` vs `= 'x'` in gorush_refresh_order_status. 27/28 hash identically with comments+whitespace removed; the 28th diffed line-by-line.",
-    "ZERO UNEXPLAINED DIFFERENCES.",
-    "Deldo classification migration moved to supabase/post-baseline/ and proved on the real baseline schema: omission rejected, out-of-vocabulary value rejected, invalid commercial_mode rejected, explicit 'test' accepted.",
-    "scripts/verify-migration-baseline.sh rewritten for CI: verifies the baseline (not the legacy migrations), asserts all 11 object counts, fails if any RLS policy appears, asserts data_classification is NOT NULL with no default, refuses non-local PGHOST.",
-    "Observed inconsistencies documented rather than tidied: two overlapping unique indexes on orders' document number, unretired print_jobs and client_offer_requests, absent document-analysis tables."
+    "DOCUMENTATION ONLY. Recorded the approved commercial architecture decisions in docs/architecture/04_SALES_SOURCING_MODEL.md: supplier identity invisible to customers; customer buys only from GommaRush; standard up to ~7 days vs express ~24-48h manually sourced from the Italian supplier; the 15-20% express share recorded explicitly as a planning assumption and not a rule; supplier minimum quantities and consolidation supported internally; customer order acceptance and supplier purchase/release as separate events; many customer orders per supplier batch; delivery promises must account for consolidation and cut-off rather than raw supplier availability; normal/older-DOT/Demo kept distinguishable; older-DOT offerable as a clearly identified cheaper GommaRush option; supplied DOT year preserved; Deldo Demo meaning unverified and not to be inferred; exact supplier listing/article survives sourcing and ordering; V1 payments bank transfer, POS on delivery, cash; manual review of every customer order; customer-specific pricing supported architecturally; portal and WhatsApp on one catalogue/pricing/order engine.",
+    "Added Deldo activation question 8 (what does the Demo column mean), noting explicitly that no DOT-encoding question is needed because the feed already supplies the year."
   ],
   "in_progress": [],
   "tests": {
-    "vitest": "585 passed, 4 skipped (Inter-Sprint live probe, gated), 43 files",
-    "typecheck": "npx tsc --noEmit clean",
-    "lint": "npx next lint: 0 errors, 7 pre-existing warnings in UI components",
-    "build": "npm run build green",
-    "schema_baseline": "bash scripts/verify-migration-baseline.sh -> all checks pass, exit 0, on PostgreSQL 17.6",
+    "note": "Documentation-only change; no code touched. Gates last run green at M3B: vitest 585 passed / 4 skipped, tsc clean, lint 0 errors, build green, verify-migration-baseline.sh exit 0.",
     "not_run": [
-      "Nothing applied to production or staging.",
-      "The migration LEDGER has not been reconciled - that requires a backup and owner approval.",
-      "Any live Deldo call - no token."
+      "No gates re-run for this commit - no source file changed."
     ]
   },
-  "production_changes": "NONE. Read-only introspection only.",
-  "database_changes": "NONE in production or staging. All DDL executed on a disposable local PostgreSQL 17.6, destroyed afterwards.",
-  "external_actions": "NONE. No supplier contact, no deployment. One npm package installed locally for the disposable PostgreSQL.",
+  "production_changes": "NONE.",
+  "database_changes": "NONE. Ledger untouched; the Deldo classification migration remains unapplied in supabase/post-baseline/.",
+  "external_actions": "NONE. No supplier contacted, no email sent.",
   "blockers": [
     {
       "id": "B9",
@@ -214,23 +201,20 @@
   ],
   "commits": [
     {
-      "sha": "c8b7949",
-      "summary": "Capture the canonical schema baseline from production and prove it"
+      "sha": "773b6d5",
+      "summary": "Record approved commercial decisions and the Deldo Demo question"
     }
   ],
   "not_verified": [
-    "Nothing has been applied to production or staging. The ledger is still divergent.",
-    "The baseline is proved on a disposable PostgreSQL 17.6, not on a Supabase project - Supabase adds platform schemas (auth, storage, realtime) outside the public-schema baseline.",
-    "Nothing has ever reached Deldo: no token, no endpoint call, no FTP account.",
-    "The Deldo persistence migration is written and proved locally but not applied.",
-    "Carried: nothing has ever reached Inter-Sprint."
+    "M4 (autonomous development runner) was NOT implemented. Only the pre-implementation inspection was done before the owner stopped the mission.",
+    "Inspection findings worth keeping for M4: the repository has NO .github/ directory and zero GitHub Actions workflows; this session reports CLAUDE_CODE_SESSION_ATTENDED=1 and its Anthropic provider is host-managed with no ANTHROPIC_API_KEY present; GITHUB_TOKEN is proxy-injected per session; the gh CLI is unavailable. On that evidence, unattended execution CANNOT be activated from this environment - it needs an owner-created repository secret.",
+    "Carried: nothing has ever reached Deldo or Inter-Sprint; the production migration ledger is still divergent."
   ],
   "next_recommended_mission": {
     "id": "M4",
-    "title": "Reconcile the production ledger, then unblock Deldo persistence",
-    "rationale": "The schema is now reproducible from source control, which was the blocking infrastructure problem. What remains is a controlled, backup-gated operation on production's migration ledger - not engineering - after which the Deldo classification migration can be applied and persistence enabled.",
-    "scope": "Verified restorable backup; reconcile the ledger (ledger only, no schema change); rebuild staging from the baseline; apply supabase/post-baseline/0001; enable the Deldo persistence boundary; wire the verify script into CI.",
-    "parallel_track": "The owner's Deldo activation checklist (docs/DELDO_ACTIVATION.md) needs no engineering and can proceed independently.",
+    "title": "Autonomous development runner V1 (restart)",
+    "rationale": "Stopped before implementation at the owner's instruction. The inspection is done and recorded in not_verified, so a restart does not need to repeat it.",
+    "note": "Persistent execution cannot be switched on from this environment: there is no API key here to place in a GitHub secret, and creating one is an owner credential action. Everything else - mission and handoff contracts, state model, safety gates, verification loop, branch isolation, concurrency and timeout protection, documentation and a safe dry run - can be built without it.",
     "do_not_start_automatically": true
   }
 }

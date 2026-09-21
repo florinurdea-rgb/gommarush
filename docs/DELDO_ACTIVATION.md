@@ -14,8 +14,8 @@ the code is written and tested.
 
 ## 1. Send Deldo the questions
 
-Seven items, all answerable in one reply. The first three block the use of any
-Deldo price; the rest unblock the live lookup and the feed.
+Eight items, all answerable in one reply. The first three block the use of any
+Deldo price; the rest unblock the live lookup, the feed and the catalogue.
 
 ### Blocking — commercial
 
@@ -55,6 +55,18 @@ Deldo price; the rest unblock the live lookup and the feed.
    snapshot or a delta. *(We currently assume a complete hourly snapshot; the
    importer deactivates nothing on a partial file, so a wrong assumption is
    safe but leaves stale listings.)*
+
+### For the catalogue
+
+8. **What does the `Demo` column mean?**
+   Some rows carry `DEMO`; most are empty. We need to know what the stock
+   actually is before it can be offered — whether it is ex-display, a
+   manufacturer sample, a customer return, or something else — and whether it
+   carries the normal warranty. We will not guess, so Demo stock stays out of
+   any customer-facing offer until you confirm.
+
+   *(We do not need to ask about DOT: the feed already supplies the year in
+   the `Dot` column, and we preserve it exactly as given.)*
 
 > **Do not send them the sample file back, and do not share credentials by
 > email in the same message as the FTP address.**
