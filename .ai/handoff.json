@@ -1,10 +1,10 @@
 {
   "project": "GommaRush",
-  "mission_id": "M3A",
-  "mission_title": "Internal hardening + database reconciliation preparation",
+  "mission_id": "M3B",
+  "mission_title": "Canonical database baseline",
   "status": "READY_FOR_REVIEW",
   "phase": "Complete. Awaiting independent review. Do not start another mission automatically.",
-  "last_updated": "2026-09-21T19:05:00Z",
+  "last_updated": "2026-09-21T19:25:00Z",
   "canonical_branch": "main",
   "working_branch": "claude/confident-albattani-p43rkj",
   "entry_points": {
@@ -16,89 +16,94 @@
     "security": "docs/SECURITY_FINDINGS.md",
     "schema_evidence": "docs/SCHEMA_RECONCILIATION_REPORT.md",
     "deldo_activation": "docs/DELDO_ACTIVATION.md",
-    "verify_baseline": "scripts/verify-migration-baseline.sh"
+    "verify_baseline": "scripts/verify-migration-baseline.sh",
+    "schema_baseline": "supabase/baseline/ (0001 structure, 0002 functions+triggers+checks)",
+    "post_baseline": "supabase/post-baseline/0001_deldo_classification.sql"
   },
   "source_authority": {
     "deldo": "API documentation.pdf and 26933TEST.csv, supplied by Jan Van Dyck (Deldo NV), subject 'RE: Connect platform and orders for - 026933 (Go Rush Trasporti srl)'. Both inspected directly in this session. GoRush customer number 026933.",
     "note": "The PDF does NOT document the CSV columns ('we send you 1 file in CSV format so that you can examine file header and structure'). The sample file IS the column contract, and every mapping was read off it."
   },
   "completed": [
-    "FAIL-CLOSED CLASSIFICATION: replaced M2's `not null default 'live'` with `not null`, no default, using add-nullable then explicit-backfill then set-not-null. Proved on a disposable local PostgreSQL: omission fails, out-of-vocabulary value fails, explicit 'test' succeeds, pre-existing row carries an explicit 'live' backfill.",
-    "RECONCILIATION EVIDENCE: applied all 20 repo migrations to an empty disposable PostgreSQL. 11 fail; 10 of 32 tables are created. 14 production tables including orders, customers and suppliers are never created by any migration in git.",
-    "Full production inventory captured read-only: 32 tables, 541 columns, 32 PK, 51 FK, 56 CHECK, 12 UNIQUE, 141 indexes, 28 functions, 23 triggers, 2 sequences, 0 enums, 5 extensions, RLS enabled on 32/32 tables with 0 policies.",
-    "Object-level classification complete with ZERO unexplained objects. All 28 production functions are defined in the repo; the 8 repo-only functions are either deliberately dropped (stand allocation) or part of the unapplied document pipeline.",
-    "Baseline strategy settled BY EVIDENCE: capture from production. The earlier squash recommendation is rejected - squashing migrations that build 10 of 32 tables yields an equally incomplete baseline.",
-    "scripts/verify-migration-baseline.sh makes the finding reproducible; refuses any non-local PGHOST because it drops databases.",
-    "Deldo importer connected CSV -> parser -> normalized rows -> observations -> persistence boundary. The boundary throws and names the four missing columns rather than no-oping.",
-    "Import refuses to load the supplier's known test file (26933TEST.csv) as live data.",
-    "GET_STOCK hardened: `server-only` guard on the token-holding modules, redirects refused (fetch follows them by default; an https->http redirect would resend the token in clear), response body capped.",
-    "docs/DELDO_ACTIVATION.md written for the owner: seven supplier questions in one reply, FTP provisioning steps, token configuration.",
-    "Corrected an M1 inaccuracy: CLAUDE.md claimed 2 lint warnings; there are 7 (0 errors), none in files these missions touched."
+    "CANONICAL BASELINE CAPTURED. supabase/baseline/ reproduces production's schema from empty: 32 tables, 541 columns, 32 PK, 51 FK, 56 CHECK, 12 UNIQUE, 141 indexes, 28 functions, 23 triggers, RLS on 32/32 with 0 policies.",
+    "PROVED on a disposable PostgreSQL 17.6 - the exact minor version production runs - obtained via npm (@embedded-postgres/linux-x64) because Docker and the PGDG apt repo were both unavailable. Neither production nor staging was used as the target.",
+    "Every object count matches production exactly.",
+    "Five of six object classes byte-identical by md5 of deparsed definitions: columns, constraints, indexes, triggers, RLS flags.",
+    "Functions: 12 of 28 differed textually; all 28 proved SEMANTICALLY IDENTICAL. Differences are (a) comments stripped in production, (b) whitespace/line wrapping, (c) one `IN ('x')` vs `= 'x'` in gorush_refresh_order_status. 27/28 hash identically with comments+whitespace removed; the 28th diffed line-by-line.",
+    "ZERO UNEXPLAINED DIFFERENCES.",
+    "Deldo classification migration moved to supabase/post-baseline/ and proved on the real baseline schema: omission rejected, out-of-vocabulary value rejected, invalid commercial_mode rejected, explicit 'test' accepted.",
+    "scripts/verify-migration-baseline.sh rewritten for CI: verifies the baseline (not the legacy migrations), asserts all 11 object counts, fails if any RLS policy appears, asserts data_classification is NOT NULL with no default, refuses non-local PGHOST.",
+    "Observed inconsistencies documented rather than tidied: two overlapping unique indexes on orders' document number, unretired print_jobs and client_offer_requests, absent document-analysis tables."
   ],
   "in_progress": [],
   "tests": {
-    "vitest": "585 passed, 4 skipped (Inter-Sprint live probe, gated by design), 43 files",
-    "new_tests": "18 added this mission: deldo-import (16), GET_STOCK redirect and body-cap (2)",
+    "vitest": "585 passed, 4 skipped (Inter-Sprint live probe, gated), 43 files",
     "typecheck": "npx tsc --noEmit clean",
-    "lint": "npx next lint: 0 errors, 7 pre-existing warnings in six UI components, none in files any mission touched",
+    "lint": "npx next lint: 0 errors, 7 pre-existing warnings in UI components",
     "build": "npm run build green",
-    "disposable_db": "PostgreSQL 16.13 local. Migration baseline run and fail-closed DDL proof both executed there. Production is 17.6 - sufficient to prove structural defects, NOT sufficient to certify a future baseline byte-for-byte.",
+    "schema_baseline": "bash scripts/verify-migration-baseline.sh -> all checks pass, exit 0, on PostgreSQL 17.6",
     "not_run": [
-      "Any live Deldo call - no token exists. Deliberately not attempted.",
-      "Any FTP feed delivery - no account provisioned.",
-      "CREATE_ORDER - not implemented, not called.",
-      "Column-level production-vs-repo diff - meaningless while the repo build is missing 22 of 32 tables."
+      "Nothing applied to production or staging.",
+      "The migration LEDGER has not been reconciled - that requires a backup and owner approval.",
+      "Any live Deldo call - no token."
     ]
   },
   "production_changes": "NONE. Read-only introspection only.",
-  "database_changes": "NONE in production or staging. All DDL work was on a disposable local PostgreSQL. No migration file written.",
-  "external_actions": "NONE. No Deldo contact, no email sent, no credential created, no FTP configured, no deployment.",
+  "database_changes": "NONE in production or staging. All DDL executed on a disposable local PostgreSQL 17.6, destroyed afterwards.",
+  "external_actions": "NONE. No supplier contact, no deployment. One npm package installed locally for the disposable PostgreSQL.",
   "blockers": [
     {
-      "id": "B8",
-      "blocks": "Writing the canonical baseline migration",
-      "needs": "Capture full DDL from production (32 tables, 51 FKs, 141 indexes, 28 functions, 23 triggers) and prove it on a Supabase project of the SAME major version (17.x). The local disposable instance is 16.13, adequate for finding defects but not for certifying a baseline.",
-      "class": "Gated by OWNER_DECISION D5"
+      "id": "B9",
+      "blocks": "Reconciling production's migration ledger to the baseline",
+      "needs": "A verified RESTORABLE backup of production, plus owner go-ahead. The expected change is to the ledger only; production's schema must not change.",
+      "class": "OWNER_DECISION"
     },
     {
       "id": "B7",
       "blocks": "Persisting any Deldo observation",
-      "needs": "The classification columns. DDL specified and proved fail-closed locally; gated behind reconciliation.",
-      "class": "Gated by OWNER_DECISION D5"
+      "needs": "supabase/post-baseline/0001_deldo_classification.sql applied. Written and proved; waits on B9.",
+      "class": "Gated by B9"
     },
     {
       "id": "B5",
       "blocks": "Any live Deldo GET_STOCK call",
-      "needs": "Test-environment API token from Jan@deldo.com. See docs/DELDO_ACTIVATION.md section 1.",
+      "needs": "Test API token from Jan@deldo.com. See docs/DELDO_ACTIVATION.md.",
       "class": "PREREQUISITE, not a decision"
     },
     {
       "id": "B6",
       "blocks": "Receiving the hourly Deldo feed",
-      "needs": "FTP account for Deldo on the existing endpoint, with its own drop directory. See docs/DELDO_ACTIVATION.md section 2.",
+      "needs": "FTP account for Deldo on the existing endpoint.",
       "class": "PREREQUISITE, not a decision"
     },
     {
       "id": "B3",
       "blocks": "Any customer-facing price",
-      "needs": "No live commercial data exists in any lane. Inter-Sprint has no price or stock; Deldo has only fictional test values.",
+      "needs": "No live commercial data in any lane.",
       "class": "PREREQUISITE, not a decision"
     }
   ],
   "risks": [
     {
+      "id": "R17",
+      "severity": "low",
+      "summary": "Production's function bodies were not created from the repository's migrations: 12 of 28 have their comments stripped and differ in formatting, though all 28 are semantically identical.",
+      "impact": "Evidence that functions too were applied outside version control. No behavioural difference exists today, but the same practice produced R15.",
+      "resolution": "The baseline carries the repository's commented versions. Requiring all schema change to go through migrations, enforced by the verify script in CI, is the fix."
+    },
+    {
       "id": "R15",
-      "severity": "critical",
-      "summary": "The repository does not contain a complete schema history. 14 of 32 production tables - orders, order_items, customers, suppliers, inventory_units, warehouse_zones, order_documents, inventory_scans, inventory_incidents, order_status_history, customer_locations, supplier_locations, supplier_customer_refs, print_jobs - are created by no migration in git.",
-      "impact": "The schema of the live commercial core exists in exactly one place: the production database. There is no reviewable history of it, and a fresh environment cannot be built. Losing production would mean losing the schema definition.",
-      "resolution": "docs/SCHEMA_RECONCILIATION_REPORT.md. Capture the baseline from production; this is now the highest-value remaining infrastructure work."
+      "severity": "medium",
+      "summary": "RESOLVED IN SOURCE, NOT YET IN THE LEDGER. The 14 tables that no migration created are now in supabase/baseline/, proved to rebuild from empty. What remains is reconciling production's migration ledger, which needs a backup and approval (B9).",
+      "impact": "Until the ledger is reconciled, `supabase db push` against production is still unpredictable. The schema itself is no longer at risk of being lost.",
+      "resolution": "docs/SCHEMA_RECONCILIATION_REPORT.md section 10."
     },
     {
       "id": "R16",
       "severity": "medium",
       "summary": "Production changes were historically applied outside the migration system. A captured baseline fixes the past but not the practice.",
       "impact": "Without a rule and a check, the divergence recurs and the next baseline is needed in months.",
-      "resolution": "Run scripts/verify-migration-baseline.sh in CI once the baseline exists, and require all schema change to go through migrations."
+      "resolution": "scripts/verify-migration-baseline.sh is now CI-suitable and asserts every object count. Wiring it into CI closes this."
     },
     {
       "id": "R10",
@@ -202,47 +207,30 @@
     }
   ],
   "review_decisions_required": [
-    "Confirm the baseline capture approach in docs/SCHEMA_RECONCILIATION_REPORT.md section 7 before any baseline migration is written.",
-    "Confirm whether the DDT document-analysis feature is actually used in production (R2). It decides whether those two migrations are urgent or merely missing.",
-    "Confirm the CSV mapping decisions read from data rather than documentation: three-digit Rim as tenths of an inch, Height=0 as no aspect ratio, non-numeric Width as imperial sizing, exact 'XL' only as extra load."
+    "Approve the captured baseline (docs/SCHEMA_RECONCILIATION_REPORT.md sections 8-10) before the ledger is reconciled.",
+    "Decide on the two overlapping unique indexes on orders' document number (report section 9.1) - reproduced as-is, not tidied.",
+    "Decide whether print_jobs and client_offer_requests should finally be retired (report section 9.2).",
+    "Confirm whether the DDT document-analysis feature is in use (R2); it decides whether those tables join the baseline or are dropped."
   ],
   "commits": [
     {
-      "sha": "090dbdf",
-      "summary": "Prove what the repository migrations actually build from empty"
-    },
-    {
-      "sha": "15441cf",
-      "summary": "Make the Deldo classification design fail-closed"
-    },
-    {
-      "sha": "76ce2e7",
-      "summary": "Connect the Deldo pipeline up to the persistence boundary"
-    },
-    {
-      "sha": "14b6ce1",
-      "summary": "Harden GET_STOCK: server-only, no redirects, bounded response"
-    },
-    {
-      "sha": "a114e3d",
-      "summary": "Add the Deldo activation checklist and correct the lint claim"
+      "sha": "c8b7949",
+      "summary": "Capture the canonical schema baseline from production and prove it"
     }
   ],
   "not_verified": [
-    "Nothing has ever reached Deldo. No token, no endpoint call, no FTP account, no email sent.",
-    "The parser has never seen a LIVE Deldo feed - only the supplier's fictional sample.",
-    "No Deldo observation has ever been persisted; the persistence boundary deliberately throws.",
-    "The canonical baseline has not been captured, written or tested. Only the NEED for it is proven.",
-    "The fail-closed DDL is proved on PostgreSQL 16.13 locally, not on Supabase 17.6.",
-    "The GET_STOCK request parameter name (article= vs productId=) remains unconfirmed - R10.",
-    "Carried: nothing has ever reached Inter-Sprint either."
+    "Nothing has been applied to production or staging. The ledger is still divergent.",
+    "The baseline is proved on a disposable PostgreSQL 17.6, not on a Supabase project - Supabase adds platform schemas (auth, storage, realtime) outside the public-schema baseline.",
+    "Nothing has ever reached Deldo: no token, no endpoint call, no FTP account.",
+    "The Deldo persistence migration is written and proved locally but not applied.",
+    "Carried: nothing has ever reached Inter-Sprint."
   ],
   "next_recommended_mission": {
-    "id": "M3B",
-    "title": "Capture the canonical schema baseline",
-    "rationale": "R15 is now the highest-value remaining infrastructure work and is fully independent of Deldo. The commercial core's schema exists only inside the production database, with no reviewable history and no way to rebuild a fresh environment. Everything else - Deldo persistence, the classification migration, any future schema change - queues behind it.",
-    "scope": "Capture full production DDL, commit it as a dated baseline, prove it on a throwaway Supabase project of the same major version, then reconcile the ledger. Requires D5 and a verified restorable backup.",
-    "parallel_track": "The owner's Deldo activation checklist needs no engineering and can proceed independently.",
+    "id": "M4",
+    "title": "Reconcile the production ledger, then unblock Deldo persistence",
+    "rationale": "The schema is now reproducible from source control, which was the blocking infrastructure problem. What remains is a controlled, backup-gated operation on production's migration ledger - not engineering - after which the Deldo classification migration can be applied and persistence enabled.",
+    "scope": "Verified restorable backup; reconcile the ledger (ledger only, no schema change); rebuild staging from the baseline; apply supabase/post-baseline/0001; enable the Deldo persistence boundary; wire the verify script into CI.",
+    "parallel_track": "The owner's Deldo activation checklist (docs/DELDO_ACTIVATION.md) needs no engineering and can proceed independently.",
     "do_not_start_automatically": true
   }
 }
