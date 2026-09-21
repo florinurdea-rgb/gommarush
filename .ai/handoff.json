@@ -1,39 +1,40 @@
 {
   "project": "GommaRush",
-  "objective": "Phase 0 - Schema Baseline and Staging Reconstruction. Capture production's real application schema into version control, rebuild it in the GommaRush Staging project (schema only, no production data), prove structural parity, and document the migration-ledger discrepancy with a recommended reconciliation procedure that is NOT executed.",
+  "objective": "Supplier Integration Program, Phase 1 - minimum supplier-neutral foundation for Inter-Sprint and Deldo, plus the unified internal search layer. Establish a test runner. Staging only; production untouched.",
   "status": "READY_FOR_REVIEW",
-  "phase": "Phase 0 complete - awaiting review",
+  "phase": "Phase 1 - supplier foundation, ingestion pipeline, unified search",
   "branch": "claude/sleepy-gauss-lezg26",
-  "commit": "15859c933e843275fe5cb48ad8aa7d8d38bf4272",
+  "commit": "",
   "tests": {
-    "passed": 5,
+    "passed": 96,
     "failed": 0,
     "not_run": [
-      "npm run lint - ESLint is uninitialized; next lint prompts interactively and cannot run non-interactively",
-      "unit tests - no test runner exists in this repository"
+      "npm run lint - ESLint uninitialized; next lint prompts interactively. Deliberately not a gate.",
+      "Inter-Sprint end-to-end feed ingestion - BLOCKED, no FTP host/credentials/path",
+      "Deldo parser tests - BLOCKED, no Deldo feed format documentation exists"
     ]
   },
   "staging_verified": true,
   "production_modified": false,
   "review_findings": [],
   "risks": [
-    "GAP (not conflict) - pricing layer: 03_PRICING_PFU_VAT.md specifies configurable markup, minimum profit, PFU provenance, VAT configuration, deterministic rounding and immutable price snapshots. None exists yet. This is a documented target capability that has not been implemented, and is the work of a later phase.",
-    "GAP (not conflict) - supplier capability model: 01_SUPPLIER_ARCHITECTURE.md requires explicit supplier capabilities and a normalized observation carrying stock confidence, lead time, price_verified_at, stock_verified_at, source type and PFU. The suppliers table has no capability columns and supplier_listing_prices carries observed_at only. Target-state gap, to be closed in Phase 1.",
-    "GAP (not conflict) - Inter-Sprint integration state: supplier documentation supports bulk FTP catalogue feeds; production currently holds a single manual spreadsheet import (adapter 'isb', import_mode 'partial', committed 2026-09-08). Nothing in verified supplier documentation contradicts FTP capability, so this is an implementation-state gap, not a specification conflict.",
-    "GAP (not conflict) - no Inter-Sprint/Deldo adapter code exists; the reusable asset is the generic importer gorush_commit_catalogue_batch rather than a lane-specific adapter. 05_IMPLEMENTATION_PRIORITIES item 5 assumes more existing work than there is.",
-    "MILESTONE BLOCKER (data, not schema) - all 9,559 supplier_listing_prices rows have NULL purchase_price, NULL stock_exact and NULL stock_raw. The source spreadsheet carried no price or stock columns. The unified-search milestone needs real commercial data from at least one lane regardless of what is implemented.",
-    "PRODUCTION FRAGILITY (pre-existing, not introduced) - gorush_new_unit_token() is LANGUAGE sql and calls gen_random_bytes() unqualified while the function lives in the extensions schema. It resolves only when extensions is on the caller's search_path. The postgres role has it; anon/authenticated/authenticator do not. Reproduced on a local instance both failing and passing on search_path alone. NOT tested against production - that would be a production write. See docs/SCHEMA_BASELINE.md section 8.",
-    "MIGRATION LEDGER - the repository and production still disagree. client_offer_requests is recorded as 20260804000000 in the repository and 20260820124105 in production, and production holds 13 further migrations the repository does not. A blind supabase db push against production remains forbidden. Reconciliation is written up but not executed (docs/SCHEMA_BASELINE.md section 5.4).",
-    "REPOSITORY DRIFT - the repository's 20260804000000 migration and production's applied version of is_valid_tyre_request differ textually (semantically identical). Direct evidence the repository file diverged from what was applied. The baseline carries production's exact body per the precedence rule.",
-    "SUPPLIER MASTER DATA - the suppliers table contains test/junk records ('asdas', 'Name', 'Furnizor Demo (test)') and unmerged duplicates (ZUIN x4, FINTYRE x2, CARLINI x2). Attaching lanes and capabilities to this list unchanged would encode the mess.",
-    "No test runner exists. The only working gates are 'npx tsc --noEmit' and 'npm run build'. npm run lint is unusable - ESLint was never initialized.",
-    "Two parallel customer intakes (quote_requests, client_offer_requests) remain in place, unchanged, by owner instruction. Canonical intake is to be decided when the sales-order layer is designed."
+    "BLOCKED - Inter-Sprint FTP delivery: no FTP host, credentials, directory path or cadence available anywhere in the repository or environment. The catalogue parser is complete and tested against the real ISB contract; only transport is missing.",
+    "BLOCKED - Inter-Sprint Gateway / Protocol 103: no verified protocol documentation. 02_SUPPLIER_RULES.md references Protocol 103 but referencing a protocol is not documenting it. live_stock_lookup is registered disabled and lookupLive is absent from the adapter. Undocumented protocol behaviour was not inferred.",
+    "BLOCKED - Deldo ingestion entirely: no feed documentation (file/FTP mechanism, path, format, column contract). No parser written, because inventing a column layout would silently mis-map real commercial data. The lane, capability rows and observation model are in place so no redesign is needed when documentation arrives.",
+    "BLOCKED - Deldo order XML: no schema. Out of scope regardless; sending a real order is an OWNER_DECISION.",
+    "src/lib/suppliers/queries.ts is deliberately NOT wired to any route. It returns supplier identity and supplier purchase cost, and this repository has no authentication, so an exposed route would leak supplier cost publicly. Follows the existing precedent of src/lib/offers/admin-queries.ts. Wiring an operator screen requires auth first.",
+    "Production still holds zero commercial data: all 9,559 supplier_listing_prices rows have NULL purchase_price and NULL stock. The unified-search milestone needs a real priced/stocked feed from at least one lane; the ISB catalogue file does not carry price or stock columns at all.",
+    "Per-lane TTL defaults (intersprint 24/24h, deldo 24/12h, it_48h 24/8h) are engineering defaults chosen to make freshness deterministic, not business policy. Tune as real feed cadence is observed.",
+    "Staging carries deliberate synthetic fixtures: one catalogue product, two listings, two real observations and ONE fictional Deldo row (is_test_data=true, EUR 0.01, 99999 units, newest timestamp) kept as a live regression fixture for the exclusion boundary.",
+    "Migration ledger reconciliation between repository and production remains open from Phase 0 (docs/SCHEMA_BASELINE.md section 5.4). Unchanged by this phase.",
+    "gorush_new_unit_token search_path fragility remains open and untested against production (docs/SCHEMA_BASELINE.md section 8)."
   ],
   "decisions_required": [
-    "NOT BLOCKING PHASE 1 - Migration ledger reconciliation (docs/SCHEMA_BASELINE.md section 5.4). Recommended: steps 1-3 only (backup, adopt 'production is baselined at 20260908142622', retire the superseded repository migration to an archive folder). That gives a trustworthy repository with ZERO production writes. Step 4, supabase migration repair, writes to production's ledger and needs its own separate approval. Needed before any future production migration, not before Phase 1 staging work.",
-    "BLOCKS CATALOGUE ATTRIBUTION, NOT PHASE 1 SCHEMA WORK - provenance of GommaRush_ISB_Tyre_Catalogue_Import-3.xlsx. 9,559 listings are attached to a supplier record named 'asdas'. Phase 1 can add supplier lanes, capabilities and observation columns without touching this data; reassigning those listings to a real lane cannot proceed until the file's origin is confirmed.",
-    "BLOCKS PHASE 3 (pricing) - PFU inside the VAT base. 03_PRICING_PFU_VAT.md puts PFU into taxable_subtotal. This matches common Italian treatment of the contributo ambientale PFU and the no-markup-on-PFU rule matches the legal pass-through requirement, but it is a tax position for the commercialista, not an engineering choice.",
-    "BLOCKS PHASE 3 (pricing) - rounding scope, per unit or per line. On 4 tyres at cost 80.00, 20% markup, PFU 2.60, VAT 22%: per-unit gives 481.16, per-line gives 481.17. Price snapshots are immutable, so this must be settled before the first snapshot is written."
+    "PREREQUISITE, NOT A DECISION - supply Inter-Sprint FTP connection details and, if live lookup is wanted, the Gateway/Protocol 103 documentation. Everything downstream is built and tested.",
+    "PREREQUISITE, NOT A DECISION - supply Deldo feed documentation (mechanism, path, format, column contract) and clearly identify which files are the fictional samples so they are ingested with is_test_data = true.",
+    "Blocks wiring an operator search screen: this repository has no authentication. Confirm the intended auth approach (Supabase Auth is already present in the platform) before any route exposing supplier cost is created.",
+    "BLOCKS PHASE 3 (pricing) - PFU inside the VAT base. A tax position for the commercialista, not an engineering choice.",
+    "BLOCKS PHASE 3 (pricing) - rounding scope, per unit or per line. Price snapshots are immutable, so it must be settled before the first one is written."
   ],
-  "next_action": "Review Phase 0 (4 baseline migrations, docs/SCHEMA_BASELINE.md, CLAUDE.md updates). Nothing blocks Phase 1 - supplier lane registry, explicit capabilities and the normalized observation model extension, staging only, additive and reversible. Phase 1 has NOT been started."
+  "next_action": "Awaiting supplier prerequisites. Independent work that can proceed meanwhile: an XLSX/CSV reader feeding the existing ingestion pipeline so an Inter-Sprint file can be ingested the moment one is supplied, and a Supabase-backed IngestStore implementation against staging."
 }
