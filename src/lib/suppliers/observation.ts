@@ -56,10 +56,34 @@ export type FeedCommercialMode =
   | "transport_included"
   | "unknown";
 
+/**
+ * Supplier-reported stock condition. This is deliberately factual, not policy:
+ * a non-empty DOT field means the supplier separated that listing as older-DOT
+ * stock; Demo means the supplier supplied its Demo marker. We do not infer an
+ * age threshold or what "Demo" means commercially.
+ *
+ * null is allowed for sources such as GET_STOCK that do not report condition.
+ */
+export type StockCondition = "normal" | "older_dot" | "demo";
+
 /** One supplier price/stock observation, normalized across all lanes. */
 export interface SupplierObservation {
   /** Which supplier lane this came from, e.g. 'deldo'. */
   readonly laneCode: string;
+
+  /**
+   * Exact supplier listing identity. Required so an observation remains safe
+   * when detached from its import row. Never reconstruct this from EAN: one EAN
+   * may legitimately have multiple supplier listings with different condition
+   * and price.
+   */
+  readonly supplierListingKey: string;
+  readonly supplierArticleId: string;
+
+  /** Source facts about condition; null means the source did not report them. */
+  readonly dotYear: string | null;
+  readonly demo: boolean | null;
+  readonly stockCondition: StockCondition | null;
   readonly classification: DataClassification;
   readonly source: ObservationSource;
   readonly observedAt: Date;
@@ -93,6 +117,7 @@ export type UnusableReason =
   | "missing_price"
   | "unknown_stock"
   | "unknown_commercial_mode"
+  | "unverified_demo"
   | "observed_in_future";
 
 export type ObservationState =
@@ -176,6 +201,13 @@ export function classifyObservation(
     return { state: "no_usable_observation", reason: "unknown_commercial_mode" };
   }
 
+  // Deldo has not yet defined what its Demo marker means or its disclosure /
+  // warranty implications. A Demo observation therefore fails closed even when
+  // price, stock and freshness are otherwise valid.
+  if (observation.demo === true || observation.stockCondition === "demo") {
+    return { state: "no_usable_observation", reason: "unverified_demo" };
+  }
+
   const ageMs = now.getTime() - observation.observedAt.getTime();
 
   // A timestamp in the future means a clock or a parser is wrong. Treating it
@@ -230,4 +262,39 @@ export function excludeTestObservations(
   observations: readonly SupplierObservation[]
 ): SupplierObservation[] {
   return observations.filter((o) => o.classification !== "test");
+}
+
+
+/**
+ * Lane policy registry used by callers that classify supplier observations.
+ * There is intentionally no default and no Deldo hard-coded threshold:
+ * documented publishing cadence is not the same thing as GommaRush's
+ * commercial freshness tolerance.
+ */
+export type FreshnessPolicies = Readonly<Record<string, FreshnessPolicy>>;
+
+export function freshnessPolicyForLane(
+  laneCode: string,
+  policies: FreshnessPolicies
+): FreshnessPolicy {
+  const policy = policies[laneCode];
+  if (!policy || !Number.isFinite(policy.staleAfterMs) || policy.staleAfterMs < 0) {
+    throw new Error(`No valid freshness policy configured for supplier lane '${laneCode}'`);
+  }
+  return policy;
+}
+
+export function classifyObservationForLane(
+  observation: SupplierObservation | null | undefined,
+  policies: FreshnessPolicies,
+  now: Date
+): ObservationState {
+  if (!observation) {
+    return { state: "no_usable_observation", reason: "no_observation" };
+  }
+  return classifyObservation(
+    observation,
+    freshnessPolicyForLane(observation.laneCode, policies),
+    now
+  );
 }
