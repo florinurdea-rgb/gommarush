@@ -245,3 +245,66 @@ filename applies to the other signals too — they are all from the same file.
 `CARLINI GOMME S.R.L.` / `CARLINI GOMME TYRES DISTRIBUTION` — plus placeholders
 `Name` and `Furnizor Demo (test)`. Deduplication is an OWNER_DECISION; merging
 supplier records affects existing orders and accounting.
+
+---
+
+## 7. Proposed migration: Deldo lane — SPECIFIED, NOT WRITTEN, NOT APPLIED
+
+Mission 2 built the Deldo feed parser, the observation model and GET_STOCK
+entirely in the application layer, so nothing here has been applied to any
+database. The schema gaps below are real but must wait for the reconciliation
+gate in §4 — adding a migration while three ledgers disagree would deepen the
+problem rather than solve it.
+
+### What the existing schema already covers
+
+More than expected. `NormalizedCatalogueRow` already carries `purchasePrice`,
+`stockRaw`, `stockExact` and `stockMinimum`, and `supplier_product_listings`
+already carries `old_dot` with the comment *"Two listings may share a product
+(new stock vs old DOT)"*. That is exactly Deldo's duplicate-EAN case, so the
+Deldo lane needs **no new product or listing structure at all**.
+
+### The one genuine gap: test/live classification
+
+There is no `is_test_data` column anywhere in the schema. Deldo's sample feed
+carries fictional prices and quantities, and the supplier's test API endpoint
+serves the same, so an observation's classification must survive into the
+database — otherwise a fictional price becomes indistinguishable from a real
+one the moment it is persisted.
+
+Smallest sufficient change:
+
+```sql
+-- Provenance of an import run: which environment and file it came from.
+alter table public.catalogue_import_runs
+  add column data_classification text not null default 'live'
+    check (data_classification in ('live', 'test'));
+
+-- Carried onto the observation, so a query never has to join to find out.
+alter table public.supplier_listing_prices
+  add column data_classification text not null default 'live'
+    check (data_classification in ('live', 'test')),
+  -- Deldo's two documented pricing modes. 'unknown' until GoRush confirms
+  -- which it receives; an unknown mode is not commercially usable.
+  add column commercial_mode text not null default 'unknown'
+    check (commercial_mode in ('transport_separate', 'transport_included', 'unknown')),
+  -- 'bulk_feed' | 'live_lookup' | 'manual'
+  add column observation_source text not null default 'bulk_feed';
+```
+
+> **The `default 'live'` is deliberate and is the safer direction here**, but it
+> is worth stating why rather than leaving it to be discovered. Every row that
+> exists today came from the Inter-Sprint XLSX upload, which is real data, so
+> backfilling it as `live` is correct. The risk runs the other way — a future
+> test import that forgets to set the column would be recorded as live — so
+> the application must always pass the value explicitly, and the Deldo import
+> path does. A `not null` with no default would be safer still and is the
+> better choice if the reconciliation lets us backfill explicitly.
+
+### Deferred, not needed yet
+
+Separate `price_verified_at` / `stock_verified_at`, stock confidence, and lead
+time / delivery class. All are in the target model in
+[`architecture/01_SUPPLIER_ARCHITECTURE.md`](architecture/01_SUPPLIER_ARCHITECTURE.md)
+but none is required to ingest a feed or verify stock, and adding columns
+nothing writes is how schemas rot.

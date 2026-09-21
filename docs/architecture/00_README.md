@@ -55,8 +55,10 @@ to exist *above* logistics, not inside it.
 
 1. **Inter-Sprint** — PRIMARY. Catalogue feed ingested (manual upload).
    Gateway transport code exists, never live-verified. Ordering disabled.
-2. **Deldo** — SECONDARY. **BLOCKED**: no feed documentation available.
-   Nothing implemented. Not to be confused with Inter-Sprint or EuroSprint.
+2. **Deldo NV** — SECONDARY. Official documentation and sample feed received.
+   Feed parser, observation model and GET_STOCK implemented; FTP transport not
+   wired and ordering deliberately absent. Not to be confused with Inter-Sprint
+   or EuroSprint.
 3. **Italian ~48h supplier** — manual. Operators search and record
    observations by hand, into the same normalized model.
 
