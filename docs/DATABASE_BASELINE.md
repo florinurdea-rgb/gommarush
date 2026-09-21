@@ -24,6 +24,14 @@ timestamps), so **the ledger cannot be compared to the repo by version number**
 **Consequence:** `supabase db push` against production today would be
 unpredictable. Nothing should be pushed until this is reconciled.
 
+> **Updated 2026-09-21 — the problem is worse than a ledger mismatch.**
+> Applying the repository's migrations to an empty database produces **10 of
+> 32 tables**; 11 of 20 migrations fail, and 14 production tables including
+> `orders`, `customers` and `suppliers` are **never created by any migration
+> in git**. Full evidence, reproducible with
+> `bash scripts/verify-migration-baseline.sh`, is in
+> [`SCHEMA_RECONCILIATION_REPORT.md`](SCHEMA_RECONCILIATION_REPORT.md).
+
 ---
 
 ## 2. Production: what is actually there
@@ -137,14 +145,21 @@ an object nobody can account for must not be carried into a canonical baseline
 or dropped from one.
 
 ### Step 4 — Decide the baseline strategy (OWNER_DECISION)
-Recommended: **squash to a dated baseline migration** that reproduces
-production's verified schema exactly, then resume incremental migrations from
-there. Rewriting history to make the existing files "look right" is rejected —
-it would produce a lineage that has never been executed anywhere.
+**Settled by evidence, no longer a preference.** The baseline must be
+**captured from production**, because the repository's migrations do not
+describe the schema — they only alter tables created outside version control
+(see [`SCHEMA_RECONCILIATION_REPORT.md`](SCHEMA_RECONCILIATION_REPORT.md) §1).
 
-The alternative — repairing the ledger entry by entry — keeps granular history
-but requires production ledger writes, and is only worth it if that history has
-value nobody has yet claimed for it.
+A squash of the existing migrations was the earlier recommendation and is now
+**rejected**: squashing files that produce 10 of 32 tables would produce a
+baseline that is equally incomplete.
+
+Repairing the ledger entry by entry is also rejected — it would leave the 14
+missing tables still absent from git.
+
+The captured baseline lands as a single dated file in `supabase/migrations/`,
+replacing the existing 20 as *history*. The old files stay in git history
+rather than being deleted, so the intent behind each remains readable.
 
 ### Step 5 — Prove it on a throwaway environment
 Apply the canonical baseline to a **new, empty** Supabase project. Diff the
@@ -264,42 +279,86 @@ already carries `old_dot` with the comment *"Two listings may share a product
 (new stock vs old DOT)"*. That is exactly Deldo's duplicate-EAN case, so the
 Deldo lane needs **no new product or listing structure at all**.
 
-### The one genuine gap: test/live classification
+### The one genuine gap: test/live classification — FAIL-CLOSED
 
-There is no `is_test_data` column anywhere in the schema. Deldo's sample feed
-carries fictional prices and quantities, and the supplier's test API endpoint
-serves the same, so an observation's classification must survive into the
-database — otherwise a fictional price becomes indistinguishable from a real
-one the moment it is persisted.
+There is no `data_classification` column anywhere in the schema. Deldo's sample
+feed carries fictional prices and quantities, and the supplier's test API
+endpoint serves the same, so an observation's classification must survive into
+the database — otherwise a fictional price becomes indistinguishable from a
+real one the moment it is persisted.
 
-Smallest sufficient change:
+> **Revised 2026-09-21. The earlier draft of this section proposed
+> `not null default 'live'`. That was wrong and is replaced.**
+>
+> A default of `'live'` means the failure mode of *forgetting* to classify is
+> *"it silently became commercial data"*. That is exactly backwards: the whole
+> purpose of the column is to stop fictional data being mistaken for real, and
+> a default that resolves omission in favour of `live` re-creates the hazard it
+> was added to remove. An `INSERT` written before the Deldo work existed, a
+> future adapter, a manual backfill, a `COPY` — any of them omitting the column
+> would produce commercial-looking rows.
+>
+> The column is now `not null` **with no default**, so omission is an error at
+> the database level rather than a silent reclassification.
 
 ```sql
--- Provenance of an import run: which environment and file it came from.
-alter table public.catalogue_import_runs
-  add column data_classification text not null default 'live'
-    check (data_classification in ('live', 'test'));
+-- One vocabulary, used by every table that carries the classification.
+create domain public.data_classification as text
+  check (value in ('live', 'test'));
 
--- Carried onto the observation, so a query never has to join to find out.
+-- Provenance of an import run: which environment and file it came from.
+-- NOT NULL, NO DEFAULT: an import that does not say what it is, fails.
+alter table public.catalogue_import_runs
+  add column data_classification public.data_classification;
+
+-- Backfill EXPLICITLY, as a deliberate statement about known rows, never as a
+-- default that would also apply to rows nobody has thought about yet.
+-- The single existing run is the real Inter-Sprint upload of 2026-09-08.
+update public.catalogue_import_runs
+   set data_classification = 'live'
+ where data_classification is null;
+
+alter table public.catalogue_import_runs
+  alter column data_classification set not null;
+
+-- Carried onto the observation too, so a query never has to join to find out
+-- whether a price is real.
 alter table public.supplier_listing_prices
-  add column data_classification text not null default 'live'
-    check (data_classification in ('live', 'test')),
-  -- Deldo's two documented pricing modes. 'unknown' until GoRush confirms
-  -- which it receives; an unknown mode is not commercially usable.
-  add column commercial_mode text not null default 'unknown'
+  add column data_classification public.data_classification,
+  -- Deldo's two documented pricing modes. 'unknown' is a legitimate, explicit
+  -- state meaning "not yet confirmed with the supplier" — it is NOT a default
+  -- for omission, and classifyObservation() treats it as unusable.
+  add column commercial_mode text
     check (commercial_mode in ('transport_separate', 'transport_included', 'unknown')),
-  -- 'bulk_feed' | 'live_lookup' | 'manual'
-  add column observation_source text not null default 'bulk_feed';
+  add column observation_source text
+    check (observation_source in ('bulk_feed', 'live_lookup', 'manual'));
+
+update public.supplier_listing_prices
+   set data_classification = 'live',
+       commercial_mode     = 'unknown',
+       observation_source  = 'bulk_feed'
+ where data_classification is null;
+
+alter table public.supplier_listing_prices
+  alter column data_classification set not null,
+  alter column commercial_mode     set not null,
+  alter column observation_source  set not null;
 ```
 
-> **The `default 'live'` is deliberate and is the safer direction here**, but it
-> is worth stating why rather than leaving it to be discovered. Every row that
-> exists today came from the Inter-Sprint XLSX upload, which is real data, so
-> backfilling it as `live` is correct. The risk runs the other way — a future
-> test import that forgets to set the column would be recorded as live — so
-> the application must always pass the value explicitly, and the Deldo import
-> path does. A `not null` with no default would be safer still and is the
-> better choice if the reconciliation lets us backfill explicitly.
+**The three-step shape — add nullable, backfill explicitly, then set not null —
+is the point**, not incidental. It is what allows `not null` with no default on
+a table that already has rows, and it forces the backfill to be a reviewable
+statement about *specific known rows* rather than a rule silently applied to
+every future one.
+
+`commercial_mode = 'unknown'` deserves the same distinction. It is an explicit
+assertion that the supplier has not yet told us which pricing mode applies (see
+handoff D8), and the application always writes it deliberately. It is not a
+fallback for a caller that forgot.
+
+The application already enforces the same rule above the database:
+`SupplierObservation.classification` is a required field with no default, and
+`classifyObservation()` checks it before completeness and before age.
 
 ### Deferred, not needed yet
 
