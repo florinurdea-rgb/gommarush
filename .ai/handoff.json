@@ -1,10 +1,10 @@
 {
   "project": "GommaRush",
-  "mission_id": "M1",
-  "mission_title": "Canonical baseline + autonomous agent control system",
+  "mission_id": "M2",
+  "mission_title": "Deldo supplier integration foundation",
   "status": "READY_FOR_REVIEW",
-  "phase": "Complete. Awaiting independent review. Do not start M2 automatically.",
-  "last_updated": "2026-09-21T18:40:00Z",
+  "phase": "Complete. Awaiting independent review. Do not start M3 automatically.",
+  "last_updated": "2026-09-21T18:50:00Z",
 
   "canonical_branch": "main",
   "working_branch": "claude/confident-albattani-p43rkj",
@@ -13,203 +13,211 @@
     "working_rules": "CLAUDE.md",
     "authority_model": "docs/AI_WORKFLOW.md",
     "architecture": "docs/architecture/00_README.md",
+    "deldo_lane": "docs/architecture/02_SUPPLIER_RULES.md",
     "database_and_migrations": "docs/DATABASE_BASELINE.md",
     "security": "docs/SECURITY_FINDINGS.md"
   },
 
+  "source_authority": {
+    "deldo": "API documentation.pdf and 26933TEST.csv, supplied by Jan Van Dyck (Deldo NV), subject 'RE: Connect platform and orders for - 026933 (Go Rush Trasporti srl)'. Both inspected directly in this session. GoRush customer number 026933.",
+    "note": "The PDF does NOT document the CSV columns ('we send you 1 file in CSV format so that you can examine file header and structure'). The sample file IS the column contract, and every mapping was read off it."
+  },
+
   "completed": [
-    "main confirmed as canonical code baseline: every other branch is behind it or a descendant.",
-    "Integrated claude/intersprint-live-probe (2 commits, cherry-picked). Safety re-verified, not assumed: probe is describe.skipIf-gated on INTERSPRINT_LIVE_PROBE=1, protocol 104 appears only in a comment saying it is never called, no credentials, fixtures deterministic.",
-    "Verified the probe's central factual claim against production: all 5 fixture EANs resolve to real catalogue_products, correct brands, all 205/55 R16, all weight_status=supplier_reported.",
-    "Integrated claude/beautiful-hypatia-as9zs6 (1 commit): .mcp.json registering staging only. No secret (project ref + feature flags, OAuth). Production deliberately left account-level.",
-    "Agent operating system reconciled onto main from claude/sleepy-gauss-lezg26, stale claims dropped.",
-    "Architecture package reconciled with IMPLEMENTED/PARTIAL/PLANNED/BLOCKED status markers on every claim.",
-    "Migration divergence documented across three lineages; reconciliation plan written, NOT executed.",
-    "Staging assessed as disposable; contents enumerated; NOT modified.",
-    "asdas provenance investigated with evidence; NOT renamed.",
-    "Security findings registered and classified; only CRON_SECRET documentation fixed."
+    "Inspected both supplier files directly before any field mapping.",
+    "CSV structure verified: ';' delimited, pure ASCII, no BOM, LF, no quoting, exactly 35 columns across all 6,730 lines, 6,729 data rows.",
+    "Article is unique (0 duplicates); EAN is NOT unique (35 duplicates, all old-DOT variants).",
+    "Feed parser implemented against the real contract and validated on the FULL file: 0 malformed, 0 rejected, 6,199 clean, 530 flagged for review, 113 old-DOT listings.",
+    "Supplier-generic observation model: provenance, classification, freshness (current / stale / no_usable / test_data).",
+    "Test-data safety boundary implemented and tested: test classification is checked before completeness and before age, so no input combination can report fictional data as current.",
+    "GET_STOCK implemented: documented test endpoint, typed JSON parsing, unknown-article as a commercial outcome, HTTPS enforced, token redacted, fail-closed config, no retry.",
+    "Deldo capability registry with documented vs implemented split; both ordering capabilities unimplemented, asserted by test.",
+    "Deldo lane documented in docs/architecture/02_SUPPLIER_RULES.md; migration specified in docs/DATABASE_BASELINE.md section 7 and deliberately NOT written or applied."
   ],
 
   "in_progress": [],
 
   "tests": {
-    "vitest": "489 passed, 4 skipped (live probe, gated by design), 39 files",
+    "vitest": "567 passed, 4 skipped (Inter-Sprint live probe, gated by design), 42 files",
+    "new_tests": "78 added across deldo-feed-parse (28), deldo-observation (22), deldo-get-stock (28)",
     "typecheck": "npx tsc --noEmit clean",
-    "lint": "npx next lint clean; 2 pre-existing <img> warnings in BrandMarquee.tsx and Hero.tsx, unrelated to this mission",
-    "build": "see build_status field",
+    "lint": "npx next lint clean; 2 pre-existing <img> warnings unrelated to this mission",
+    "build": "npm run build green",
     "not_run": [
-      "Inter-Sprint live probe - BLOCKED: no credentials in any environment, and outbound egress to customers.inter-sprint.nl:80 unverified.",
-      "Deldo anything - BLOCKED: no documentation, no sample, no credentials."
+      "Any live Deldo call - BLOCKED: no API token. Requires a request to Jan@deldo.com.",
+      "Any FTP feed delivery - BLOCKED: Deldo pushes to OUR FTP server; no account provisioned for them yet.",
+      "CREATE_ORDER - deliberately not implemented and not called."
     ]
   },
-  "build_status": "npm run build verified green at commit time",
 
-  "production_changes": "NONE. Read-only queries only.",
-  "database_changes": "NONE in production or staging. No migration written, applied or altered.",
-  "external_actions": "NONE. No supplier contacted, no order placed or validated, no deployment.",
+  "production_changes": "NONE.",
+  "database_changes": "NONE in production or staging. The Deldo migration is specified only; no migration file written or applied.",
+  "external_actions": "NONE. No Deldo endpoint contacted, no order generated or transmitted, no FTP configured, no deployment.",
 
   "blockers": [
     {
-      "id": "B1",
-      "blocks": "Any Inter-Sprint live capability (stock lookup, ordering, feed automation)",
-      "needs": "Gateway credentials (INTERSPRINT_GATEWAY_CUSTOMER_NUMBER/USERNAME/PASSWORD) and confirmed egress to customers.inter-sprint.nl:80.",
+      "id": "B5",
+      "blocks": "Any live Deldo GET_STOCK call",
+      "needs": "A test-environment API token, requested from Jan@deldo.com. The test URL is documented and already configured.",
       "class": "PREREQUISITE, not a decision"
     },
     {
-      "id": "B2",
-      "blocks": "Deldo entirely",
-      "needs": "Feed mechanism, path, format and column contract; a real sample file; the XML order schema. Identify which sample files are the fictional ones so they ingest flagged as test data.",
+      "id": "B6",
+      "blocks": "Receiving the hourly Deldo feed",
+      "needs": "An FTP account for Deldo on GommaRush infrastructure, then send Deldo the FTP address, login and password. Deldo pushes to OUR server. An endpoint already exists (infra/ftp, built for Inter-Sprint) and should be reused with directory isolation rather than duplicated.",
       "class": "PREREQUISITE, not a decision"
+    },
+    {
+      "id": "B7",
+      "blocks": "Persisting any Deldo observation",
+      "needs": "The test/live classification column does not exist in the schema. Migration specified in docs/DATABASE_BASELINE.md section 7, gated behind the M1 reconciliation (B4/D5).",
+      "class": "Gated by OWNER_DECISION D5"
     },
     {
       "id": "B3",
-      "blocks": "Any customer-facing price",
-      "needs": "No commercial data exists. All 9,559 supplier_listing_prices rows have purchase_price NULL and no stock; the ISB catalogue file carries neither column. A priced/stocked feed or live Gateway lookup is required.",
+      "blocks": "Any customer-facing price (carried from M1)",
+      "needs": "Inter-Sprint still has no price or stock data. Deldo now supplies both, but only as fictional test values until a live feed arrives.",
       "class": "PREREQUISITE, not a decision"
-    },
-    {
-      "id": "B4",
-      "blocks": "Migration reconciliation execution",
-      "needs": "Owner approval of the baseline strategy in docs/DATABASE_BASELINE.md section 4, plus a verified restorable backup.",
-      "class": "OWNER_DECISION - see D5"
     }
   ],
 
   "risks": [
     {
+      "id": "R10",
+      "severity": "medium",
+      "summary": "Deldo documentation conflicts with itself on the GET_STOCK request parameter. The 'URL Parameters' section lists productId=[integer|string] OR ean=[string]; both worked examples use article=.",
+      "impact": "A wrong parameter name means every live lookup fails, or worse, silently returns nothing useful.",
+      "resolution": "article= is implemented because it is the only form demonstrated. Confirm with Deldo when requesting the token - it costs one line in the same email as B5."
+    },
+    {
+      "id": "R11",
+      "severity": "high",
+      "summary": "The Discount column's meaning is undocumented and values range from -407.69 to +63.23. A plain percentage discount cannot be negative.",
+      "impact": "If Discount must be applied to reach the real purchase price, every Deldo cost is currently wrong. If it must not, applying it later would corrupt every margin.",
+      "resolution": "Carried verbatim and never applied. purchasePrice is the Price column as supplied. Needs D7."
+    },
+    {
+      "id": "R12",
+      "severity": "high",
+      "summary": "Which of Deldo's two documented pricing modes GoRush receives is not stated anywhere - tyre price with transport separate, or transport included for a destination country.",
+      "impact": "The same number means different things under each. A markup applied to the wrong interpretation misprices every Deldo tyre.",
+      "resolution": "Every observation carries commercialMode 'unknown', which classifyObservation treats as not commercially usable. Needs D8."
+    },
+    {
+      "id": "R13",
+      "severity": "medium",
+      "summary": "Neither the feed nor the API returns a currency.",
+      "impact": "Deldo is Belgian and EUR is the obvious assumption, but an assumed currency on a purchase price is exactly the class of silent error this integration must not make.",
+      "resolution": "currency is left null. Needs D8 alongside the pricing mode."
+    },
+    {
+      "id": "R14",
+      "severity": "low",
+      "summary": "530 of 6,729 rows are flagged for review: 459 parenthesised or damaged load/speed values, 70 three-digit truck rims, 3 imperial widths.",
+      "impact": "Descriptive only - no commercial field is affected. These rows import with null dimensions rather than guesses.",
+      "resolution": "Acceptable. Revisit if search quality suffers."
+    },
+    {
       "id": "R1",
       "severity": "high",
-      "summary": "Gateway Manual conflict. protocols.ts cites Gateway Manual v2.2 with paragraph refs for every protocol code; the capability notes on claude/sleepy-gauss-lezg26 assert no verified protocol documentation exists. The manual is not in this repository. Both cannot be true.",
-      "impact": "The entire Inter-Sprint protocol registry may be inferred rather than documented. Until settled, no Gateway behaviour may be inferred from it.",
-      "resolution": "One question to the owner or one email to the supplier. See docs/architecture/02_SUPPLIER_RULES.md."
+      "summary": "Carried from M1, unchanged: the Inter-Sprint Gateway Manual conflict. protocols.ts cites Gateway Manual v2.2 with paragraph refs; the sleepy-gauss capability notes assert no verified protocol documentation exists, and the manual is not in this repository.",
+      "impact": "The Inter-Sprint protocol registry may be inferred rather than documented.",
+      "resolution": "D6. Unaffected by this mission."
     },
     {
       "id": "R2",
       "severity": "high",
-      "summary": "document-analysis-jobs.ts queries document_analyses and document_extracted_lines. Neither table exists in production. Reached by /api/admin/ddt-import/status and /api/cron/document-analysis.",
-      "impact": "Either the feature is unused, or it is broken in production and unreported.",
-      "resolution": "Confirm usage before the reconciliation window; it decides whether migrations 20260901/20260902 are urgent."
+      "summary": "Carried from M1, unchanged: document_analyses and document_extracted_lines do not exist in production but are queried by live routes.",
+      "resolution": "Confirm whether the DDT document-analysis feature is in use."
     },
     {
       "id": "R3",
       "severity": "high",
-      "summary": "Three migration lineages disagree. No repo filename matches any production ledger version. quote_requests exists in production with data but is absent from its ledger; four repo migrations are unapplied.",
-      "impact": "supabase db push against production today would be unpredictable.",
-      "resolution": "docs/DATABASE_BASELINE.md section 4. Do not push anything until executed."
+      "summary": "Carried from M1, unchanged: three migration lineages disagree. No migration was added in this mission, deliberately, so the divergence is not deepened.",
+      "resolution": "docs/DATABASE_BASELINE.md section 4."
     },
     {
       "id": "R4",
       "severity": "medium",
-      "summary": "The entire 9,559-row production catalogue hangs off supplier 'asdas' (vat_number 'ads'), created as a test record. 16 suppliers include four spellings of ZUIN, two of FINTYRE, two of CARLINI, plus placeholders 'Name' and 'Furnizor Demo (test)'.",
-      "impact": "Any sourcing, pricing or accounting grouped by supplier produces wrong totals.",
-      "resolution": "OWNER_DECISION D1 and D2. Evidence in docs/DATABASE_BASELINE.md section 6."
-    },
-    {
-      "id": "R5",
-      "severity": "medium",
-      "summary": "Inter-Sprint gateway defaults to plain HTTP with HTTP Basic auth; the FTP drop point is plain FTP open to the whole internet.",
-      "impact": "Credentials would cross the internet unencrypted. Nothing has been transmitted yet - no credentials exist.",
-      "resolution": "docs/SECURITY_FINDINGS.md findings 1 and 2. Ask the supplier about HTTPS/FTPS/SFTP and obtain egress IPs."
-    },
-    {
-      "id": "R6",
-      "severity": "medium",
-      "summary": "The only commercial observations are from 2026-09-08 and carry no price or stock. There is no freshness control because nothing consumes observations yet.",
-      "impact": "Prospective: presenting a stale or absent observation as live availability means wrong stock and wrong prices.",
-      "resolution": "A freshness gate belongs in the same change as the first customer-facing price, not later."
-    },
-    {
-      "id": "R7",
-      "severity": "low",
-      "summary": "1,229 of 9,550 catalogue products (12.9%) have weight_status='missing_or_zero'.",
-      "impact": "Any weight-based PFU rule is indeterminate for them.",
-      "resolution": "Must resolve to TO_CONFIRM, never a guess. Policy is OWNER_DECISION D4."
-    },
-    {
-      "id": "R8",
-      "severity": "low",
-      "summary": "The supplier lane and capability model exists only on claude/sleepy-gauss-lezg26 and in staging, not in main. Porting it needs a migration.",
-      "impact": "Adding a migration while the ledger is divergent would deepen R3.",
-      "resolution": "Port after reconciliation. Proposed schema in docs/DATABASE_BASELINE.md section 5. Do not delete that branch - it holds the only copy."
+      "summary": "Carried from M1, unchanged: the production catalogue hangs off supplier 'asdas'; duplicate ZUIN / FINTYRE / CARLINI records.",
+      "resolution": "D1, D2."
     }
   ],
 
   "owner_decisions_required": [
     {
-      "id": "D1",
-      "question": "Supplier identity for 'asdas', which owns the entire production catalogue.",
-      "options": "Rename in place (preserves 9,559 listings, but relabels a cancelled test order as that supplier's) or create a proper supplier and re-import (leaves the test record clean, rewrites 9,559 listings).",
-      "blocks": "Anything customer-facing that names or groups by supplier.",
-      "evidence": "docs/DATABASE_BASELINE.md section 6"
+      "id": "D7",
+      "question": "What does the Deldo feed's Discount column mean, and is it already reflected in Price?",
+      "why": "Values run from -407.69 to +63.23, so it is not a plain percentage discount. Until answered, purchase cost cannot be considered final.",
+      "blocks": "Any use of a Deldo purchase price.",
+      "note": "One question to Jan@deldo.com. Can be combined with D8 and R10."
     },
     {
-      "id": "D2",
-      "question": "Deduplicating the ZUIN / FINTYRE / CARLINI supplier records and removing placeholders.",
-      "blocks": "Correct supplier-level reporting and accounting.",
-      "note": "Merging supplier records affects existing orders."
+      "id": "D8",
+      "question": "Which of the two Deldo pricing modes does GoRush receive - transport separate, or transport included for a destination country - and in what currency?",
+      "why": "The same number means different things under each mode, and no currency is supplied anywhere.",
+      "blocks": "Any markup or supplier comparison involving Deldo."
     },
     {
-      "id": "D3",
-      "question": "PFU tariff source, values and effective dates; and whether PFU sits inside the VAT base.",
-      "blocks": "Any customer total. A tax position for the commercialista, not an engineering choice.",
-      "note": "Must be settled before the first price snapshot, which is immutable. Do not populate tariffs from model knowledge."
-    },
-    {
-      "id": "D4",
-      "question": "Markup policy (default percentage, minimum profit per tyre, rounding scope per unit or per line) and the policy for products with no verified weight.",
-      "blocks": "Any selling price."
-    },
-    {
-      "id": "D5",
-      "question": "Approve the migration reconciliation strategy and schedule a maintenance window.",
-      "blocks": "Any future migration, including the supplier capability port (R8).",
-      "evidence": "docs/DATABASE_BASELINE.md section 4"
+      "id": "D9",
+      "question": "Approve provisioning an FTP account for Deldo on the existing GommaRush FTP endpoint, and sending Deldo the credentials.",
+      "why": "Deldo pushes the hourly feed to our server. This is an external action and a credential change, so it is not taken autonomously.",
+      "note": "The existing endpoint is PLAIN FTP (security finding 2). Ask Deldo whether they support FTPS or SFTP in the same email."
     },
     {
       "id": "D6",
-      "question": "Does the Inter-Sprint Gateway Manual v2.2 exist and can it be supplied?",
-      "blocks": "Trusting the protocol registry. See R1.",
-      "note": "Cheapest open item here: one question, and it settles a high-severity conflict."
+      "question": "Carried from M1: does the Inter-Sprint Gateway Manual v2.2 exist and can it be supplied?",
+      "blocks": "Trusting the Inter-Sprint protocol registry."
+    },
+    {
+      "id": "D1",
+      "question": "Carried from M1: supplier identity for 'asdas'."
+    },
+    {
+      "id": "D2",
+      "question": "Carried from M1: deduplicating supplier records."
+    },
+    {
+      "id": "D3",
+      "question": "Carried from M1: PFU tariff source, values, effective dates, and whether PFU sits inside the VAT base."
+    },
+    {
+      "id": "D4",
+      "question": "Carried from M1: markup policy and the policy for products with no verified weight. Note that the Deldo feed has NO weight column at all."
+    },
+    {
+      "id": "D5",
+      "question": "Carried from M1: approve the migration reconciliation strategy. Now also blocks persisting Deldo observations (B7)."
     }
   ],
 
   "review_decisions_required": [
-    "Confirm whether the DDT document-analysis feature is actually used in production (R2).",
-    "Confirm staging may be rebuilt from the canonical baseline once one exists. Assessed as disposable; not modified."
+    "Confirm the CSV mapping decisions that were read from data rather than documentation: three-digit Rim as tenths of an inch, Height=0 as no aspect ratio, non-numeric Width as imperial sizing, and only an exact 'XL' treated as extra load.",
+    "Confirm that not implementing CREATE_ORDER XML generation in M2 is the right scope call. The PDF contains a full request example, so it could be built as a pure fixture-tested function whenever wanted."
   ],
 
   "commits": [
-    { "sha": "64569e5", "summary": "Add a gated live probe for the Inter-Sprint gateway (cherry-picked)" },
-    { "sha": "136382e", "summary": "Make the Protocol 103 proof a single command over five real catalogue EANs (cherry-picked)" },
-    { "sha": "19f9847", "summary": "Add the supabase-staging project MCP server (cherry-picked)" },
-    { "sha": "aee4fd4", "summary": "Add the durable agent operating system" },
-    { "sha": "29c38ad", "summary": "Reconcile the architecture specification against verified reality" },
-    { "sha": "4faef08", "summary": "Record database divergence, security findings, and the asdas provenance" }
+    { "sha": "a92108a", "summary": "Add supplier observation provenance, freshness and the Deldo lane registry" },
+    { "sha": "2583885", "summary": "Add the Deldo price & stock feed parser, mapped from the real file" },
+    { "sha": "85d0169", "summary": "Add Deldo GET_STOCK: the final availability and price verification" },
+    { "sha": "e24838f", "summary": "Document the verified Deldo lane and specify its migration" }
   ],
 
-  "branch_disposition": {
-    "main": "CANONICAL. Unchanged by this mission.",
-    "claude/intersprint-live-probe": "INTEGRATED by cherry-pick. Safe to retire after review; not deleted.",
-    "claude/beautiful-hypatia-as9zs6": "INTEGRATED by cherry-pick. Safe to retire after review; not deleted.",
-    "claude/sleepy-gauss-lezg26": "PARTIALLY PORTED - agent system and architecture concepts only. Its reconstructed baseline migrations are rejected; main's catalogue schema is richer and is what production runs. DO NOT DELETE: it holds the only copy of the supplier-foundation migrations (R8).",
-    "claude/gorush-transport-intake-phase1-v2": "NOT REVIEWED. 8 commits ahead, 10 behind. Implements the TRANSPORT intake flow. Out of Mission 1 scope; needs its own review.",
-    "stale": "claude/gorush-landing-page-abb0oh, claude/gorush-logistics-phase-1-1bm6gu, claude/gorush-marketing-redesign, claude/logo-storage-homepage-gtcyuh - 106+ commits behind, not integrated, not deleted."
-  },
-
   "not_verified": [
-    "Nothing has ever reached Inter-Sprint. The gateway has no application caller and the probe has never run with credentials.",
-    "No Deldo code, connection or data exists anywhere.",
-    "The migration reconciliation plan is written but unexecuted and unrehearsed.",
-    "The supplier capability port is specified but not implemented - no migration written.",
-    "Production runtime behaviour of the DDT document-analysis feature (R2)."
+    "Nothing has ever reached Deldo. No token exists, no endpoint has been called, no FTP account provisioned.",
+    "CREATE_ORDER is not implemented and no XML has been generated or transmitted.",
+    "The parser has never run against a LIVE Deldo feed - only against the supplier's fictional 26933TEST.csv. A live file may differ, which is why the header check is exact.",
+    "No Deldo observation has ever been persisted; the schema cannot yet distinguish test from live data.",
+    "The GET_STOCK request parameter name (article= vs productId=) is unconfirmed - R10.",
+    "Carried from M1: nothing has ever reached Inter-Sprint either."
   ],
 
   "next_recommended_mission": {
-    "id": "M2",
-    "title": "Resolve the commercial data blocker before building pricing",
-    "rationale": "The audit originally proposed going straight to a pricing and offer slice. That is not currently buildable: production has no purchase price and no stock (B3), so a pricing engine would have no input. Obtain a priced and stocked supplier feed, or live Gateway lookup, first.",
-    "scope": "Settle D6 (does the Gateway Manual exist). Obtain a priced/stocked Inter-Sprint feed or credentials. Wire freshness and provenance onto observations. Still no customer-facing pricing, no supplier ordering.",
-    "requires": ["B1 or a priced feed", "D6"],
+    "id": "M3",
+    "title": "Close the Deldo prerequisites, then persist observations",
+    "rationale": "The Deldo lane is built as far as it can go without the supplier. Three of the four remaining items are one email to Jan@deldo.com (token, Discount meaning, pricing mode and currency, plus the article= confirmation), and the fourth is an FTP account. None is engineering work.",
+    "scope": "Send the supplier questions (D7, D8, R10) and request the test token (B5). Provision Deldo's FTP account on the existing endpoint (D9). Then, once the M1 reconciliation gate opens, apply the classification migration (B7) and wire the import run so Deldo observations can be persisted with provenance.",
+    "explicitly_out_of_scope": "Markup, selling price, PFU, customer catalogue, checkout, sourcing, CREATE_ORDER.",
     "do_not_start_automatically": true
   }
 }
