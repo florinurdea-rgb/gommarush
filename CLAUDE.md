@@ -11,7 +11,66 @@ Read this before any implementation work.
 | `docs/AI_HANDOFF.md` | Handoff template to fill in at the end of a work phase |
 | `.ai/handoff.json` | Machine-readable current state. Update at the end of every meaningful phase |
 | `README.md` | Stack, setup, environment variables, deployment |
-| `docs/architecture/` | Canonical supplier / pricing / sourcing specification — **not yet committed, see "Known gaps"** |
+| **`docs/architecture/`** | **THE CANONICAL SPECIFICATION.** Supplier, pricing, PFU/VAT, sales and sourcing architecture. Implementation and AI review are performed *against these documents*. |
+
+---
+
+## 0. Canonical specification and precedence
+
+**`docs/architecture/` is the canonical GommaRush product and architecture
+specification.** Implementation is performed against it, and AI review checks
+work against it. It is the reference, not background reading.
+
+| Document | Covers |
+| --- | --- |
+| [`docs/architecture/00_README.md`](docs/architecture/00_README.md) | Package purpose, supplier lanes, the source-technology-neutral principle |
+| [`docs/architecture/01_SUPPLIER_ARCHITECTURE.md`](docs/architecture/01_SUPPLIER_ARCHITECTURE.md) | Canonical flow, product identity, normalized offer, capabilities, search strategy, customer confidentiality |
+| [`docs/architecture/02_SUPPLIER_RULES.md`](docs/architecture/02_SUPPLIER_RULES.md) | Per-lane rules: Inter-Sprint, Deldo, Italian ~48h manual |
+| [`docs/architecture/03_PRICING_PFU_VAT.md`](docs/architecture/03_PRICING_PFU_VAT.md) | Markup, minimum profit, PFU, VAT, rounding, price snapshots |
+| [`docs/architecture/04_SALES_SOURCING_MODEL.md`](docs/architecture/04_SALES_SOURCING_MODEL.md) | Sales order, sourcing allocation, supplier purchase, logistics boundary |
+| [`docs/architecture/05_IMPLEMENTATION_PRIORITIES.md`](docs/architecture/05_IMPLEMENTATION_PRIORITIES.md) | Milestone definition and priority order |
+
+Sections 1-11 below are the *working rules* for applying that specification.
+Where this file summarizes the specification, the specification wins.
+
+### Precedence
+
+When sources disagree, this is the order of authority:
+
+```
+verified supplier documentation / actual production facts
+  → approved docs/architecture specification
+  → approved owner decisions
+  → implementation
+```
+
+Read it as: a verified supplier fact or a proven production fact outranks the
+specification; the specification outranks a prior owner decision that predates
+it; and all three outrank whatever the code currently does.
+
+**A conflict between these sources is never resolved silently.** Not by
+"correcting" the specification, not by making the code match a document that
+describes something which does not exist, and not by assuming the production
+database is right because it is live.
+
+When you find a conflict:
+
+1. **Stop** work that depends on the resolution. Continue anything that does not.
+2. **Record it** in [`.ai/handoff.json`](.ai/handoff.json):
+   - under **`risks`** when the conflict is a factual discrepancy you can state
+     and work around without a business decision;
+   - under **`decisions_required`** when resolving it needs owner input — any
+     commercial, tax, pricing, supplier-behaviour or approved-business-rule
+     question.
+3. **State both sides**: what the specification says, what the supplier
+   documentation or production proves, and which you recommend — with reasoning.
+4. Where it is a `decisions_required` item, set `status` to `OWNER_DECISION`
+   if it blocks the current phase.
+
+The specification is not automatically right. The audit of this repository found
+several places where it described integrations and data that do not exist.
+Report those; do not build fiction to match a document, and do not edit the
+specification to match reality without owner approval.
 
 ---
 
@@ -224,10 +283,9 @@ Code and documentation drift is treated as an incomplete task.
   the same change.
 - Update `.ai/handoff.json` at the end of every meaningful implementation phase,
   and keep it valid JSON.
-- If you discover documentation that contradicts the code, **report the conflict**
-  rather than silently making the code match the document. The specification is
-  not automatically right — the audit of this repository found several places
-  where it described things that do not exist.
+- If you discover documentation that contradicts the code, supplier documentation
+  or production, **report the conflict** via the precedence procedure in §0 rather
+  than silently making either side match the other.
 
 ## 11. Escalation
 
@@ -258,10 +316,7 @@ afterwards — state the question, then wait.
 
 Recorded honestly so no agent assumes otherwise:
 
-1. **`docs/architecture/` does not exist yet.** The canonical supplier / pricing /
-   sourcing specification lives outside this repository. Until it is committed,
-   an AI reviewer cloning this repo cannot check work against it.
-2. **No test runner** (see §8).
-3. **No schema baseline.** Production's schema and its `gorush_*` functions are
+1. **No test runner** (see §8).
+2. **No schema baseline.** Production's schema and its `gorush_*` functions are
    not in version control, and the migration ledgers disagree. Treat every
    migration question as unresolved until this is fixed.

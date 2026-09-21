@@ -1,10 +1,10 @@
 {
   "project": "GommaRush",
-  "objective": "Establish the lightweight AI-assisted development protocol shared by the owner, Claude and a separate AI reviewer: CLAUDE.md, docs/AI_WORKFLOW.md, docs/AI_HANDOFF.md and .ai/handoff.json. Documentation and protocol only - no application behaviour changed.",
+  "objective": "Commit the architecture package to docs/architecture/ as the canonical GommaRush product and architecture specification, and establish the source-precedence rule in CLAUDE.md and docs/AI_WORKFLOW.md. Documentation only - no application code, schema, migration, supplier data, staging or production change.",
   "status": "READY_FOR_REVIEW",
   "phase": "Workflow setup (pre-Phase 0)",
   "branch": "claude/sleepy-gauss-lezg26",
-  "commit": "ce864a8beb8fbcd7d9c6afeecf804bb6557b5ca7",
+  "commit": "",
   "tests": {
     "passed": 2,
     "failed": 0,
@@ -17,16 +17,23 @@
   "production_modified": false,
   "review_findings": [],
   "risks": [
-    "docs/architecture/ does not exist in this repository. CLAUDE.md references it as the canonical supplier/pricing/sourcing specification, but the package (00_README through 05_IMPLEMENTATION_PRIORITIES) lives outside version control. An AI reviewer cloning this repo cannot check work against it.",
+    "SPEC vs PRODUCTION - Inter-Sprint FTP ingestion: 02_SUPPLIER_RULES.md describes bulk passenger and truck catalogue feeds via FTP. Production proves only a single manual spreadsheet import (catalogue_import_runs: adapter 'isb', file 'GommaRush_ISB_Tyre_Catalogue_Import-3.xlsx', import_mode 'partial', committed 2026-09-08). No FTP ingestion exists. Precedence: production fact outranks the specification. Not silently changed.",
+    "SPEC vs REPOSITORY - existing Inter-Sprint work: 05_IMPLEMENTATION_PRIORITIES.md item 5 says to fit existing Inter-Sprint work behind the supplier-neutral boundary. No Inter-Sprint integration code exists in this repository - no Gateway client, no Protocol 103/104. The reusable asset is the generic importer gorush_commit_catalogue_batch, not an Inter-Sprint adapter. Less existing work than the document implies.",
+    "SPEC vs PRODUCTION - normalized observation model: 01_SUPPLIER_ARCHITECTURE.md requires stock confidence, expected lead time, price_verified_at, stock_verified_at, source type, PFU data and ordering capability on a supplier observation. supplier_listing_prices carries observed_at only. The remaining fields do not exist.",
+    "SPEC vs PRODUCTION - explicit capabilities: 01_SUPPLIER_ARCHITECTURE.md requires capabilities to be explicit rather than inferred. The suppliers table has no capability, lane or integration-type column. No capability model exists.",
+    "MILESTONE BLOCKER - no commercial data: all 9,559 supplier_listing_prices rows have NULL purchase_price, NULL stock_exact and NULL stock_raw. The source spreadsheet carried no price or stock columns. The 05_IMPLEMENTATION_PRIORITIES milestone (purchase price, stock, delivery estimate, freshness per sourcing option) cannot be met from current data regardless of what is implemented.",
+    "SPEC vs PRODUCTION - pricing layer absent: 03_PRICING_PFU_VAT.md specifies configurable markup, minimum profit, PFU with provenance, VAT configuration, deterministic rounding and price snapshots. None of these exist in the database or the repository. order_items.unit_price / vat_percent / line_total are extracted supplier-document (DDT) figures and must not be mistaken for customer pricing.",
+    "No schema baseline: production holds 14 migrations and 28 gorush_* functions that are not in any repository, and the repository and production migration ledgers record client_offer_requests under different versions (repo 20260804000000, production 20260820124105). No migration work is safe until this is resolved. supabase db push against production is forbidden.",
+    "Supplier master data quality: the suppliers table contains test/junk records ('asdas', 'Name', 'Furnizor Demo (test)') and unmerged duplicates (ZUIN x4, FINTYRE x2, CARLINI x2). Attaching lanes and capabilities to this list would encode the mess.",
     "No test runner exists. The only working verification gates are 'npx tsc --noEmit' and 'npm run build'.",
-    "npm run lint is broken as a gate: ESLint was never initialized, so next lint drops into an interactive setup prompt.",
-    "No schema baseline. Production holds 14 migrations and 28 gorush_* functions that are not in any repository, and the repo and production migration ledgers disagree about client_offer_requests. No migration work is safe until this is resolved.",
-    "Two parallel customer-request tables exist (client_offer_requests, quote_requests). One must be made canonical before a sales layer is built on top of either."
+    "npm run lint is broken as a gate: ESLint was never initialized, so next lint drops into an interactive setup prompt."
   ],
   "decisions_required": [
-    "Should the architecture package (00_README, 01_SUPPLIER_ARCHITECTURE, 02_SUPPLIER_RULES, 03_PRICING_PFU_VAT, 04_SALES_SOURCING_MODEL, 05_IMPLEMENTATION_PRIORITIES) be committed to docs/architecture/? Recommendation: yes. Without it the AI reviewer has no canonical specification to review against, and CLAUDE.md's reference dangles. Not done here because it was outside the requested scope.",
-    "Approve Phase 0 (schema baseline and staging reconstruction) from the architecture audit. It touches no production data and unblocks every later phase.",
-    "Provenance of GommaRush_ISB_Tyre_Catalogue_Import-3.xlsx: 9,559 catalogue listings are attached to a supplier record named 'asdas' and cannot be attributed to a real supplier until confirmed. Blocks Phase 1."
+    "CONFLICT - catalogue provenance: 9,559 catalogue listings and their import run are attached to a supplier record named 'asdas'. The specification names three lanes (Inter-Sprint, Deldo, Italian ~48h); none exists as a supplier record. What is GommaRush_ISB_Tyre_Catalogue_Import-3.xlsx and which supplier owns it? Until answered the data cannot be attributed to any lane. Blocks Phase 1.",
+    "CONFLICT - two customer-request tables: 04_SALES_SOURCING_MODEL.md specifies one customer offer to sales-order layer. Production has two parallel intakes: quote_requests (2 rows, with RPC, event log, notification state machine and the customer-visible GR-YYMMDD-NNNN counter) and client_offer_requests (0 rows, written by this repository's public form). One must be made canonical before a sales layer is built on either. Recommendation: keep quote_requests, retire client_offer_requests after repointing the website. Owner decision because it changes an approved customer-facing flow.",
+    "TAX POLICY - PFU inside the VAT base: 03_PRICING_PFU_VAT.md puts PFU into taxable_subtotal, so VAT applies to it. This matches common Italian treatment of the contributo ambientale PFU, and the no-markup-on-PFU rule matches the legal pass-through requirement. It is a tax position, not an engineering choice - confirm with the commercialista before it is encoded. Blocks Phase 3.",
+    "PRICING POLICY - rounding scope: 03_PRICING_PFU_VAT.md requires deterministic rounding but does not state whether VAT is rounded per unit or per line. On 4 tyres at cost 80.00 with 20% markup, PFU 2.60 and VAT 22%, per-unit gives 481.16 and per-line gives 481.17. Price snapshots are immutable, so this must be decided before the first snapshot is written. Blocks Phase 3.",
+    "Approve Phase 0 (schema baseline and staging reconstruction). It touches no production data and unblocks every later phase."
   ],
-  "next_action": "Owner to review this protocol branch and decide whether to commit the architecture package to docs/architecture/, then approve Phase 0 (schema baseline and staging reconstruction)."
+  "next_action": "Owner to review this documentation-only branch, then answer the catalogue-provenance and canonical-intake conflicts and approve Phase 0. Phase 0 has NOT been started, as instructed."
 }
