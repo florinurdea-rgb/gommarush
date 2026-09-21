@@ -226,6 +226,37 @@ export function buildDeldoImport(request: DeldoImportRequest): DeldoImportResult
   };
 }
 
+/**
+ * Persistence plan for one Deldo listing. This remains pure and does not touch
+ * Supabase; persistDeldoImport stays closed until the post-baseline migration
+ * is deliberately applied.
+ *
+ * The key is the safety property: database lookup/upsert MUST use the exact
+ * supplier listing key, never EAN/product identity. Deldo legitimately carries
+ * two listings for one EAN at different prices/condition.
+ */
+export interface DeldoListingPersistencePlan {
+  readonly supplierListingKey: string;
+  readonly supplierArticleId: string;
+  readonly listing: DeldoImportListing;
+}
+
+export function planDeldoListingPersistence(
+  listing: DeldoImportListing
+): DeldoListingPersistencePlan {
+  if (listing.observation.supplierListingKey !== listing.row.supplierListingKey) {
+    throw new Error("Deldo persistence refused: observation/listing key mismatch");
+  }
+  if (listing.observation.supplierArticleId !== listing.row.supplierArticleId) {
+    throw new Error("Deldo persistence refused: observation/article id mismatch");
+  }
+  return {
+    supplierListingKey: listing.row.supplierListingKey,
+    supplierArticleId: listing.row.supplierArticleId,
+    listing,
+  };
+}
+
 export class DeldoPersistenceUnavailableError extends Error {
   readonly missingSchema: readonly string[];
   constructor(missingSchema: readonly string[]) {
