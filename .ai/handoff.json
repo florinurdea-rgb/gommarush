@@ -1,0 +1,32 @@
+{
+  "project": "GommaRush",
+  "objective": "Establish the lightweight AI-assisted development protocol shared by the owner, Claude and a separate AI reviewer: CLAUDE.md, docs/AI_WORKFLOW.md, docs/AI_HANDOFF.md and .ai/handoff.json. Documentation and protocol only - no application behaviour changed.",
+  "status": "READY_FOR_REVIEW",
+  "phase": "Workflow setup (pre-Phase 0)",
+  "branch": "claude/sleepy-gauss-lezg26",
+  "commit": "",
+  "tests": {
+    "passed": 2,
+    "failed": 0,
+    "not_run": [
+      "npm run lint - ESLint is uninitialized; next lint prompts interactively and cannot run non-interactively",
+      "unit tests - no test runner exists in this repository"
+    ]
+  },
+  "staging_verified": false,
+  "production_modified": false,
+  "review_findings": [],
+  "risks": [
+    "docs/architecture/ does not exist in this repository. CLAUDE.md references it as the canonical supplier/pricing/sourcing specification, but the package (00_README through 05_IMPLEMENTATION_PRIORITIES) lives outside version control. An AI reviewer cloning this repo cannot check work against it.",
+    "No test runner exists. The only working verification gates are 'npx tsc --noEmit' and 'npm run build'.",
+    "npm run lint is broken as a gate: ESLint was never initialized, so next lint drops into an interactive setup prompt.",
+    "No schema baseline. Production holds 14 migrations and 28 gorush_* functions that are not in any repository, and the repo and production migration ledgers disagree about client_offer_requests. No migration work is safe until this is resolved.",
+    "Two parallel customer-request tables exist (client_offer_requests, quote_requests). One must be made canonical before a sales layer is built on top of either."
+  ],
+  "decisions_required": [
+    "Should the architecture package (00_README, 01_SUPPLIER_ARCHITECTURE, 02_SUPPLIER_RULES, 03_PRICING_PFU_VAT, 04_SALES_SOURCING_MODEL, 05_IMPLEMENTATION_PRIORITIES) be committed to docs/architecture/? Recommendation: yes. Without it the AI reviewer has no canonical specification to review against, and CLAUDE.md's reference dangles. Not done here because it was outside the requested scope.",
+    "Approve Phase 0 (schema baseline and staging reconstruction) from the architecture audit. It touches no production data and unblocks every later phase.",
+    "Provenance of GommaRush_ISB_Tyre_Catalogue_Import-3.xlsx: 9,559 catalogue listings are attached to a supplier record named 'asdas' and cannot be attributed to a real supplier until confirmed. Blocks Phase 1."
+  ],
+  "next_action": "Owner to review this protocol branch and decide whether to commit the architecture package to docs/architecture/, then approve Phase 0 (schema baseline and staging reconstruction)."
+}
