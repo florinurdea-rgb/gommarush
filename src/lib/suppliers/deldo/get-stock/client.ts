@@ -183,6 +183,14 @@ export function parseGetStockBody(
     price,
     observation: {
       laneCode: DELDO_LANE_CODE,
+      // GET_STOCK is called by exact Deldo article. Keep that identity on the
+      // observation itself; never reconstruct it later from an EAN.
+      supplierListingKey: `DELDO:${productId.trim()}`,
+      supplierArticleId: productId.trim(),
+      // GET_STOCK does not return DOT/Demo condition facts.
+      dotYear: null,
+      demo: null,
+      stockCondition: null,
       // Inherited from the environment, never chosen by the caller: the test
       // endpoint serves fictional data, so its answers are test data however
       // real they look.
