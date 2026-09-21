@@ -1,0 +1,215 @@
+{
+  "project": "GommaRush",
+  "mission_id": "M1",
+  "mission_title": "Canonical baseline + autonomous agent control system",
+  "status": "READY_FOR_REVIEW",
+  "phase": "Complete. Awaiting independent review. Do not start M2 automatically.",
+  "last_updated": "2026-09-21T18:40:00Z",
+
+  "canonical_branch": "main",
+  "working_branch": "claude/confident-albattani-p43rkj",
+
+  "entry_points": {
+    "working_rules": "CLAUDE.md",
+    "authority_model": "docs/AI_WORKFLOW.md",
+    "architecture": "docs/architecture/00_README.md",
+    "database_and_migrations": "docs/DATABASE_BASELINE.md",
+    "security": "docs/SECURITY_FINDINGS.md"
+  },
+
+  "completed": [
+    "main confirmed as canonical code baseline: every other branch is behind it or a descendant.",
+    "Integrated claude/intersprint-live-probe (2 commits, cherry-picked). Safety re-verified, not assumed: probe is describe.skipIf-gated on INTERSPRINT_LIVE_PROBE=1, protocol 104 appears only in a comment saying it is never called, no credentials, fixtures deterministic.",
+    "Verified the probe's central factual claim against production: all 5 fixture EANs resolve to real catalogue_products, correct brands, all 205/55 R16, all weight_status=supplier_reported.",
+    "Integrated claude/beautiful-hypatia-as9zs6 (1 commit): .mcp.json registering staging only. No secret (project ref + feature flags, OAuth). Production deliberately left account-level.",
+    "Agent operating system reconciled onto main from claude/sleepy-gauss-lezg26, stale claims dropped.",
+    "Architecture package reconciled with IMPLEMENTED/PARTIAL/PLANNED/BLOCKED status markers on every claim.",
+    "Migration divergence documented across three lineages; reconciliation plan written, NOT executed.",
+    "Staging assessed as disposable; contents enumerated; NOT modified.",
+    "asdas provenance investigated with evidence; NOT renamed.",
+    "Security findings registered and classified; only CRON_SECRET documentation fixed."
+  ],
+
+  "in_progress": [],
+
+  "tests": {
+    "vitest": "489 passed, 4 skipped (live probe, gated by design), 39 files",
+    "typecheck": "npx tsc --noEmit clean",
+    "lint": "npx next lint clean; 2 pre-existing <img> warnings in BrandMarquee.tsx and Hero.tsx, unrelated to this mission",
+    "build": "see build_status field",
+    "not_run": [
+      "Inter-Sprint live probe - BLOCKED: no credentials in any environment, and outbound egress to customers.inter-sprint.nl:80 unverified.",
+      "Deldo anything - BLOCKED: no documentation, no sample, no credentials."
+    ]
+  },
+  "build_status": "npm run build verified green at commit time",
+
+  "production_changes": "NONE. Read-only queries only.",
+  "database_changes": "NONE in production or staging. No migration written, applied or altered.",
+  "external_actions": "NONE. No supplier contacted, no order placed or validated, no deployment.",
+
+  "blockers": [
+    {
+      "id": "B1",
+      "blocks": "Any Inter-Sprint live capability (stock lookup, ordering, feed automation)",
+      "needs": "Gateway credentials (INTERSPRINT_GATEWAY_CUSTOMER_NUMBER/USERNAME/PASSWORD) and confirmed egress to customers.inter-sprint.nl:80.",
+      "class": "PREREQUISITE, not a decision"
+    },
+    {
+      "id": "B2",
+      "blocks": "Deldo entirely",
+      "needs": "Feed mechanism, path, format and column contract; a real sample file; the XML order schema. Identify which sample files are the fictional ones so they ingest flagged as test data.",
+      "class": "PREREQUISITE, not a decision"
+    },
+    {
+      "id": "B3",
+      "blocks": "Any customer-facing price",
+      "needs": "No commercial data exists. All 9,559 supplier_listing_prices rows have purchase_price NULL and no stock; the ISB catalogue file carries neither column. A priced/stocked feed or live Gateway lookup is required.",
+      "class": "PREREQUISITE, not a decision"
+    },
+    {
+      "id": "B4",
+      "blocks": "Migration reconciliation execution",
+      "needs": "Owner approval of the baseline strategy in docs/DATABASE_BASELINE.md section 4, plus a verified restorable backup.",
+      "class": "OWNER_DECISION - see D5"
+    }
+  ],
+
+  "risks": [
+    {
+      "id": "R1",
+      "severity": "high",
+      "summary": "Gateway Manual conflict. protocols.ts cites Gateway Manual v2.2 with paragraph refs for every protocol code; the capability notes on claude/sleepy-gauss-lezg26 assert no verified protocol documentation exists. The manual is not in this repository. Both cannot be true.",
+      "impact": "The entire Inter-Sprint protocol registry may be inferred rather than documented. Until settled, no Gateway behaviour may be inferred from it.",
+      "resolution": "One question to the owner or one email to the supplier. See docs/architecture/02_SUPPLIER_RULES.md."
+    },
+    {
+      "id": "R2",
+      "severity": "high",
+      "summary": "document-analysis-jobs.ts queries document_analyses and document_extracted_lines. Neither table exists in production. Reached by /api/admin/ddt-import/status and /api/cron/document-analysis.",
+      "impact": "Either the feature is unused, or it is broken in production and unreported.",
+      "resolution": "Confirm usage before the reconciliation window; it decides whether migrations 20260901/20260902 are urgent."
+    },
+    {
+      "id": "R3",
+      "severity": "high",
+      "summary": "Three migration lineages disagree. No repo filename matches any production ledger version. quote_requests exists in production with data but is absent from its ledger; four repo migrations are unapplied.",
+      "impact": "supabase db push against production today would be unpredictable.",
+      "resolution": "docs/DATABASE_BASELINE.md section 4. Do not push anything until executed."
+    },
+    {
+      "id": "R4",
+      "severity": "medium",
+      "summary": "The entire 9,559-row production catalogue hangs off supplier 'asdas' (vat_number 'ads'), created as a test record. 16 suppliers include four spellings of ZUIN, two of FINTYRE, two of CARLINI, plus placeholders 'Name' and 'Furnizor Demo (test)'.",
+      "impact": "Any sourcing, pricing or accounting grouped by supplier produces wrong totals.",
+      "resolution": "OWNER_DECISION D1 and D2. Evidence in docs/DATABASE_BASELINE.md section 6."
+    },
+    {
+      "id": "R5",
+      "severity": "medium",
+      "summary": "Inter-Sprint gateway defaults to plain HTTP with HTTP Basic auth; the FTP drop point is plain FTP open to the whole internet.",
+      "impact": "Credentials would cross the internet unencrypted. Nothing has been transmitted yet - no credentials exist.",
+      "resolution": "docs/SECURITY_FINDINGS.md findings 1 and 2. Ask the supplier about HTTPS/FTPS/SFTP and obtain egress IPs."
+    },
+    {
+      "id": "R6",
+      "severity": "medium",
+      "summary": "The only commercial observations are from 2026-09-08 and carry no price or stock. There is no freshness control because nothing consumes observations yet.",
+      "impact": "Prospective: presenting a stale or absent observation as live availability means wrong stock and wrong prices.",
+      "resolution": "A freshness gate belongs in the same change as the first customer-facing price, not later."
+    },
+    {
+      "id": "R7",
+      "severity": "low",
+      "summary": "1,229 of 9,550 catalogue products (12.9%) have weight_status='missing_or_zero'.",
+      "impact": "Any weight-based PFU rule is indeterminate for them.",
+      "resolution": "Must resolve to TO_CONFIRM, never a guess. Policy is OWNER_DECISION D4."
+    },
+    {
+      "id": "R8",
+      "severity": "low",
+      "summary": "The supplier lane and capability model exists only on claude/sleepy-gauss-lezg26 and in staging, not in main. Porting it needs a migration.",
+      "impact": "Adding a migration while the ledger is divergent would deepen R3.",
+      "resolution": "Port after reconciliation. Proposed schema in docs/DATABASE_BASELINE.md section 5. Do not delete that branch - it holds the only copy."
+    }
+  ],
+
+  "owner_decisions_required": [
+    {
+      "id": "D1",
+      "question": "Supplier identity for 'asdas', which owns the entire production catalogue.",
+      "options": "Rename in place (preserves 9,559 listings, but relabels a cancelled test order as that supplier's) or create a proper supplier and re-import (leaves the test record clean, rewrites 9,559 listings).",
+      "blocks": "Anything customer-facing that names or groups by supplier.",
+      "evidence": "docs/DATABASE_BASELINE.md section 6"
+    },
+    {
+      "id": "D2",
+      "question": "Deduplicating the ZUIN / FINTYRE / CARLINI supplier records and removing placeholders.",
+      "blocks": "Correct supplier-level reporting and accounting.",
+      "note": "Merging supplier records affects existing orders."
+    },
+    {
+      "id": "D3",
+      "question": "PFU tariff source, values and effective dates; and whether PFU sits inside the VAT base.",
+      "blocks": "Any customer total. A tax position for the commercialista, not an engineering choice.",
+      "note": "Must be settled before the first price snapshot, which is immutable. Do not populate tariffs from model knowledge."
+    },
+    {
+      "id": "D4",
+      "question": "Markup policy (default percentage, minimum profit per tyre, rounding scope per unit or per line) and the policy for products with no verified weight.",
+      "blocks": "Any selling price."
+    },
+    {
+      "id": "D5",
+      "question": "Approve the migration reconciliation strategy and schedule a maintenance window.",
+      "blocks": "Any future migration, including the supplier capability port (R8).",
+      "evidence": "docs/DATABASE_BASELINE.md section 4"
+    },
+    {
+      "id": "D6",
+      "question": "Does the Inter-Sprint Gateway Manual v2.2 exist and can it be supplied?",
+      "blocks": "Trusting the protocol registry. See R1.",
+      "note": "Cheapest open item here: one question, and it settles a high-severity conflict."
+    }
+  ],
+
+  "review_decisions_required": [
+    "Confirm whether the DDT document-analysis feature is actually used in production (R2).",
+    "Confirm staging may be rebuilt from the canonical baseline once one exists. Assessed as disposable; not modified."
+  ],
+
+  "commits": [
+    { "sha": "64569e5", "summary": "Add a gated live probe for the Inter-Sprint gateway (cherry-picked)" },
+    { "sha": "136382e", "summary": "Make the Protocol 103 proof a single command over five real catalogue EANs (cherry-picked)" },
+    { "sha": "19f9847", "summary": "Add the supabase-staging project MCP server (cherry-picked)" },
+    { "sha": "aee4fd4", "summary": "Add the durable agent operating system" },
+    { "sha": "29c38ad", "summary": "Reconcile the architecture specification against verified reality" },
+    { "sha": "4faef08", "summary": "Record database divergence, security findings, and the asdas provenance" }
+  ],
+
+  "branch_disposition": {
+    "main": "CANONICAL. Unchanged by this mission.",
+    "claude/intersprint-live-probe": "INTEGRATED by cherry-pick. Safe to retire after review; not deleted.",
+    "claude/beautiful-hypatia-as9zs6": "INTEGRATED by cherry-pick. Safe to retire after review; not deleted.",
+    "claude/sleepy-gauss-lezg26": "PARTIALLY PORTED - agent system and architecture concepts only. Its reconstructed baseline migrations are rejected; main's catalogue schema is richer and is what production runs. DO NOT DELETE: it holds the only copy of the supplier-foundation migrations (R8).",
+    "claude/gorush-transport-intake-phase1-v2": "NOT REVIEWED. 8 commits ahead, 10 behind. Implements the TRANSPORT intake flow. Out of Mission 1 scope; needs its own review.",
+    "stale": "claude/gorush-landing-page-abb0oh, claude/gorush-logistics-phase-1-1bm6gu, claude/gorush-marketing-redesign, claude/logo-storage-homepage-gtcyuh - 106+ commits behind, not integrated, not deleted."
+  },
+
+  "not_verified": [
+    "Nothing has ever reached Inter-Sprint. The gateway has no application caller and the probe has never run with credentials.",
+    "No Deldo code, connection or data exists anywhere.",
+    "The migration reconciliation plan is written but unexecuted and unrehearsed.",
+    "The supplier capability port is specified but not implemented - no migration written.",
+    "Production runtime behaviour of the DDT document-analysis feature (R2)."
+  ],
+
+  "next_recommended_mission": {
+    "id": "M2",
+    "title": "Resolve the commercial data blocker before building pricing",
+    "rationale": "The audit originally proposed going straight to a pricing and offer slice. That is not currently buildable: production has no purchase price and no stock (B3), so a pricing engine would have no input. Obtain a priced and stocked supplier feed, or live Gateway lookup, first.",
+    "scope": "Settle D6 (does the Gateway Manual exist). Obtain a priced/stocked Inter-Sprint feed or credentials. Wire freshness and provenance onto observations. Still no customer-facing pricing, no supplier ordering.",
+    "requires": ["B1 or a priced feed", "D6"],
+    "do_not_start_automatically": true
+  }
+}
