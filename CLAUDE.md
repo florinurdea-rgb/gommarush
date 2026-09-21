@@ -10,6 +10,7 @@ Read this before any implementation work.
 | `docs/AI_WORKFLOW.md` | Lifecycle and the AUTO / REVIEW / OWNER_DECISION authority levels |
 | `docs/AI_HANDOFF.md` | Handoff template to fill in at the end of a work phase |
 | `.ai/handoff.json` | Machine-readable current state. Update at the end of every meaningful phase |
+| [`docs/SCHEMA_BASELINE.md`](docs/SCHEMA_BASELINE.md) | What production and staging contain, baseline methodology, migration-history discrepancies, and the migration procedure |
 | `README.md` | Stack, setup, environment variables, deployment |
 | **`docs/architecture/`** | **THE CANONICAL SPECIFICATION.** Supplier, pricing, PFU/VAT, sales and sourcing architecture. Implementation and AI review are performed *against these documents*. |
 
@@ -110,12 +111,15 @@ Rules that hold across all of them:
   obstacle.
 - **Never** run a production migration, production write, or destructive
   database operation. These are `OWNER_DECISION` (see `docs/AI_WORKFLOW.md`).
-- **Never run `supabase db push` against production.** The repository is not
-  currently a valid migration source for it: production's ledger holds
-  migrations this repository does not contain, and the one migration here
-  (`supabase/migrations/20260804000000_client_offer_requests.sql`) is recorded
-  in production under a different version. Assume no blanket replay is safe
-  until a schema baseline exists.
+- **Never run a blind `supabase db push` against production.** Production's
+  ledger holds 14 migrations whose SQL is not in this repository, and the
+  repository holds baseline files production's ledger does not list. A push
+  would try to apply files describing objects that already exist, against a
+  live database carrying real warehouse, delivery and catalogue data. The
+  reconciliation procedure is written up but deliberately NOT executed - see
+  [`docs/SCHEMA_BASELINE.md`](docs/SCHEMA_BASELINE.md) section 5.4, which needs
+  owner approval. The same caution applies to `supabase db reset` and
+  `supabase db pull`.
 - Never print, log, or commit secrets. `SUPABASE_SERVICE_ROLE_KEY` and
   `RESEND_API_KEY` are server-only and must only be read in files that
   `import "server-only"`.
@@ -137,6 +141,10 @@ The logistics subsystem is live and carries real operational data:
 ## 3. Staging-first development
 
 **Staging Supabase project: `ltdwabkitplicyiwucsp`. This is where development happens.**
+
+Staging now carries the full application schema, verified byte-identical to
+production across all nine schema components, and **no data** (all 32 tables
+empty). See [`docs/SCHEMA_BASELINE.md`](docs/SCHEMA_BASELINE.md) §2 and §7.
 
 - Every schema change is applied and verified on staging first. No exceptions.
 - Synthetic/seed data on staging is `AUTO` — create what you need to test.
@@ -317,6 +325,13 @@ afterwards — state the question, then wait.
 Recorded honestly so no agent assumes otherwise:
 
 1. **No test runner** (see §8).
-2. **No schema baseline.** Production's schema and its `gorush_*` functions are
-   not in version control, and the migration ledgers disagree. Treat every
-   migration question as unresolved until this is fixed.
+2. **Migration ledgers still disagree** between the repository and production.
+   Phase 0 put production's full schema under version control and rebuilt it on
+   staging (verified byte-identical), so a schema baseline now EXISTS. What
+   remains is the ledger reconciliation itself, which is a production write and
+   therefore `OWNER_DECISION` - documented, not executed, in
+   [`docs/SCHEMA_BASELINE.md`](docs/SCHEMA_BASELINE.md) section 5.
+3. **`gorush_new_unit_token()` resolves `gen_random_bytes()` only when
+   `extensions` is on the caller's `search_path`** - a pre-existing production
+   fragility, reproduced locally but deliberately not tested against production.
+   See [`docs/SCHEMA_BASELINE.md`](docs/SCHEMA_BASELINE.md) section 8.
