@@ -74,6 +74,17 @@ describe("Deldo import pipeline", () => {
     expect(new Set(keys).size).toBe(keys.length);
   });
 
+  it("keeps exact listing identity and source condition on the observation itself", () => {
+    const result = buildDeldoImport(request());
+    const normal = result.listings.find((l) => l.row.supplierArticleId === "BR6727");
+    const older = result.listings.find((l) => l.row.supplierArticleId === "BR672722");
+    expect(normal?.observation.supplierListingKey).toBe("DELDO:BR6727");
+    expect(older?.observation.supplierListingKey).toBe("DELDO:BR672722");
+    expect(normal?.observation.stockCondition).toBe("normal");
+    expect(older?.observation.stockCondition).toBe("older_dot");
+    expect(older?.observation.dotYear).toBe("2022");
+  });
+
   it("does not assume EAN is unique", () => {
     const result = buildDeldoImport(request());
     const pair = result.listings.filter(
