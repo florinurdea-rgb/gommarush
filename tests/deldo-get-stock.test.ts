@@ -148,6 +148,16 @@ describe("GET_STOCK response parsing", () => {
     expect(outcome.price).toBe(85.5);
   });
 
+  it("keeps the exact Deldo article identity on the observation", () => {
+    const outcome = parseGetStockBody(SUCCESS_BODY, config, observedAt);
+    if (outcome.status !== "available") throw new Error("expected available");
+    expect(outcome.observation.supplierArticleId).toBe("BS7623");
+    expect(outcome.observation.supplierListingKey).toBe("DELDO:BS7623");
+    expect(outcome.observation.dotYear).toBeNull();
+    expect(outcome.observation.demo).toBeNull();
+    expect(outcome.observation.stockCondition).toBeNull();
+  });
+
   it("carries price as well as stock, because GET_STOCK verifies both", () => {
     const outcome = parseGetStockBody(SUCCESS_BODY, config, observedAt);
     if (outcome.status !== "available") throw new Error("expected available");
