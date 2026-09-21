@@ -175,6 +175,18 @@ export function buildDeldoImport(request: DeldoImportRequest): DeldoImportResult
       row: outcome.normalized,
       observation: {
         laneCode: DELDO_LANE_CODE,
+        supplierListingKey: outcome.normalized.supplierListingKey,
+        supplierArticleId: outcome.normalized.supplierArticleId,
+        dotYear: outcome.normalized.deldo.dotYear,
+        demo: outcome.normalized.deldo.demo,
+        // Demo takes precedence when both source markers are present. This is
+        // descriptive only: Demo remains commercially unusable until Deldo
+        // confirms what the marker means.
+        stockCondition: outcome.normalized.deldo.demo
+          ? "demo"
+          : outcome.normalized.deldo.dotYear !== null
+            ? "older_dot"
+            : "normal",
         // Carried from the request, never inferred from the content. A file's
         // rows cannot tell you whether the file is real.
         classification: request.classification,
