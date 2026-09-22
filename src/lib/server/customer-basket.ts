@@ -33,6 +33,8 @@ export async function resolveBasket(lines:BasketLineInput[]):Promise<BasketResol
 export function customerBasketPayload(lines:BasketResolvedLine[]){
  const tyreNetTotalCents=lines.reduce((sum,l)=>sum+(l.customer.tyreSaleNetCents??0)*l.input.quantity,0);
  const allFinal=lines.every(l=>l.customer.customerTotalCents!==null);
+ const resolutions=lines.map(l=>l.internal.resolution);
+ const monetaryStatus=allFinal?"complete":resolutions.some(r=>r==="pfu_unresolved")?"pending_pfu":"pending_tax_policy";
  return {
   lines:lines.map(l=>({productId:l.input.productId,oldDot:l.input.oldDot,quantity:l.input.quantity,tyre:l.customer.tyre,availability:l.customer.availability,unitTyreNetCents:l.customer.tyreSaleNetCents,pfuStatus:l.customer.pfuStatus,unitPfuCents:l.customer.pfuAmountCents,unitVatCents:l.customer.vatAmountCents,unitTotalCents:l.customer.customerTotalCents})),
   currency:"EUR",tyreNetTotalCents,pfuTotalCents:allFinal?lines.reduce((s,l)=>s+(l.customer.pfuAmountCents??0)*l.input.quantity,0):null,
