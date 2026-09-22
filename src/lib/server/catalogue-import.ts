@@ -52,6 +52,15 @@ export interface AnalyzeInput {
   uploadedBy: string;
   storageBucket?: string | null;
   storagePath?: string | null;
+  /**
+   * Free-text provenance stored on the run.
+   *
+   * The Inter-Sprint worker records which sub-feed a file was, determined
+   * from the header rather than the filename, so the admin status view can
+   * report PCR and truck separately without re-deriving it from a name that
+   * cannot be trusted for it.
+   */
+  notes?: string | null;
 }
 
 export interface ImportSummary {
@@ -77,6 +86,8 @@ export interface ImportSummary {
    * shrunk.
    */
   paddingRows: number;
+  /** Lines whose field count disagreed with the header. Never interpreted. */
+  malformedRows: number;
 }
 
 export interface AnalyzeResult {
@@ -94,7 +105,7 @@ function emptySummary(): ImportSummary {
     newProducts: 0, newListings: 0, updatedListings: 0, unchangedListings: 0,
     conflicts: 0, proposedDeactivations: 0, newEans: 0, newWeights: 0,
     missingEans: 0, invalidEans: 0, missingWeights: 0, truncated: false,
-    paddingRows: 0,
+    paddingRows: 0, malformedRows: 0,
   };
 }
 
@@ -338,6 +349,7 @@ export async function analyzeCatalogueImport(input: AnalyzeInput): Promise<Analy
       import_mode: input.importMode,
       status: "analyzing",
       uploaded_by: input.uploadedBy,
+      notes: input.notes ?? null,
       batch_size: DEFAULT_BATCH_SIZE,
     })
     .select("id")
@@ -347,26 +359,57 @@ export async function analyzeCatalogueImport(input: AnalyzeInput): Promise<Analy
   const runId = String((created as { id: string }).id);
 
   try {
-    // An adapter may choose its own sheet: Inter-Sprint names the sheet after
-    // the file, with an account prefix we have no document for.
-    let sheetName = adapter.sheetName;
-    if (adapter.resolveSheetName) {
-      const available = await listSheetNames(input.bytes);
-      const resolved = adapter.resolveSheetName(available);
-      if (!resolved) throw new WorkbookError("SHEET_NOT_FOUND", available.join(", "));
-      sheetName = resolved;
+    const summary = emptySummary();
+
+    // WHICH READER: decided from the bytes, not the filename or a setting.
+    //
+    // Every XLSX is a zip and therefore starts with the local-file-header
+    // magic 'PK\x03\x04'. Anything else that an adapter can read as
+    // delimited text is treated as text. Inter-Sprint gave us XLSX exports as
+    // samples and delivers real CSV in production; both must reach the same
+    // commercial mapping, and a file extension is not evidence of content.
+    const looksLikeWorkbook =
+      input.bytes.length >= 4 &&
+      input.bytes[0] === 0x50 &&
+      input.bytes[1] === 0x4b &&
+      input.bytes[2] === 0x03 &&
+      input.bytes[3] === 0x04;
+
+    let headers: string[];
+    let rows: { sourceRow: number; cells: Record<string, string> }[];
+    let truncated = false;
+    let malformedLines: number[] = [];
+
+    if (!looksLikeWorkbook && adapter.readDelimitedText) {
+      const parsed = adapter.readDelimitedText(input.bytes.toString("utf8"));
+      headers = parsed.headers;
+      rows = parsed.rows;
+      malformedLines = parsed.malformedLines;
+      summary.paddingRows += parsed.paddingLines;
+    } else {
+      // An adapter may choose its own sheet: Inter-Sprint names the sheet
+      // after the file, with an account prefix we have no document for.
+      let sheetName = adapter.sheetName;
+      if (adapter.resolveSheetName) {
+        const available = await listSheetNames(input.bytes);
+        const resolved = adapter.resolveSheetName(available);
+        if (!resolved) throw new WorkbookError("SHEET_NOT_FOUND", available.join(", "));
+        sheetName = resolved;
+      }
+      const sheet = await readSheet(input.bytes, sheetName);
+      headers = sheet.headers;
+      rows = sheet.rows;
+      truncated = sheet.truncated;
     }
 
-    const { headers, rows, truncated } = await readSheet(input.bytes, sheetName);
+    // A malformed line is a line we refused to interpret. Recorded so a
+    // partially broken delivery is visible rather than quietly shorter.
+    summary.malformedRows = malformedLines.length;
 
     const missing = missingColumns(headers, adapter.requiredColumns);
     if (missing.length > 0) {
       throw new WorkbookError("MISSING_COLUMNS", missing.join(", "));
     }
-
-    const summary = emptySummary();
-    // Set after the loop, once padding has been discounted.
-    summary.truncated = truncated;
 
     const context = await loadMatchContext(input.supplierId);
     const errors: { sourceRow: number; messages: string[] }[] = [];
@@ -512,7 +555,8 @@ export async function analyzeCatalogueImport(input: AnalyzeInput): Promise<Analy
 
     // Source rows are the rows that carried data. Padding is excluded so the
     // count matches what an operator sees in the supplier's own file.
-    summary.sourceRows = rows.length - summary.paddingRows;
+    summary.sourceRows = rows.length;
+    summary.truncated = truncated;
 
     // A listing we hold but the file does not mention. ONLY a complete
     // snapshot may propose deactivating it; a partial file says nothing

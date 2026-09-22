@@ -1,5 +1,6 @@
 import { looksLikeFormula } from "@/lib/catalogue/xlsx-reader";
 import { isScannable, validateGtin } from "@/lib/catalogue/gtin";
+import { readIntersprintCsv } from "@/lib/suppliers/intersprint/feed/csv-reader";
 import type {
   NormalizedCatalogueRow,
   NormalizedRowOutcome,
@@ -36,6 +37,20 @@ import type {
  * dropping a descriptive column must not stop a price refresh.
  */
 const REQUIRED_COLUMNS = ["sysnr", "itemcode", "nett-price", "available"] as const;
+
+/**
+ * The column that distinguishes the PCR feed from the truck feed.
+ *
+ * VERIFIED in both the August samples and the September production headers:
+ * the PCR file carries `wcat` (Inter-Sprint's weight bucket) and the truck
+ * file does not.
+ *
+ * Deliberately NOT the filename. Production delivers
+ * `vrd-001-21185-107.csv` (PCR) and `vrd-001-21185.csv` (truck) — the truck
+ * name is a STRICT PREFIX of the PCR name, so any startsWith/includes match
+ * classifies PCR as truck and applies a minimum release of 10 instead of 60.
+ */
+const PCR_ONLY_COLUMN = "wcat";
 
 /**
  * Sheet names seen in the supplied samples.
@@ -192,6 +207,44 @@ export class IntersprintFeedAdapter implements SupplierImportAdapter {
    */
   isPaddingRow(cells: Record<string, string>): boolean {
     return !text(cells.sysnr) && !text(cells.itemcode);
+  }
+
+  /**
+   * Reads the real production delivery, which is semicolon-delimited CSV.
+   *
+   * Delegates to the M9 reader, which detects the dialect against the verified
+   * column contract and refuses what it cannot prove. The importer calls this
+   * only when the bytes are not a workbook; the XLSX path is unchanged.
+   */
+  readDelimitedText(text: string): {
+    headers: string[];
+    rows: { sourceRow: number; cells: Record<string, string> }[];
+    malformedLines: number[];
+    paddingLines: number;
+  } {
+    const result = readIntersprintCsv(text);
+    return {
+      headers: [...result.headers],
+      rows: result.rows.map((row) => ({
+        sourceRow: row.sourceRow,
+        cells: { ...row.cells },
+      })),
+      malformedLines: [...result.malformedLines],
+      paddingLines: result.paddingLines,
+    };
+  }
+
+  /**
+   * Which Inter-Sprint feed a header belongs to.
+   *
+   * Content, not filename — see PCR_ONLY_COLUMN. Returns null when the header
+   * is recognisably a feed but carries no category signal, so the caller can
+   * decide rather than being handed a guess.
+   */
+  detectCategory(headers: readonly string[]): "pcr" | "truck" | null {
+    const present = new Set(headers.map((header) => header.trim()));
+    if (!present.has("sysnr") || !present.has("nett-price")) return null;
+    return present.has(PCR_ONLY_COLUMN) ? "pcr" : "truck";
   }
 
   normalizeRow(sourceRow: number, cells: Record<string, string>): NormalizedRowOutcome {

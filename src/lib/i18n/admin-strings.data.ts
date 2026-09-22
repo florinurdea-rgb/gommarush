@@ -465,4 +465,19 @@ export const EN_STRINGS: Record<string, string> = {
   "Esaurito": "Out of stock",
   "Stock non noto": "Stock unknown",
   "Non in vendita": "Not offered",
+  // --- M10: feed status ---
+  "Flusso Inter-Sprint": "Inter-Sprint feed",
+  "Stato dell'importazione automatica di prezzi e disponibilità.":
+    "Status of the automatic price and availability import.",
+  "Vetture": "Car",
+  "Autocarro": "Truck",
+  "Non aggiornato": "Not refreshed",
+  "Aggiornato": "Up to date",
+  "Ultimo import riuscito": "Last successful import",
+  "Impronta": "Fingerprint",
+  "Righe": "Rows",
+  "applicate": "applied",
+  "scartate": "rejected",
+  "Nessun import riuscito finora.": "No successful import yet.",
+  "Ultimo tentativo": "Last attempt",
 };

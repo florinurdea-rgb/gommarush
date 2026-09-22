@@ -181,34 +181,78 @@ day, and a 18 September statement that the integration is complete.
 Note that `INTERSPRINT_GATEWAY_*` is a different channel — the ordering/stock
 API, not this feed.
 
-### Not verified from here
+### Delivery is confirmed (M10, 2026-09-22)
 
-This session had **no credentials and no network route to port 21** (HTTPS
-egress works; FTP times out). So:
+**OWNER-VERIFIED by direct inspection of the FTP VM.** Inter-Sprint is actively
+uploading. Authenticated uploads were observed in the `vsftpd` logs from source
+IP `193.172.180.162`, and two files were present in `/incoming`:
 
-- **We do not know whether Inter-Sprint has uploaded anything.** Nothing in
-  this repository has ever listed `/incoming`.
-- **No real CSV has been seen**, so the delimiter, quoting and encoding remain
-  **UNCONFIRMED**. The reader detects the dialect against the verified column
-  contract and refuses what it cannot prove, rather than defaulting.
-- **The FTP client has never run against the real server.** It is therefore
-  read-only unless `INTERSPRINT_FTP_ALLOW_WRITES=true`.
+| Feed | Filename | Observed size | Observed lines |
+| --- | --- | --- | --- |
+| PCR / car | `vrd-001-21185-107.csv` | 3,060,504 B | 11,208 |
+| Truck | `vrd-001-21185.csv` | 46,527 B | 172 |
 
-### The chain, as it now stands
+Sizes and counts are **observations, not a contract**, and are not relied on
+anywhere in code.
+
+**Deliveries are recurring and overwrite the same two filenames**, observed on
+21–22 September at roughly 06:27, 10:27, 12:2x and 14:27, with PCR and truck
+refreshed independently and sizes varying between deliveries. Hence identity is
+the **checksum, never the filename**.
+
+**The files are genuinely CSV, semicolon-delimited**, and the production header
+matches the contract established from the August samples. So the M9 dialect
+detection is confirmed against reality rather than merely safe.
+
+> **Filename trap.** The truck name `vrd-001-21185.csv` is a **strict prefix**
+> of the PCR name `vrd-001-21185-107.csv`. Any `startsWith`/`includes` match
+> classifies PCR as truck and applies a minimum release of 10 instead of 60.
+> The two feeds are told apart by the **`wcat` column**, which only PCR
+> carries.
+
+Header note: production writes `Fuel efficiency` where the August samples wrote
+`Fuel effeciency`. Neither is mapped — the catalogue has no EU-label columns
+beyond `eprel_id` — so the difference is recorded rather than depended on.
+
+### Still not verified
+
+- **Whether a delivery is a complete snapshot or a delta (D14).** Recurring
+  overwrites do not settle it. Absence of a row still means **nothing**, and
+  ingestion is hard-wired to `importMode: 'partial'` so no deactivation can be
+  proposed.
+- **The currency (D15).** Still null.
+- **That the production worker runs.** It is written, installed by script and
+  tested against a stub, but has **not been deployed or observed processing a
+  real file**.
+
+### The chain, as it now stands (M10)
 
 ```
-incoming/  →  list + download        FtpFeedTransport (unverified)
-           →  checksum + dedupe      lifecycle.ts      (tested)
-           →  claim                  lifecycle.ts      (tested)
-           →  CSV dialect detection  csv-reader.ts     (tested)
-           →  commercial mapping     intersprint-feed-adapter.ts (M8, tested)
-           →  observations           observation.ts    (tested)
-           →  pricing                src/lib/pricing/  (M7, tested)
-           →  processed/ | failed/   lifecycle.ts      (tested)
+Inter-Sprint ──plain FTP──> VM /incoming
+                                  │  infra/intersprint-worker/ingest-feed.sh
+                                  │  stability check, atomic claim, sha256, gzip
+                                  ▼
+                            HTTPS + bearer token
+                                  ▼
+             /api/feed/intersprint/ingest   checksum verified against bytes
+                                  │         category from header (wcat)
+                                  ▼
+             analyzeCatalogueImport          the SAME path the admin screen uses
+                                  ▼
+             /api/feed/intersprint/commit    batched, repeated until finished
+                                  ▼
+             catalogue_products / supplier_product_listings
+             supplier_listing_prices  ← nett-price, stock exact/band, observed_at
+                                  ▼
+             M7 pricing engine → /admin/catalogue/ricerca
 ```
 
-Everything except the FTP socket itself is exercised by tests against an
-in-memory transport.
+The worker runs **on** the FTP VM and reads the spool directory locally, so no
+FTP client and no FTP credentials are involved in ingestion at all.
+`FtpFeedTransport` remains for a pull-based deployment and is not used here.
+
+`infra/intersprint-worker/README.md` records the architecture decision, the
+schedule, the locking and the permission model.
 
 ---
 

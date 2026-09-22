@@ -156,6 +156,25 @@ export interface SupplierImportAdapter {
    * for each would bury every genuine error under noise.
    */
   isPaddingRow?(cells: Record<string, string>): boolean;
+
+  /**
+   * Reads a delimited-text delivery instead of a workbook.
+   *
+   * Optional, because most suppliers hand us one container or the other.
+   * Inter-Sprint samples arrived as XLSX exports while the production FTP
+   * delivery is real CSV, and both must reach the same commercial mapping —
+   * so the importer chooses the reader from the BYTES and the adapter
+   * interprets whatever comes out.
+   */
+  readDelimitedText?(text: string): {
+    headers: string[];
+    rows: { sourceRow: number; cells: Record<string, string> }[];
+    malformedLines: number[];
+    paddingLines: number;
+  };
+
+  /** Which sub-feed a header belongs to, where a supplier ships more than one. */
+  detectCategory?(headers: readonly string[]): string | null;
 }
 
 /** The specification fields two products must agree on before they may merge. */
