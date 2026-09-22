@@ -46,3 +46,12 @@ export async function listCustomerSalesOrders(customerId:string){
 export async function listRequestedSalesOrders(){
  const admin=createSupabaseAdminClient();const {data,error}=await admin.from("sales_orders").select("id,order_number,status,customer_id,customer_snapshot,grand_total_cents,currency,fulfilment_class,payment_method,requested_at").eq("status","requested").order("requested_at",{ascending:true}).limit(200);if(error)throw error;return data??[];
 }
+
+export async function getSalesOrderDetail(orderId:string){
+ const admin=createSupabaseAdminClient();
+ const [{data:order,error:oe},{data:items,error:ie}]=await Promise.all([
+  admin.from("sales_orders").select("*").eq("id",orderId).maybeSingle(),
+  admin.from("sales_order_items").select("id,line_number,catalogue_product_id,quantity,tyre_snapshot,condition_snapshot,unit_tyre_net_cents,unit_pfu_cents,unit_vat_cents,unit_total_cents,pricing_status").eq("sales_order_id",orderId).order("line_number",{ascending:true})
+ ]);
+ if(oe)throw oe;if(ie)throw ie;if(!order)return null;return {order,items:items??[]};
+}
