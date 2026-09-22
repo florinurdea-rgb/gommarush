@@ -1,10 +1,10 @@
 {
   "project": "GommaRush",
-  "mission_id": "M4-PARTIAL",
-  "mission_title": "Autonomous development runner V1 — STOPPED BY OWNER before implementation",
+  "mission_id": "M5-RECONCILE",
+  "mission_title": "Deldo context reconciliation: re-verify primary artefacts, close the freshness test gap, record provenance",
   "status": "READY_FOR_REVIEW",
-  "phase": "M4 implementation NOT started, by owner instruction. This commit records approved commercial decisions only.",
-  "last_updated": "2026-09-21T19:45:00Z",
+  "phase": "Reconciliation complete. No Deldo implementation was rewritten. Two factual documentation errors corrected, one untested safety function covered, provenance recorded under docs/suppliers/.",
+  "last_updated": "2026-09-22",
   "canonical_branch": "main",
   "working_branch": "claude/confident-albattani-p43rkj",
   "entry_points": {
@@ -22,22 +22,25 @@
   },
   "source_authority": {
     "deldo": "API documentation.pdf and 26933TEST.csv, supplied by Jan Van Dyck (Deldo NV), subject 'RE: Connect platform and orders for - 026933 (Go Rush Trasporti srl)'. Both inspected directly in this session. GoRush customer number 026933.",
-    "note": "The PDF does NOT document the CSV columns ('we send you 1 file in CSV format so that you can examine file header and structure'). The sample file IS the column contract, and every mapping was read off it."
+    "note": "The PDF does NOT document the CSV columns ('we send you 1 file in CSV format so that you can examine file header and structure'). The sample file IS the column contract, and every mapping was read off it.",
+    "deldo_reverified": "Both primary artefacts were re-read independently on 2026-09-22 and every PRIMARY claim in docs/suppliers/deldo/README.md was re-derived from them: 26933TEST.csv (1,322,596 bytes, sha256 5e384ccf45d06ec3..., 6,729 data rows, 35 columns, ';' delimited, no quoting, POINT decimal separator on 6729/6729 Price values, pure ASCII, LF endings, 0 malformed rows) and API documentation.pdf (18 pages). The existing parser and GET_STOCK client were confirmed to match these artefacts."
   },
   "completed": [
+    "M5: reconciled the docs/suppliers provenance system with the existing Deldo implementation; corrected two factual errors; closed the lane-freshness test gap; recorded PRIMARY/SECOND-HAND/UNCONFIRMED provenance in docs/suppliers/deldo/README.md.",
     "DOCUMENTATION ONLY. Recorded the approved commercial architecture decisions in docs/architecture/04_SALES_SOURCING_MODEL.md: supplier identity invisible to customers; customer buys only from GommaRush; standard up to ~7 days vs express ~24-48h manually sourced from the Italian supplier; the 15-20% express share recorded explicitly as a planning assumption and not a rule; supplier minimum quantities and consolidation supported internally; customer order acceptance and supplier purchase/release as separate events; many customer orders per supplier batch; delivery promises must account for consolidation and cut-off rather than raw supplier availability; normal/older-DOT/Demo kept distinguishable; older-DOT offerable as a clearly identified cheaper GommaRush option; supplied DOT year preserved; Deldo Demo meaning unverified and not to be inferred; exact supplier listing/article survives sourcing and ordering; V1 payments bank transfer, POS on delivery, cash; manual review of every customer order; customer-specific pricing supported architecturally; portal and WhatsApp on one catalogue/pricing/order engine.",
     "Added Deldo activation question 8 (what does the Demo column mean), noting explicitly that no DOT-encoding question is needed because the feed already supplies the year."
   ],
   "in_progress": [],
   "tests": {
-    "note": "Documentation-only change; no code touched. Gates last run green at M3B: vitest 585 passed / 4 skipped, tsc clean, lint 0 errors, build green, verify-migration-baseline.sh exit 0.",
-    "not_run": [
-      "No gates re-run for this commit - no source file changed."
-    ]
+    "vitest": "597 passed / 4 skipped (43 files). Up from 589 passed: 8 new lane-freshness tests added.",
+    "typecheck": "tsc --noEmit PASS. Was FAILING before this change on two unused imports in tests/deldo-observation.test.ts (TS6133).",
+    "lint": "next lint: 0 errors, 1 pre-existing warning (@next/next/no-img-element in src/components/site/Hero.tsx), unrelated to Deldo.",
+    "build": "next build PASS.",
+    "verify-migration-baseline.sh": "exit 0 against a local throwaway PostgreSQL 16. 56 checks, 12 uniques, 141 indexes, 28 functions, 23 triggers, 32 RLS tables, 0 policies; post-baseline 0001_deldo_classification.sql applies and data_classification is NOT NULL with no default (fail-closed confirmed)."
   },
-  "production_changes": "NONE.",
-  "database_changes": "NONE. Ledger untouched; the Deldo classification migration remains unapplied in supabase/post-baseline/.",
-  "external_actions": "NONE. No supplier contacted, no email sent.",
+  "production_changes": "NONE. Production was not read from or written to in this session.",
+  "database_changes": "NONE applied to staging or production. A throwaway LOCAL PostgreSQL 16 instance was created solely to run scripts/verify-migration-baseline.sh; it is disposable and touches no hosted project. supabase/post-baseline/0001_deldo_classification.sql remains intentionally unapplied.",
+  "external_actions": "NONE. No Deldo contact, no live API call, no CREATE_ORDER, no supplier communication.",
   "blockers": [
     {
       "id": "B9",
@@ -71,6 +74,9 @@
     }
   ],
   "risks": [
+    "CORRECTED: a prior session working on the unrelated branch claude/sleepy-gauss-lezg26 concluded that no Deldo parser could be written because the primary files had never been inspected. That was wrong. The parser exists, is grounded in 26933TEST.csv, and is tested. That branch diverged from d6e2cda and never contained any of this Deldo work; it duplicated the schema baseline independently. Do not merge it over this branch.",
+    "Discount range was misstated as '-407.69 to +63.23' in both src/lib/suppliers/deldo/feed/parse.ts and docs/DELDO_ACTIVATION.md. The true range across 3,639 non-zero values is -407.69 to +78.33; 644 rows exceeded the stated upper bound. Both corrected. The conclusion drawn from it - never apply Discount - was and remains correct.",
+    "Stock in 26933TEST.csv has a hard floor of 3 and a hard ceiling of 100 (464 rows at exactly 100, none above, no zero-stock rows). That looks like deliberate banding rather than true counts, so it must not be presented as an exact quantity until Deldo confirms the semantics.",
     {
       "id": "R17",
       "severity": "low",
@@ -206,9 +212,9 @@
     }
   ],
   "not_verified": [
-    "M4 (autonomous development runner) was NOT implemented. Only the pre-implementation inspection was done before the owner stopped the mission.",
-    "Inspection findings worth keeping for M4: the repository has NO .github/ directory and zero GitHub Actions workflows; this session reports CLAUDE_CODE_SESSION_ATTENDED=1 and its Anthropic provider is host-managed with no ANTHROPIC_API_KEY present; GITHUB_TOKEN is proxy-injected per session; the gh CLI is unavailable. On that evidence, unattended execution CANNOT be activated from this environment - it needs an owner-created repository secret.",
-    "Carried: nothing has ever reached Deldo or Inter-Sprint; the production migration ledger is still divergent."
+    "Whether the LIVE Deldo feed is generated with the same CSV dialect as 26933TEST.csv. Format facts are verified for the test file only.",
+    "Deldo Stock semantics (banding, per-warehouse, incoming stock), Discount meaning, pricing mode for 026933, and Demo meaning all remain UNCONFIRMED pending Jan's written reply.",
+    "GET_STOCK has never been called. No token has been issued and no live request was made."
   ],
   "next_recommended_mission": {
     "id": "M4",

@@ -20,7 +20,7 @@ Deldo price; the rest unblock the live lookup, the feed and the catalogue.
 ### Blocking — commercial
 
 1. **What does the `Discount` column mean?**
-   In `26933TEST.csv` its values range from **-407.69 to +63.23**. A percentage
+   In `26933TEST.csv` the 3,639 non-zero values range from **-407.69 to +78.33**. A percentage
    discount cannot be negative, so we cannot infer it.
 
 2. **Does `Price` already incorporate `Discount`, or must we apply it?**

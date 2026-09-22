@@ -87,10 +87,14 @@ export interface DeldoRowExtras {
    * The Discount column, VERBATIM AND UNAPPLIED.
    *
    * Its meaning is not documented, and the sample makes the obvious reading
-   * untenable: values range from -407.69 to +63.23. A plain percentage
-   * discount cannot be negative, so this is either a surcharge indicator, a
-   * margin figure, or a comparison against a list price that is not in the
-   * feed.
+   * untenable: across 26933TEST.csv the 3,639 non-zero values run from
+   * -407.69 to +78.33. A plain percentage discount cannot be negative, so
+   * this is either a surcharge indicator, a margin figure, or a comparison
+   * against a list price that is not in the feed.
+   *
+   * The two negatives sit on the two dearest rows (1221.00 and the
+   * placeholder-looking 999.99), which is itself a reason not to trust a
+   * reading of this column derived from a test file.
    *
    * Applying an unknown quantity to a purchase price is precisely the silent
    * commercial corruption this integration must not produce, so it is carried

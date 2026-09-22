@@ -257,3 +257,83 @@ describe("Deldo capabilities", () => {
     }
   });
 });
+
+/**
+ * Lane-scoped freshness.
+ *
+ * These functions shipped exported but untested: the typecheck was failing on
+ * two unused imports left behind by an abandoned attempt to cover them. The
+ * safety property is that a lane with no configured policy FAILS rather than
+ * falling back to a default, because a default would silently invent a
+ * commercial freshness tolerance that nobody approved.
+ */
+describe("lane-scoped freshness policy", () => {
+  const policies = {
+    deldo: { staleAfterMs: 4 * 60 * 60 * 1000 },
+    intersprint: { staleAfterMs: 7 * 24 * 60 * 60 * 1000 },
+  };
+  const now = new Date("2026-09-21T12:00:00Z");
+
+  it("returns the policy configured for the lane", () => {
+    expect(freshnessPolicyForLane("deldo", policies).staleAfterMs).toBe(4 * 60 * 60 * 1000);
+    expect(freshnessPolicyForLane("intersprint", policies).staleAfterMs).toBe(
+      7 * 24 * 60 * 60 * 1000
+    );
+  });
+
+  it("THROWS for an unconfigured lane instead of defaulting", () => {
+    expect(() => freshnessPolicyForLane("it_48h", policies)).toThrow(
+      /No valid freshness policy configured for supplier lane 'it_48h'/
+    );
+  });
+
+  it("THROWS on a malformed policy rather than treating it as usable", () => {
+    for (const bad of [
+      { staleAfterMs: Number.NaN },
+      { staleAfterMs: Number.POSITIVE_INFINITY },
+      { staleAfterMs: -1 },
+    ]) {
+      expect(() => freshnessPolicyForLane("deldo", { deldo: bad })).toThrow(
+        /No valid freshness policy/
+      );
+    }
+  });
+
+  it("does NOT hard-code Deldo's documented feed interval as a policy", () => {
+    // Publishing cadence is a supplier fact; freshness tolerance is a
+    // GommaRush commercial decision. They must not be the same number by
+    // accident.
+    expect(() => freshnessPolicyForLane("deldo", {})).toThrow();
+  });
+
+  it("classifies through the lane's own policy", () => {
+    const threeHoursOld = observation({
+      observedAt: new Date(now.getTime() - 3 * 60 * 60 * 1000),
+    });
+    // Fresh under Deldo's 4h policy...
+    expect(classifyObservationForLane(threeHoursOld, policies, now).state).toBe("current");
+    // ...and the SAME observation is stale under a stricter lane policy.
+    expect(
+      classifyObservationForLane(threeHoursOld, { deldo: { staleAfterMs: 60 * 1000 } }, now).state
+    ).toBe("stale");
+  });
+
+  it("reports an absent observation without needing a policy at all", () => {
+    expect(classifyObservationForLane(null, {}, now)).toEqual({
+      state: "no_usable_observation",
+      reason: "no_observation",
+    });
+  });
+
+  it("still rejects test data ahead of any freshness question", () => {
+    const freshTestRow = observation({ classification: "test", observedAt: now });
+    expect(classifyObservationForLane(freshTestRow, policies, now).state).toBe("test_data");
+  });
+
+  it("propagates the throw for an observation on an unconfigured lane", () => {
+    const other = observation({ laneCode: "it_48h" });
+    expect(() => classifyObservationForLane(other, policies, now)).toThrow(
+      /No valid freshness policy configured for supplier lane 'it_48h'/
+    );
+  });
+});
