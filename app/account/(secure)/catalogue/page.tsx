@@ -1,0 +1,1 @@
+export default function CustomerCataloguePage(){return <div><h1 className="text-2xl font-extrabold text-ink">Catalogo</h1><p className="mt-2 text-ink-soft">Ricerca pneumatici — collegamento al catalogo cliente in M12.</p></div>;}
