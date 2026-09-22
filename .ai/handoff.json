@@ -1,12 +1,12 @@
 {
   "project": "GommaRush",
-  "mission_id": "M11B-ADMIN-CATALOGUE-WORKSPACE",
-  "mission_title": "Admin Catalogue Browse & Compare (incl. sorting and brand-tier taxonomy)",
-  "status": "READY_FOR_REVIEW",
-  "phase": "Built and tested. No production mutation; the pending 0003/0004 operations remain unapplied.",
+  "mission_id": "M12-M13-CUSTOMER-PORTAL-COMMERCE",
+  "mission_title": "Customer account, catalogue, basket and sales-order foundation",
+  "status": "IN_PROGRESS",
+  "phase": "Customer portal and basket/checkout architecture built on accepted M11B. No production mutation. Checkout deliberately fails closed until PFU/VAT policy is resolved.",
   "last_updated": "2026-09-22",
   "canonical_branch": "main",
-  "working_branch": "claude/confident-albattani-p43rkj",
+  "working_branch": "chatgpt/m12-customer-portal",
   "entry_points": {
     "working_rules": "CLAUDE.md",
     "authority_model": "docs/AI_WORKFLOW.md",
@@ -50,7 +50,13 @@
     "listing_state": "src/lib/catalogue/listing-state.ts",
     "catalogue_import_ui": "app/admin/(secure)/catalogue/importa/page.tsx (secondary)",
     "brand_tiers": "src/lib/catalogue/brand-tiers.ts (mechanism present, mapping EMPTY pending approval)",
-    "catalogue_sort": "src/lib/catalogue/catalogue-sort.ts"
+    "catalogue_sort": "src/lib/catalogue/catalogue-sort.ts",
+    "customer_portal": "app/account/ + app/api/account/",
+    "customer_session": "src/lib/auth/customer-session.ts",
+    "customer_basket": "src/lib/server/customer-basket.ts",
+    "sales_orders": "src/lib/server/sales-orders.ts",
+    "pending_customer_accounts": "supabase/pending-approval/0005_customer_accounts.sql",
+    "pending_sales_orders": "supabase/pending-approval/0006_sales_orders.sql"
   },
   "source_authority": {
     "deldo": "API documentation.pdf and 26933TEST.csv, supplied by Jan Van Dyck (Deldo NV), subject 'RE: Connect platform and orders for - 026933 (Go Rush Trasporti srl)'. Both inspected directly in this session. GoRush customer number 026933.",
@@ -62,6 +68,7 @@
     "m10_production_verification": "READ-ONLY inspection of the production database on 2026-09-22, after two real Inter-Sprint feeds were processed by the deployed worker. Run ef834c00-3326-4c47-916e-4f18561e03aa (PCR, vrd-001-21185-107.csv, 3,060,504 B, checksum 04fa0b3c6a25) and run 77b811d4-5b0f-41ed-89ca-ec67b67fd060 (truck, vrd-001-21185.csv, 46,527 B, checksum 70a5d9196b13). Both status='committed', both supplier_id=4ce0b557-9575-4784-aa80-99e78af4da2f, both adapter='intersprint-feed', both import_mode='partial', both deactivated_listings=0, both rejected_rows=0."
   },
   "completed": [
+    "M12/M13 in progress: explicit auth-user→customer mapping; protected customer portal; login/logout; account/company/location view; customer-safe catalogue projection with supplier alternatives collapsed to one visible GommaRush offer per product+condition; local basket with server-side price/stock revalidation; checkout UI; separate sales_orders/sales_order_items schema with immutable customer/delivery/pricing/tyre snapshots; idempotent order creation; customer order history; admin 'Ordini clienti' inbox; 'Conferma e invia ordine' deliberately disabled so no supplier action can occur.",
     "M11B review fix: lane/vehicle membership is now DATABASE-CORRECT. Runs are indexed to ids and the joined relation is filtered on last_import_run_id, so a supplier tab or a Car&Van/Truck choice changes product membership, the total and the page boundaries rather than only which offers are drawn. An empty lane matches a sentinel id so it returns nothing instead of everything. Supplier-article search now resolves to product ids in a bounded pre-query, making a claim the old code made and did not honour actually true. Facets share the same run constraint. +15 tests.",
     "M11B amendment: catalogue sorting and the brand-tier taxonomy. brand-tiers.ts is the central, reusable mechanism the customer catalogue will share - premium / mid_range / value, with provenance and approver on each assignment - and its mapping is DELIBERATELY EMPTY because no approved classification exists and none can be derived (Inter-Sprint's 'LUXE BANDEN' is a product segment spanning many brands, not a brand statement). An unclassified brand resolves to null, never to 'value' by omission, and the UI hides the tier filter with an explanation rather than showing three buckets that all return nothing. catalogue-sort.ts separates DATABASE-NATIVE ordering (brand A-Z) from OFFER-DERIVED ordering (lowest price, freshest, most stock), whose keys live on another table: those materialise the whole filtered set before slicing, bounded at 1,000 products, and are REFUSED with a visible message above that rather than sorting a page in isolation - which is the exact bug M11B removed. +32 tests.",
     "M11B: /admin/catalogue is now Browse & Compare. New read at src/lib/server/catalogue-browse.ts rooted at catalogue_products rather than supplier_product_listings, which makes ordering and pagination DATABASE-CORRECT (the previous search ordered a page by listing id then sorted that page by brand in JS - a locally sorted page in a globally unsorted sequence) and makes canonical grouping free, since one row IS one catalogue_product_id. Three narrow reads - products paginated, their listings with the latest observation only, open conflicts - each on an index that already exists. Supplier lanes (Inter-Sprint 7d, Deldo 7d, Carlini 48h) with attribution by import ADAPTER, replacing the hard-coded laneCode 'intersprint' in catalogue-search.ts. Vehicle classification by run provenance with product_class fallback. States CURRENT / NO_CURRENT_PRICE / NEEDS_REVIEW / CONFLICT. Dependent facets computed with every filter except the one being listed. Importer moved to /admin/catalogue/importa and /ricerca now redirects, so there is one Catalogue experience. Feed health compacted to a strip. +43 tests.",
@@ -75,17 +82,22 @@
     "DOCUMENTATION ONLY. Recorded the approved commercial architecture decisions in docs/architecture/04_SALES_SOURCING_MODEL.md: supplier identity invisible to customers; customer buys only from GommaRush; standard up to ~7 days vs express ~24-48h manually sourced from the Italian supplier; the 15-20% express share recorded explicitly as a planning assumption and not a rule; supplier minimum quantities and consolidation supported internally; customer order acceptance and supplier purchase/release as separate events; many customer orders per supplier batch; delivery promises must account for consolidation and cut-off rather than raw supplier availability; normal/older-DOT/Demo kept distinguishable; older-DOT offerable as a clearly identified cheaper GommaRush option; supplied DOT year preserved; Deldo Demo meaning unverified and not to be inferred; exact supplier listing/article survives sourcing and ordering; V1 payments bank transfer, POS on delivery, cash; manual review of every customer order; customer-specific pricing supported architecturally; portal and WhatsApp on one catalogue/pricing/order engine.",
     "Added Deldo activation question 8 (what does the Demo column mean), noting explicitly that no DOT-encoding question is needed because the feed already supplies the year."
   ],
-  "in_progress": [],
+  "in_progress": [
+    "Run/repair full quality gates for M12/M13 branch; production migrations 0005/0006 remain unapplied.",
+    "Final customer order submission is fail-closed while PFU and PFU VAT-base policy are unresolved."
+  ],
   "tests": {
     "npm test": "963 passed / 6 skipped (62 files). Up from 948: +15 membership regression tests.",
     "npm run typecheck": "PASS (tsc --noEmit, clean).",
     "npm run lint": "0 errors, 7 warnings - all pre-existing UI warnings.",
-    "npm run build": "PASS."
+    "npm run build": "PASS.",
+    "M12/M13 branch": "New customer projection-boundary and basket contract tests added. Full gates NOT YET EXECUTED in this tool environment; do not claim pass until run."
   },
-  "production_changes": "NONE. No database mutation, no migration applied. 0003 (rename) and 0004 (indexes) remain prepared and unapplied.",
-  "database_changes": "NONE.",
+  "production_changes": "NONE. No database mutation or supplier action. 0003/0004/0005/0006 remain unapplied.",
+  "database_changes": "Prepared only: 0005 customer_accounts and 0006 sales_orders/sales_order_items. NOT APPLIED.",
   "external_actions": "NONE.",
   "blockers": [
+    "M13 checkout monetary gate: PFU tariff (D3) and PFU VAT-base policy (D11) are unresolved. Basket may show tyre net, but checkout cannot create an order with a falsely final total; submission returns PRICING_NOT_FINAL until verified policy exists.",
     "D18: no approved brand-tier mapping, so the tier filters match nothing. Mechanism is ready; only the commercial decision is missing.",
     "M11B: 0004 indexes unapplied - product_class and season-alone filters scan until they are.",
     "M11A: the RESET manifest (Furnizor Demo supplier + its 7 seeded orders) needs a backup and owner confirmation. NOT executed.",
