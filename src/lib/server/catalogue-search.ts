@@ -60,6 +60,10 @@ export interface CatalogueSearchQuery {
   rimInch?: number | null;
   season?: SearchableSeason | null;
   brand?: string | null;
+  /** Exact canonical product for server-side basket/checkout revalidation. */
+  productId?: string | null;
+  /** Preserve the customer-visible stock condition when revalidating. */
+  oldDot?: boolean | null;
   /** Page size. Clamped; a search is a preview, not an export. */
   limit?: number;
   offset?: number;
@@ -205,6 +209,8 @@ async function fetchListings(query: CatalogueSearchQuery): Promise<ListingRow[] 
   if (query.rimInch != null) request = request.eq("catalogue_products.rim_inch", query.rimInch);
   if (query.season) request = request.eq("catalogue_products.season", query.season);
   if (query.brand) request = request.eq("catalogue_products.brand", query.brand);
+  if (query.productId) request = request.eq("catalogue_products.id", query.productId);
+  if (query.oldDot != null) request = request.eq("old_dot", query.oldDot);
 
   const limit = clampLimit(query.limit);
   const offset = Math.max(Math.trunc(query.offset ?? 0), 0);
