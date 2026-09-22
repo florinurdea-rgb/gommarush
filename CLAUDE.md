@@ -11,6 +11,7 @@ Read this before any implementation work.
 | `docs/AI_HANDOFF.md` | Handoff template to fill in at the end of a work phase |
 | `.ai/handoff.json` | Machine-readable current state. Update at the end of every meaningful phase |
 | [`docs/SCHEMA_BASELINE.md`](docs/SCHEMA_BASELINE.md) | What production and staging contain, baseline methodology, migration-history discrepancies, and the migration procedure |
+| [`docs/suppliers/`](docs/suppliers/) | Primary supplier documentation, one directory per lane, each fact labelled PRIMARY / SECOND-HAND / UNCONFIRMED |
 | `README.md` | Stack, setup, environment variables, deployment |
 | **`docs/architecture/`** | **THE CANONICAL SPECIFICATION.** Supplier, pricing, PFU/VAT, sales and sourcing architecture. Implementation and AI review are performed *against these documents*. |
 
@@ -169,6 +170,15 @@ empty). See [`docs/SCHEMA_BASELINE.md`](docs/SCHEMA_BASELINE.md) §2 and §7.
 - Do not invent supplier behaviour that is not in supplier documentation. If
   supplier behaviour is ambiguous and could affect commercial correctness, stop
   and ask — that is `OWNER_DECISION`.
+- **A relayed field list is not a file format.** Knowing a column is called
+  `Price` tells you nothing about its type, decimal separator, encoding or
+  nullability. Never write a parser from second-hand description: record it in
+  [`docs/suppliers/`](docs/suppliers/) as `SECOND-HAND` and wait for the
+  supplier's own document. Guessing silently mis-maps real commercial data.
+- **Supplier facts belong in the repository, not in a chat transcript.** When
+  supplier documentation or correspondence reveals a field, endpoint, account
+  number or commercial term, record it under [`docs/suppliers/`](docs/suppliers/)
+  with its provenance in the same change. Never commit credentials.
 
 ## 5. Sales order vs existing logistics order
 

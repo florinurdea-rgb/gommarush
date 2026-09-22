@@ -22,6 +22,12 @@ been invented to paper over that.
 | **Deldo ingestion (any)** | Deldo's feed documentation: file/FTP mechanism, delivery path, file format and column contract. Without the column contract a parser would silently mis-map real commercial data. |
 | **Deldo order XML** | The XML schema. Out of scope regardless — sending a real order is an `OWNER_DECISION`. |
 
+Per-lane reference material, with every fact labelled by provenance, is in
+[`suppliers/`](suppliers/) — [`suppliers/intersprint/`](suppliers/intersprint/)
+and [`suppliers/deldo/`](suppliers/deldo/). Deldo has supplied API documentation
+and a test Price & Stock file to GommaRush, but **neither has reached this
+repository**, which is the entirety of the Deldo blocker.
+
 What this means in practice: **no supplier feed can currently be fetched.** The
 ingestion pipeline, the adapter contract, the observation model, the freshness
 logic and the search layer are all complete and tested; they are waiting on
