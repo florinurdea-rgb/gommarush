@@ -161,7 +161,7 @@ from insufficient stock.
 
 > **`Discount` is carried verbatim and never applied.** Its meaning is
 > undocumented and the sample makes the obvious reading untenable: values range
-> from **-407.69 to +63.23**, and a plain percentage discount cannot be
+> from **-407.69 to +78.33**, and a plain percentage discount cannot be
 > negative. `purchasePrice` is the `Price` column exactly as supplied. See
 > handoff decision **D7**.
 

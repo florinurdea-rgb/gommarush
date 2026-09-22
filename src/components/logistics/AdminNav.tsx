@@ -34,12 +34,33 @@ const SECONDARY_NAV: NavItem[] = [
   { href: "/admin/customers", label: "Clienti" },
   { href: "/admin/suppliers", label: "Fornitori" },
   { href: "/admin/catalogue", label: "Catalogo" },
+  { href: "/admin/catalogue/ricerca", label: "Ricerca e prezzi" },
   { href: "/admin/sistema", label: "Sistema" },
 ];
 
-function isActive(pathname: string, href: string): boolean {
+/** Every nav destination, used to resolve which one a URL belongs to. */
+const ALL_HREFS: string[] = [
+  ...PRIMARY_NAV.map((item) => item.href),
+  ...SECONDARY_NAV.map((item) => item.href),
+];
+
+function matchesHref(pathname: string, href: string): boolean {
   if (href === "/admin") return pathname === "/admin";
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+/**
+ * Only the MOST SPECIFIC matching nav entry is active.
+ *
+ * Without the longest-match rule, /admin/catalogue/ricerca would light up both
+ * "Catalogo" and "Ricerca e prezzi", since the first is a prefix of the second
+ * — two highlighted tabs, and no indication of which screen you are on.
+ */
+function isActive(pathname: string, href: string): boolean {
+  if (!matchesHref(pathname, href)) return false;
+  return !ALL_HREFS.some(
+    (other) => other.length > href.length && matchesHref(pathname, other)
+  );
 }
 
 function NavLink({

@@ -1,9 +1,9 @@
 {
   "project": "GommaRush",
-  "mission_id": "M6-IMPORT-SAFETY",
-  "mission_title": "Deldo import safety boundary: explicit data classification, enforced at run time",
+  "mission_id": "M7-CATALOGUE-PRICING-PREVIEW",
+  "mission_title": "Inter-Sprint catalogue search and internal commercial pricing preview",
   "status": "READY_FOR_REVIEW",
-  "phase": "Complete. Classification is enforced at run time at the import boundary and re-asserted at the persistence plan. Persistence remains gated.",
+  "phase": "Complete. Central pricing layer, PFU component, customer/internal projection boundary, catalogue search and the internal admin preview all exist and are tested. No supplier cost data exists to price against.",
   "last_updated": "2026-09-22",
   "canonical_branch": "main",
   "working_branch": "claude/confident-albattani-p43rkj",
@@ -18,7 +18,11 @@
     "deldo_activation": "docs/DELDO_ACTIVATION.md",
     "verify_baseline": "scripts/verify-migration-baseline.sh",
     "schema_baseline": "supabase/baseline/ (0001 structure, 0002 functions+triggers+checks)",
-    "post_baseline": "supabase/post-baseline/0001_deldo_classification.sql"
+    "post_baseline": "supabase/post-baseline/0001_deldo_classification.sql",
+    "pricing_engine": "src/lib/pricing/ (settings.ts, pfu.ts, calculate.ts, projection.ts)",
+    "catalogue_search": "src/lib/server/catalogue-search.ts",
+    "internal_preview": "app/admin/(secure)/catalogue/ricerca/page.tsx + app/api/admin/catalogue/search/route.ts",
+    "pricing_spec": "docs/architecture/03_PRICING_PFU_VAT.md"
   },
   "source_authority": {
     "deldo": "API documentation.pdf and 26933TEST.csv, supplied by Jan Van Dyck (Deldo NV), subject 'RE: Connect platform and orders for - 026933 (Go Rush Trasporti srl)'. Both inspected directly in this session. GoRush customer number 026933.",
@@ -26,6 +30,7 @@
     "deldo_reverified": "Both primary artefacts were re-read independently on 2026-09-22 and every PRIMARY claim in docs/suppliers/deldo/README.md was re-derived from them: 26933TEST.csv (1,322,596 bytes, sha256 5e384ccf45d06ec3..., 6,729 data rows, 35 columns, ';' delimited, no quoting, POINT decimal separator on 6729/6729 Price values, pure ASCII, LF endings, 0 malformed rows) and API documentation.pdf (18 pages). The existing parser and GET_STOCK client were confirmed to match these artefacts."
   },
   "completed": [
+    "M7: central GommaRush pricing layer in src/lib/pricing/, deliberately OUTSIDE any supplier adapter. settings.ts holds markup 20% (provenance POLICY_OWNER), optional minimum profit, VAT 22% (STATUTORY) and pfuVatBase='unresolved'; every figure carries a provenance marker and an UNRESOLVED one is refused, not defaulted. pfu.ts implements SUPPLIER_EXACT/RULE_CALCULATED/MANUAL_CONFIRMED/TO_CONFIRM with an EMPTY verified-tariff table and refuses to derive an amount from weight. calculate.ts computes cost -> markup -> net -> PFU -> taxable -> VAT -> total in integer cents, failing closed at three points. projection.ts makes the customer/internal split two DIFFERENT TYPES so a supplier cost has nowhere to sit in a customer payload. catalogue-search.ts searches the existing normalized catalogue (no parallel catalogue) by width/aspect/rim/season. Internal preview at /admin/catalogue/ricerca, admin-guarded by the (secure) layout AND re-checked in the route. 56 new tests.",
     "M6: runtime data-classification guard at the Deldo import boundary (assertDataClassification / assertFeedCommercialMode in observation.ts); classification re-asserted and surfaced explicitly on DeldoListingPersistencePlan as dataClassification/commercialMode/observationSource; 24 new tests; Quality=season and Vehicle=vehicle-class locked by regression tests.",
     "M5: reconciled the docs/suppliers provenance system with the existing Deldo implementation; corrected two factual errors; closed the lane-freshness test gap; recorded PRIMARY/SECOND-HAND/UNCONFIRMED provenance in docs/suppliers/deldo/README.md.",
     "DOCUMENTATION ONLY. Recorded the approved commercial architecture decisions in docs/architecture/04_SALES_SOURCING_MODEL.md: supplier identity invisible to customers; customer buys only from GommaRush; standard up to ~7 days vs express ~24-48h manually sourced from the Italian supplier; the 15-20% express share recorded explicitly as a planning assumption and not a rule; supplier minimum quantities and consolidation supported internally; customer order acceptance and supplier purchase/release as separate events; many customer orders per supplier batch; delivery promises must account for consolidation and cut-off rather than raw supplier availability; normal/older-DOT/Demo kept distinguishable; older-DOT offerable as a clearly identified cheaper GommaRush option; supplied DOT year preserved; Deldo Demo meaning unverified and not to be inferred; exact supplier listing/article survives sourcing and ordering; V1 payments bank transfer, POS on delivery, cash; manual review of every customer order; customer-specific pricing supported architecturally; portal and WhatsApp on one catalogue/pricing/order engine.",
@@ -33,21 +38,28 @@
   ],
   "in_progress": [],
   "tests": {
-    "npm test": "621 passed / 4 skipped (43 files). Up from 597: +24 tests (13 import-safety, 7 Quality/Vehicle semantics, 4 persistence-plan classification).",
+    "npm test": "677 passed / 4 skipped (46 files, 1 skipped file). Up from 621: +56 tests (32 pricing calculation, 13 projection boundary, 11 catalogue search).",
     "npm run typecheck": "PASS (tsc --noEmit, clean).",
-    "npm run lint": "0 errors, 7 warnings - all pre-existing UI warnings, none in supplier code. CLAUDE.md's documented '7 pre-existing warnings' is CORRECT; an earlier report of '1 warning' in this session was wrong because the output had been truncated.",
-    "npm run build": "PASS.",
-    "verify-migration-baseline.sh": "exit 0 against a disposable local PostgreSQL 16. Post-baseline 0001_deldo_classification.sql applies; data_classification is NOT NULL with no default."
+    "npm run lint": "0 errors, 7 warnings - all pre-existing UI warnings (HeroBackground, DriverHome x2, SummaryDashboard, VehicleBoard, BrandMarquee, Hero). None in pricing, search or the new preview.",
+    "npm run build": "PASS. /admin/catalogue/ricerca and /api/admin/catalogue/search both built.",
+    "verify-migration-baseline.sh": "NOT RE-RUN this mission - no migration, schema or baseline file was touched."
   },
-  "production_changes": "NONE.",
-  "database_changes": "NONE applied to any hosted project. A disposable LOCAL PostgreSQL 16 was used only to run scripts/verify-migration-baseline.sh. supabase/post-baseline/0001_deldo_classification.sql remains intentionally unapplied.",
-  "external_actions": "NONE. No Deldo contact, no GET_STOCK call, no CREATE_ORDER, no FTP provisioning, no credentials handled.",
+  "production_changes": "NONE. Production was READ ONLY this mission: SELECT-only introspection to establish what commercial data exists.",
+  "database_changes": "NONE. No migration was written, applied or planned. M7 reads the existing catalogue schema unchanged.",
+  "external_actions": "NONE. No supplier API call, no supplier contact, no order.",
   "blockers": [
+    "M7 BLOCKER - NO SUPPLIER COST DATA. All 9,559 rows in supplier_listing_prices have purchase_price NULL and stock NULL (verified in production 2026-09-22). The single catalogue import run, GommaRush_ISB_Tyre_Catalogue_Import-3.xlsx (adapter 'isb', 9,559 rows, committed 2026-09-08), was SPECIFICATION ONLY. Every listing therefore prices as 'cost_unavailable'. The pricing engine is complete and tested; it has nothing to price. Resolving this needs a price-bearing Inter-Sprint file, which is a supplier/commercial action, not an engineering one.",
+    "M7 BLOCKER - PFU. No verified tariff exists, so every listing resolves to TO_CONFIRM and no customer total is produced. VERIFIED_PFU_TARIFFS is deliberately empty. Blocked on D3.",
+    "M7 BLOCKER - PFU/VAT base. pfuVatBase is 'unresolved' pending the commercialista, which independently blocks the customer total even once a tariff exists.",
     "Deldo persistence is gated by the schema reconciliation. persistDeldoImport throws DeldoPersistenceUnavailableError by design and must stay closed until 0001_deldo_classification.sql is deliberately applied.",
     "No Deldo feed can be fetched: no FTP credentials, and SFTP/FTPS support is unconfirmed.",
     "No GET_STOCK test token has been issued, so the API path has never executed against Deldo."
   ],
   "risks": [
+    "M7: the catalogue's only supplier record is literally named 'asdas' (R4/D1). The DB therefore cannot confirm this catalogue IS Inter-Sprint; the evidence is the import run's adapter tag 'isb'. The internal preview shows that supplier name verbatim rather than relabelling it, because renaming a supplier on a hunch is exactly the silent conflict resolution CLAUDE.md forbids.",
+    "M7: the catalogue schema has NO EU-label columns beyond eprel_id (no fuel efficiency, wet grip or noise). 8,972 of 9,550 active products carry an eprel_id. The preview surfaces that id and nothing more; the richer label data is simply not in the system and must not be inferred from it.",
+    "M7: availability is projected as unknown/in_stock/on_request, never as a quantity. ISB ships thresholds ('>20') and the Deldo sample is banded 3..100, so neither is a count a customer promise could rest on. Today every row reads 'unknown' because no stock is stored at all.",
+    "M7: the preview is INTERNAL ONLY and deliberately has no public counterpart. The customer projection exists and is tested but nothing serves it yet. The first route that does must use toCustomerOffer, never toInternalOffer.",
     "buildDeldoImport currently has NO non-test caller: there is no admin route, upload route or server action that reaches Deldo import. So there was no live bypass to close. The runtime guard was added because the FIRST such route - the next mission is feed activation - would otherwise pass unvalidated JSON straight through an erased TypeScript type.",
     "guardKnownTestFile only recognises the one named file 26933TEST.csv. It is a deliberate backstop, not a heuristic, and must not be broadened into 'looks like test data' - such a guess would eventually be wrong in the expensive direction.",
     "CORRECTED: a prior session working on the unrelated branch claude/sleepy-gauss-lezg26 concluded that no Deldo parser could be written because the primary files had never been inspected. That was wrong. The parser exists, is grounded in 26933TEST.csv, and is tested. That branch diverged from d6e2cda and never contained any of this Deldo work; it duplicated the schema baseline independently. Do not merge it over this branch.",
@@ -84,7 +96,7 @@
     {
       "id": "R11",
       "severity": "high",
-      "summary": "The Discount column's meaning is undocumented and values range from -407.69 to +63.23. A plain percentage discount cannot be negative.",
+      "summary": "The Discount column's meaning is undocumented and values range from -407.69 to +78.33. A plain percentage discount cannot be negative.",
       "impact": "If Discount must be applied to reach the real purchase price, every Deldo cost is currently wrong. If it must not, applying it later would corrupt every margin.",
       "resolution": "Carried verbatim and never applied. purchasePrice is the Price column as supplied. Needs D7."
     },
@@ -131,9 +143,21 @@
   ],
   "owner_decisions_required": [
     {
+      "id": "D10",
+      "question": "Supply an Inter-Sprint file that carries purchase price and stock, or confirm which feed should provide them.",
+      "why": "The pricing engine is finished and tested but every one of the 9,559 listings has a NULL purchase_price, so it produces no selling price for any tyre. This is the single thing standing between the preview and a usable commercial answer.",
+      "blocks": "The entire commercial purpose of the catalogue preview."
+    },
+    {
+      "id": "D11",
+      "question": "Confirm with the commercialista whether PFU sits inside the VAT taxable base.",
+      "why": "pfuVatBase is 'unresolved', which is what stops a customer total being produced. Both answers are implemented and tested; only the decision is missing. It must be settled before the first price snapshot, because snapshots are immutable.",
+      "blocks": "Any customer-facing gross total."
+    },
+    {
       "id": "D7",
       "question": "What does the Deldo feed's Discount column mean, and is it already reflected in Price?",
-      "why": "Values run from -407.69 to +63.23, so it is not a plain percentage discount. Until answered, purchase cost cannot be considered final.",
+      "why": "Values run from -407.69 to +78.33, so it is not a plain percentage discount. Until answered, purchase cost cannot be considered final.",
       "blocks": "Any use of a Deldo purchase price.",
       "note": "One question to Jan@deldo.com. Can be combined with D8 and R10."
     },
@@ -168,7 +192,7 @@
     },
     {
       "id": "D4",
-      "question": "Carried from M1: markup policy and the policy for products with no verified weight. Note that the Deldo feed has NO weight column at all."
+      "question": "Carried from M1, PARTIALLY DECIDED: markup is now set to 20% for the internal preview (2026-09-22) and held as configuration in DEFAULT_PRICING_SETTINGS. Still open: whether 20% is also the live selling markup, whether a minimum euro profit per tyre applies, and the policy for products with no verified weight. Note the Deldo feed has NO weight column at all."
     },
     {
       "id": "D5",
@@ -188,9 +212,13 @@
     }
   ],
   "not_verified": [
+    "That the 9,550-product catalogue is Inter-Sprint's. The adapter tag on the import run says 'isb'; the supplier record says 'asdas'. Not reconciled - see D1.",
+    "Any PFU tariff value, scheme, category or effective date. None exists in this system and none was invented.",
+    "Whether 22% is the correct VAT rate for every line GommaRush sells. It is the Italian ordinary rate, recorded as STATUTORY configuration; reduced-rate cases are a commercialista question.",
     "Whether the LIVE Deldo feed uses the same CSV dialect as 26933TEST.csv. Format facts are PRIMARY for the test file only.",
     "Discount meaning, whether Price incorporates it, pricing mode for 026933, currency, Stock semantics, Demo meaning, PFU treatment, GET_STOCK parameter contract and rate limits, FTPS/SFTP support - all awaiting Jan. He has NOT replied.",
     "GET_STOCK has never been called. No token issued, no live request made."
   ],
-  "next_recommended_mission": "Reconcile Jan/Deldo answers and prepare real Deldo feed activation while respecting the DB persistence gate. The autonomous development runner (M4) is NOT the current priority. Sequence after this mission: (1) Jan/Deldo response reconciliation + DB persistence gate, (2) real Deldo feed ingestion, (3) commercial pricing/PFU, (4) customer catalogue/search/order journey."
+  "next_recommended_mission": "Obtain and import a price-bearing Inter-Sprint file (D10), so the finished pricing engine has something to price. That single step turns the existing preview from a working mechanism into a real commercial answer, and it requires no further engineering. In parallel: resolve PFU tariffs (D3) and the PFU/VAT base (D11). AFTER those: price snapshots for quotes/orders, then the customer-facing catalogue served from toCustomerOffer. The autonomous development runner (M4) remains NOT the priority.",
+  "head_at_completion": "see commits[0]; branch claude/confident-albattani-p43rkj"
 }

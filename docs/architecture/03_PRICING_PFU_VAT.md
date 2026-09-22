@@ -1,8 +1,18 @@
 # Pricing, PFU, VAT & Markup
 
-**Status: PLANNED. None of this exists in `main`** — there is no markup, selling
-price, margin or pricing configuration anywhere in the codebase (verified
-2026-09-21). This document is the agreed direction, not a description of code.
+**Status: PARTLY IMPLEMENTED (2026-09-22, branch
+`claude/confident-albattani-p43rkj`).** The calculation, the markup
+configuration, the PFU component and the customer/internal split now exist in
+`src/lib/pricing/`; they are reachable only from the internal admin preview at
+`/admin/catalogue/ricerca`. Price snapshots and the override model remain
+PLANNED. What is NOT implemented is marked per section below.
+
+> **The engine has no data to price.** All 9,559 supplier listing price rows
+> have a NULL `purchase_price` and NULL stock (verified against production,
+> 2026-09-22): the one catalogue import was specification-only. Every listing
+> therefore resolves to `cost_unavailable`. This is a data gap, not a defect —
+> the arithmetic below is tested and will apply the moment a price-bearing
+> supplier file is imported.
 
 ## Principle
 
@@ -57,8 +67,12 @@ tyre · VAT rate · optional rounding rule.
 The model must be extensible to supplier, customer, brand/category, quantity
 tier and promotional overrides — but **do not implement those until approved**.
 
-> **OWNER_DECISION — the actual markup value.** Any starting figure is a
-> business decision, not a default an agent may choose.
+> **OWNER_DECISION — the actual markup value. DECIDED for the preview:
+> 20%.** Set by the owner on 2026-09-22 and held in
+> `DEFAULT_PRICING_SETTINGS.markupPercent` with provenance `POLICY_OWNER`.
+> It is configuration, not a figure compiled into a calculation, and it
+> applies to every supplier lane at once. A different value for live selling
+> remains an owner decision.
 
 ## Minimum profit
 
@@ -104,7 +118,21 @@ A separate tax layer, never confused with markup. The Italian standard rate is
 configuration held in controlled tax/pricing settings, never duplicated across
 supplier integrations.
 
+**IMPLEMENTED.** `vatRatePercent` is 22 with provenance `STATUTORY` — the
+Italian ordinary rate, recorded as configuration rather than inferred at a call
+site. A rate whose provenance is `UNRESOLVED` produces no VAT at all rather
+than a zero-rated total.
+
+The engine will not produce a customer total today, because `pfuVatBase` is
+`unresolved`: whether PFU sits inside the taxable base is the open accounting
+question above, and both answers give different totals. Net selling price,
+markup and gross profit are still reported, which is what B2B competitiveness
+is judged on.
+
 ## Price snapshots
+
+**Status: PLANNED — not implemented.** Nothing writes a price snapshot yet,
+because nothing yet creates a quote or an order from a calculated price.
 
 Changing the global markup affects **new** calculations only. Once a quote,
 offer or order price is created, the commercial inputs are snapshotted so
