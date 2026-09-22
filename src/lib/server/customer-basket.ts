@@ -38,6 +38,6 @@ export function customerBasketPayload(lines:BasketResolvedLine[]){
   currency:"EUR",tyreNetTotalCents,pfuTotalCents:allFinal?lines.reduce((s,l)=>s+(l.customer.pfuAmountCents??0)*l.input.quantity,0):null,
   vatTotalCents:allFinal?lines.reduce((s,l)=>s+(l.customer.vatAmountCents??0)*l.input.quantity,0):null,
   grandTotalCents:allFinal?lines.reduce((s,l)=>s+(l.customer.customerTotalCents??0)*l.input.quantity,0):null,
-  monetaryStatus:allFinal?"complete":"pending_pfu"
+  monetaryStatus
  };
 }
