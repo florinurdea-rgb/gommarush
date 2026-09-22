@@ -1,0 +1,1 @@
+export default function CustomerOrdersPage(){return <div><h1 className="text-2xl font-extrabold text-ink">Ordini</h1><p className="mt-2 text-ink-soft">I tuoi ordini GommaRush appariranno qui.</p></div>;}
