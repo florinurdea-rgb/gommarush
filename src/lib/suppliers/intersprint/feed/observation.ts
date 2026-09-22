@@ -5,6 +5,14 @@ import {
   type SupplierObservation,
 } from "@/lib/suppliers/observation";
 import type { NormalizedCatalogueRow } from "@/lib/types/catalogue";
+import {
+  categoryForProductClass,
+  INTERSPRINT_COMMERCIAL_POLICY,
+  previewReleaseQuantity,
+  resolveIntersprintCommercialMode,
+  type IntersprintCategory,
+  type IntersprintCommercialPolicy,
+} from "@/lib/suppliers/intersprint/commercial-policy";
 
 // Turning Inter-Sprint feed rows into normalised supplier observations.
 //
@@ -31,14 +39,36 @@ export const INTERSPRINT_LANE_CODE = "intersprint";
  * reason: a markup applied to the wrong interpretation misprices everything.
  */
 export type IntersprintPriceBasis =
-  /** Confirmed by Inter-Sprint as the price Go Rush pays. Nothing sets this yet. */
+  /**
+   * Confirmed as the net purchase price GommaRush pays.
+   *
+   * OWNER-CONFIRMED 2026-09-22 (POLICY_OWNER). NOT an Inter-Sprint document —
+   * the supplier has never written this down for us, and the distinction is
+   * preserved deliberately so nobody later cites a business decision as a
+   * supplier commitment.
+   */
   | "confirmed_net_to_gorush"
-  /** Carried from the feed, meaning not yet confirmed. The current state. */
+  /** Carried from the feed with its meaning unconfirmed. The M8 state. */
   | "feed_nett_price_unconfirmed";
 
 export interface IntersprintObservationInput {
   /** One normalised row from the Inter-Sprint feed adapter. */
   readonly row: NormalizedCatalogueRow;
+  /**
+   * Units of the supplier RELEASE this line will belong to.
+   *
+   * Transport is included only once Inter-Sprint's minimum is reached (60 PCR,
+   * 10 truck), so the same price means different things either side of it.
+   * Omitted means "sourcing has not decided yet", which resolves to `unknown`
+   * and fails closed rather than assuming a full batch.
+   */
+  readonly releaseQuantity?: number | null;
+  /**
+   * Which minimum applies. Derived from the catalogue product class when not
+   * given, because the feed itself carries no category flag.
+   */
+  readonly category?: IntersprintCategory;
+  readonly policy?: IntersprintCommercialPolicy;
   /**
    * Whether this file is real or a sample. NO DEFAULT, by design — the two
    * sample files we hold are genuinely not live data, and an importer that
@@ -92,10 +122,33 @@ export function buildIntersprintObservation(
     stockMinimum: row.stockMinimum,
     stockRaw: row.stockRaw,
 
-    // See IntersprintPriceBasis. 'unknown' is what stops an unconfirmed price
-    // being marked up and quoted; it is not a placeholder to be tidied away.
-    commercialMode: "unknown",
+    // Resolved from the owner's confirmation plus the release size. Below the
+    // minimum this is 'transport_separate', not 'transport_included': the
+    // price is still real, but it does not yet carry delivery.
+    commercialMode: resolveIntersprintCommercialMode({
+      category: input.category ?? categoryForProductClass(row.productClass),
+      releaseQuantity: input.releaseQuantity ?? null,
+      policy: input.policy ?? INTERSPRINT_COMMERCIAL_POLICY,
+    }),
   };
+}
+
+/**
+ * An observation priced the way the internal preview shows it: as part of a
+ * consolidated release that reaches Inter-Sprint's minimum.
+ *
+ * Separate from the general builder so the assumption is visible at the call
+ * site rather than buried in a default. The preview screen states it too.
+ */
+export function buildIntersprintPreviewObservation(
+  input: Omit<IntersprintObservationInput, "releaseQuantity">
+): SupplierObservation {
+  const category = input.category ?? categoryForProductClass(input.row.productClass);
+  return buildIntersprintObservation({
+    ...input,
+    category,
+    releaseQuantity: previewReleaseQuantity(category, input.policy),
+  });
 }
 
 /**
@@ -125,6 +178,15 @@ export function isPriceBasisCommerciallyUsable(basis: IntersprintPriceBasis): bo
   return basis === "confirmed_net_to_gorush";
 }
 
-/** The basis every row currently carries. */
+/**
+ * The basis every row now carries, following the owner's confirmation.
+ *
+ * M8 shipped `feed_nett_price_unconfirmed`, which made every Inter-Sprint
+ * price commercially unusable. The change here is a business decision being
+ * recorded, not a new supplier fact.
+ */
 export const CURRENT_INTERSPRINT_PRICE_BASIS: IntersprintPriceBasis =
-  "feed_nett_price_unconfirmed";
+  "confirmed_net_to_gorush";
+
+/** Where that confirmation came from. Never relabel this as supplier-sourced. */
+export const CURRENT_PRICE_BASIS_PROVENANCE = "POLICY_OWNER" as const;

@@ -455,4 +455,14 @@ export const EN_STRINGS: Record<string, string> = {
   "Disponibile": "In stock",
   "Su richiesta": "On request",
   "Non nota": "Unknown",
+  // --- M9: FTP feed, selling policy ---
+  "I prezzi presuppongono un ordine consolidato che raggiunge il minimo Inter-Sprint (60 vetture, 10 autocarro), con trasporto incluso.":
+    "Prices assume a consolidated order reaching the Inter-Sprint minimum (60 car, 10 truck), with transport included.",
+  "Articoli con meno di 5 pezzi non vengono offerti ai clienti.":
+    "Listings with fewer than 5 units are not offered to customers.",
+  "Stock fornitore": "Supplier stock",
+  "Sotto il minimo di vendita": "Below the selling minimum",
+  "Esaurito": "Out of stock",
+  "Stock non noto": "Stock unknown",
+  "Non in vendita": "Not offered",
 };

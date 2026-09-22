@@ -207,17 +207,19 @@ describe("search results carry cost internally and never to the customer", () =>
 
     const result = await searchCatalogue({ widthMm: 205 });
     const [internal] = result.internal;
-    const [customer] = result.customer;
 
     expect(internal.resolution).toBe("cost_unavailable");
     expect(internal.supplierCostCents).toBeNull();
     expect(internal.tyreSaleNetCents).toBeNull();
     expect(internal.availability).toBe("unknown");
-    expect(customer.priceAvailable).toBe(false);
-    expect(customer.tyreSaleNetCents).toBeNull();
-    // The tyre is still findable — a missing price is not a missing product.
-    expect(customer.tyre.brand).toBe("MICHELIN");
-    expect(customer.tyre.sizeDisplay).toBe("205/55 R16");
+    // The operator still sees the listing, and why it is not offered.
+    expect(internal.sellable).toBe(false);
+    expect(internal.sellabilityReason).toBe("stock_unknown");
+    expect(internal.tyre.brand).toBe("MICHELIN");
+
+    // With no stock figure at all we will not offer it, so it does not reach
+    // the customer projection.
+    expect(result.customer).toHaveLength(0);
   });
 
   it("marks PFU to-confirm for every result while no tariff exists", async () => {
@@ -239,7 +241,10 @@ describe("search results carry cost internally and never to the customer", () =>
     expect(result.internal[0].pfuStatus).toBe("TO_CONFIRM");
     expect(result.internal[0].pfuAmountCents).toBeNull();
     expect(result.internal[0].customerTotalCents).toBeNull();
-    expect(result.customer[0].pfuStatus).toBe("TO_CONFIRM");
+    // This fixture states no stock, so it is not offered; PFU is asserted on
+    // the internal view. Customer-side PFU is covered where stock permits.
+    expect(result.internal[0].sellable).toBe(false);
+    expect(result.customer).toHaveLength(0);
   });
 
   it("refuses a negative supplier price rather than pricing from it", async () => {
@@ -258,6 +263,87 @@ describe("search results carry cost internally and never to the customer", () =>
 
     const result = await searchCatalogue({ widthMm: 205 });
     expect(result.internal[0].resolution).toBe("cost_unavailable");
+  });
+
+  it("offers a listing whose stock clears the minimum", async () => {
+    const { searchCatalogue } = await import("@/lib/server/catalogue-search");
+
+    mockListings([
+      listingRow({
+        purchase_price: "61.5000",
+        currency: "EUR",
+        stock_raw: "6",
+        stock_exact: 6,
+        stock_minimum: 6,
+        observed_at: "2026-09-08T14:46:30.554Z",
+      }),
+    ]);
+
+    const result = await searchCatalogue({ widthMm: 205 });
+
+    expect(result.internal[0].sellable).toBe(true);
+    expect(result.customer).toHaveLength(1);
+    expect(result.customer[0].tyre.brand).toBe("MICHELIN");
+  });
+
+  /**
+   * The owner's <5 rule. The supplier genuinely holds 3; we decline to sell
+   * from that pool, and the 3 survives untouched on the internal view.
+   */
+  it("suppresses a listing below the minimum without altering its stock", async () => {
+    const { searchCatalogue } = await import("@/lib/server/catalogue-search");
+
+    mockListings([
+      listingRow({
+        purchase_price: "61.5000",
+        currency: "EUR",
+        stock_raw: "3",
+        stock_exact: 3,
+        stock_minimum: 3,
+        observed_at: "2026-09-08T14:46:30.554Z",
+      }),
+    ]);
+
+    const result = await searchCatalogue({ widthMm: 205 });
+
+    expect(result.customer).toHaveLength(0);
+    expect(result.internal[0].sellable).toBe(false);
+    expect(result.internal[0].sellabilityReason).toBe("below_minimum_offer_quantity");
+    // The supplier's real figure is preserved, not rewritten to zero.
+    expect(result.internal[0].supplierStockExact).toBe(3);
+    expect(result.internal[0].supplierStockRaw).toBe("3");
+    expect(result.internal[0].minimumOfferQuantity).toBe(5);
+  });
+
+  it("offers a banded listing on the strength of its floor", async () => {
+    const { searchCatalogue } = await import("@/lib/server/catalogue-search");
+
+    mockListings([
+      listingRow({
+        purchase_price: "61.5000",
+        currency: "EUR",
+        stock_raw: ">  20",
+        stock_exact: null,
+        stock_minimum: 20,
+        observed_at: "2026-09-08T14:46:30.554Z",
+      }),
+    ]);
+
+    const result = await searchCatalogue({ widthMm: 205 });
+
+    expect(result.customer).toHaveLength(1);
+    expect(result.internal[0].supplierStockExact).toBeNull();
+    expect(result.internal[0].supplierStockMinimum).toBe(20);
+
+    // The band reached the customer as an availability WORD, never as a
+    // quantity. Checked by field rather than by substring: '20' also occurs
+    // inside '205/55 R16', which is the tyre's width and perfectly public.
+    const customer = result.customer[0] as unknown as Record<string, unknown>;
+    expect(customer.availability).toBe("in_stock");
+    for (const key of Object.keys(customer)) {
+      expect(key.toLowerCase()).not.toContain("stock");
+    }
+    expect(Object.values(customer)).not.toContain(20);
   });
 
   it("degrades to an empty result when the catalogue tables are absent", async () => {

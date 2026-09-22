@@ -46,6 +46,15 @@ function listing(overrides: Partial<PricedListing> = {}): PricedListing {
     supplierName: "Inter-Sprint Banden BV",
     supplierArticleId: "ISB-12851",
     costObservedAt: "2026-09-08T14:46:30.554Z",
+    supplierStockExact: 6,
+    supplierStockMinimum: 6,
+    supplierStockRaw: "6",
+    sellability: {
+      sellable: true,
+      reason: "sellable" as const,
+      assessedQuantity: 6,
+      minimumApplied: 5,
+    },
     breakdown: calculateTyrePrice(
       { supplierCostCents: 6_150, pfu: resolvedPfu("SUPPLIER_EXACT", 316, null, "Supplier.") },
       SETTINGS

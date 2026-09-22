@@ -163,15 +163,94 @@ being read.
 
 ---
 
-## 7. FTP
+## 7. FTP (updated M9)
 
-**Nothing in this repository fetches an Inter-Sprint file.** There is no FTP
-client, no credential, no scheduled job and no path configuration for this
-lane. `INTERSPRINT_GATEWAY_*` configures the ordering/stock **API**, which is
-a different channel entirely. The only FTP in the system is the GommaRush
-endpoint discussed for Deldo (plain FTP — security finding 2).
+The endpoint **is** provisioned by this repository:
+`infra/ftp/provision-intersprint-ftp.sh` creates a chrooted, single-user
+plain-FTP drop point with `incoming/` writable by Inter-Sprint and
+`processing/`, `processed/`, `failed/` owned by root and read-only to them —
+so the supplier cannot alter the record of what we did with their files.
 
-So between a file arriving and the catalogue being updated there is currently:
-FTP receipt → file discovery → fetch → hand bytes to `analyzeCatalogueImport`
-with `adapterId: "intersprint-feed"` → operator review → commit. Only the last
-three exist.
+**SECOND-HAND** (owner-verified from correspondence, not observed here):
+plain FTP, port 21, passive, upload directory `/incoming`, a dedicated
+Inter-Sprint account, credentials supplied privately, delivery three times a
+day, and a 18 September statement that the integration is complete.
+
+**Credentials live only in the environment.** `INTERSPRINT_FTP_*` in
+`.env.local.example` documents the names; no value belongs in this repository.
+Note that `INTERSPRINT_GATEWAY_*` is a different channel — the ordering/stock
+API, not this feed.
+
+### Not verified from here
+
+This session had **no credentials and no network route to port 21** (HTTPS
+egress works; FTP times out). So:
+
+- **We do not know whether Inter-Sprint has uploaded anything.** Nothing in
+  this repository has ever listed `/incoming`.
+- **No real CSV has been seen**, so the delimiter, quoting and encoding remain
+  **UNCONFIRMED**. The reader detects the dialect against the verified column
+  contract and refuses what it cannot prove, rather than defaulting.
+- **The FTP client has never run against the real server.** It is therefore
+  read-only unless `INTERSPRINT_FTP_ALLOW_WRITES=true`.
+
+### The chain, as it now stands
+
+```
+incoming/  →  list + download        FtpFeedTransport (unverified)
+           →  checksum + dedupe      lifecycle.ts      (tested)
+           →  claim                  lifecycle.ts      (tested)
+           →  CSV dialect detection  csv-reader.ts     (tested)
+           →  commercial mapping     intersprint-feed-adapter.ts (M8, tested)
+           →  observations           observation.ts    (tested)
+           →  pricing                src/lib/pricing/  (M7, tested)
+           →  processed/ | failed/   lifecycle.ts      (tested)
+```
+
+Everything except the FTP socket itself is exercised by tests against an
+in-memory transport.
+
+---
+
+## 8. Commercial policy (M9) — OWNER DECISIONS, not supplier statements
+
+`src/lib/suppliers/intersprint/commercial-policy.ts`. Every item here is
+**`POLICY_OWNER`**: a GommaRush business decision recorded on 2026-09-22.
+Inter-Sprint has not written any of it down for us, and it must never be
+cited as though they had.
+
+| Decision | Value |
+| --- | --- |
+| `nett-price` is the net purchase cost | Yes |
+| Transport included at minimum release | PCR **60**, truck **10** |
+| Currency | still **UNCONFIRMED**, carried as null |
+
+Transport inclusion is a property of the **release**, not the row, so the
+commercial mode is resolved per order: at or above the minimum it is
+`transport_included`, below it `transport_separate`, and with no quantity yet
+decided it is `unknown` and fails closed. The internal preview prices on the
+consolidated-release basis and says so on screen.
+
+Currency is deliberately still open. The owner confirmed what `nett-price`
+**is**, not what it is denominated in, and no Inter-Sprint document in this
+repository states a currency.
+
+---
+
+## 9. Selling policy (M9) — minimum offer quantity
+
+`src/lib/commerce/selling-policy.ts`. **A GommaRush selling rule, not an
+Inter-Sprint stock semantic.**
+
+- Fewer than **5** units → not offered to customers.
+- The supplier's real figure is **never** altered. A listing showing 3 keeps
+  showing 3 internally; it simply does not reach the customer projection.
+- A band satisfies the floor **on its floor**: `>  20` clears 5 without any
+  exact quantity being resolved.
+- Unknown stock is not sellable, and is a different reason code from
+  out-of-stock.
+
+The floor is a lookup, not a constant, so it can later vary by supplier,
+customer or channel without the importer, adapter or catalogue query changing.
+Filtering happens in `searchCatalogue`, not in the UI, so a future export or
+API cannot accidentally publish a suppressed listing.

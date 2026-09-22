@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { intersprintFeedAdapter } from "@/lib/catalogue/intersprint-feed-adapter";
 import {
   buildIntersprintObservation,
+  buildIntersprintPreviewObservation,
   CURRENT_INTERSPRINT_PRICE_BASIS,
+  CURRENT_PRICE_BASIS_PROVENANCE,
   INTERSPRINT_FRESHNESS_POLICY,
   INTERSPRINT_LANE_CODE,
   isPriceBasisCommerciallyUsable,
@@ -17,6 +19,7 @@ import { calculateTyrePrice } from "@/lib/pricing/calculate";
 import { DEFAULT_PRICING_SETTINGS } from "@/lib/pricing/settings";
 import { resolvePfu } from "@/lib/pricing/pfu";
 import { toCustomerOffer, toInternalOffer, type PricedListing } from "@/lib/pricing/projection";
+import { assessSellability } from "@/lib/commerce/selling-policy";
 import { INTERSPRINT_PCR_ROWS, intersprintRow } from "./intersprint-feed-fixtures";
 
 /**
@@ -170,13 +173,20 @@ describe("the price basis is unconfirmed, and that is recorded", () => {
    * Nothing in the feed or the covering email says whether `nett-price` is the
    * price Go Rush actually pays. The number is carried; the claim is not.
    */
-  it("carries the feed price with an unconfirmed basis", () => {
-    expect(CURRENT_INTERSPRINT_PRICE_BASIS).toBe("feed_nett_price_unconfirmed");
-    expect(isPriceBasisCommerciallyUsable(CURRENT_INTERSPRINT_PRICE_BASIS)).toBe(false);
+  /**
+   * M9 CHANGE. M8 carried 'feed_nett_price_unconfirmed', which made every
+   * Inter-Sprint price unusable. The owner has since confirmed nett-price is
+   * the net purchase cost, so the basis is confirmed — by the OWNER, which is
+   * what the provenance records. Inter-Sprint has still never written it down.
+   */
+  it("carries the owner-confirmed basis, labelled as the owner's", () => {
+    expect(CURRENT_INTERSPRINT_PRICE_BASIS).toBe("confirmed_net_to_gorush");
+    expect(isPriceBasisCommerciallyUsable(CURRENT_INTERSPRINT_PRICE_BASIS)).toBe(true);
+    expect(CURRENT_PRICE_BASIS_PROVENANCE).toBe("POLICY_OWNER");
   });
 
-  it("would accept a basis Inter-Sprint had confirmed", () => {
-    expect(isPriceBasisCommerciallyUsable("confirmed_net_to_gorush")).toBe(true);
+  it("still treats the M8 unconfirmed basis as unusable", () => {
+    expect(isPriceBasisCommerciallyUsable("feed_nett_price_unconfirmed")).toBe(false);
   });
 
   /**
@@ -184,31 +194,72 @@ describe("the price basis is unconfirmed, and that is recorded", () => {
    * up and quoted, via the same gate the Deldo lane uses.
    */
   /**
-   * THE HEADLINE SAFETY PROPERTY OF THIS MISSION.
-   *
-   * Every Inter-Sprint observation built today is refused for commercial use,
-   * and the reason given is the unresolved commercial meaning of the price —
-   * not a missing price, not stale data. The number is present and correct;
-   * what is missing is Inter-Sprint confirming what it means.
-   *
-   * The refusal comes BEFORE the age check, so no amount of freshness can
-   * make an unconfirmed price usable.
+   * Transport inclusion depends on the RELEASE, not the row, so an
+   * observation built without a release quantity still fails closed. Sourcing
+   * has not decided yet, and guessing a full batch would promise delivery we
+   * have not earned.
    */
-  it("fails closed for commercial use while the price basis is unconfirmed", () => {
+  it("fails closed when the release quantity is not yet known", () => {
     const o = observation();
     expect(o.commercialMode).toBe("unknown");
 
-    const state = classifyObservation(o, POLICY, NOW);
-    expect(state).toEqual({
+    expect(classifyObservation(o, POLICY, NOW)).toEqual({
       state: "no_usable_observation",
       reason: "unknown_commercial_mode",
     });
-    expect(isCommerciallyUsable(state)).toBe(false);
   });
 
-  it("becomes usable once the basis is confirmed, and not before", () => {
-    const confirmed = { ...observation(), commercialMode: "transport_separate" as const };
-    expect(isCommerciallyUsable(classifyObservation(confirmed, POLICY, NOW))).toBe(true);
+  it("includes transport once the PCR minimum of 60 is reached", () => {
+    const o = buildIntersprintObservation({
+      row: normalized(),
+      classification: "live",
+      observedAt: OBSERVED_AT,
+      category: "pcr",
+      releaseQuantity: 60,
+    });
+
+    expect(o.commercialMode).toBe("transport_included");
+    expect(isCommerciallyUsable(classifyObservation(o, POLICY, NOW))).toBe(true);
+  });
+
+  it("keeps transport separate below the minimum", () => {
+    const o = buildIntersprintObservation({
+      row: normalized(),
+      classification: "live",
+      observedAt: OBSERVED_AT,
+      category: "pcr",
+      releaseQuantity: 59,
+    });
+
+    expect(o.commercialMode).toBe("transport_separate");
+    // Still a real, usable price — it simply does not carry delivery.
+    expect(isCommerciallyUsable(classifyObservation(o, POLICY, NOW))).toBe(true);
+  });
+
+  it("uses the truck minimum of 10 for truck stock", () => {
+    const pcr = buildIntersprintObservation({
+      row: normalized(), classification: "live", observedAt: OBSERVED_AT,
+      category: "pcr", releaseQuantity: 10,
+    });
+    const truck = buildIntersprintObservation({
+      row: normalized(), classification: "live", observedAt: OBSERVED_AT,
+      category: "truck", releaseQuantity: 10,
+    });
+
+    expect(pcr.commercialMode).toBe("transport_separate");
+    expect(truck.commercialMode).toBe("transport_included");
+  });
+
+  /** The preview prices on the consolidated-release basis, and says so. */
+  it("builds a preview observation that reaches the minimum", () => {
+    const o = buildIntersprintPreviewObservation({
+      row: normalized(),
+      classification: "live",
+      observedAt: OBSERVED_AT,
+    });
+
+    expect(o.commercialMode).toBe("transport_included");
+    expect(isCommerciallyUsable(classifyObservation(o, POLICY, NOW))).toBe(true);
   });
 });
 
@@ -289,6 +340,13 @@ describe("the catalogue preview projections", () => {
       supplierName: "Inter-Sprint Banden BV",
       supplierArticleId: row.supplierArticleId,
       costObservedAt: o.observedAt.toISOString(),
+      supplierStockExact: o.stockExact,
+      supplierStockMinimum: o.stockMinimum,
+      supplierStockRaw: o.stockRaw,
+      sellability: assessSellability({
+        stock: { stockExact: o.stockExact, stockMinimum: o.stockMinimum },
+        laneCode: INTERSPRINT_LANE_CODE,
+      }),
       breakdown: calculateTyrePrice(
         { supplierCostCents: 9_920, pfu: resolvePfu({ weightKg: 8.238 }) },
         DEFAULT_PRICING_SETTINGS

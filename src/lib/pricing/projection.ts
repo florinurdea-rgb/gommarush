@@ -17,6 +17,7 @@ import type { Cents } from "@/lib/documents/pipeline/money";
 import type { PriceBreakdown, PriceResolution } from "@/lib/pricing/calculate";
 import { grossMarginPercent, grossProfitCents } from "@/lib/pricing/calculate";
 import type { PfuStatus } from "@/lib/pricing/pfu";
+import type { SellabilityDecision, SellabilityReason } from "@/lib/commerce/selling-policy";
 
 /** The tyre itself. Identical for both audiences — specs are not secret. */
 export interface TyreSpecView {
@@ -89,6 +90,20 @@ export interface InternalTyreOffer {
   tyre: TyreSpecView;
   availability: AvailabilityView;
 
+  /**
+   * The supplier's real stock, unaltered — including the 3s and 4s that are
+   * NOT offered to customers. Suppressing a listing must never destroy the
+   * figure that sourcing and consolidation depend on.
+   */
+  supplierStockExact: number | null;
+  supplierStockMinimum: number | null;
+  supplierStockRaw: string | null;
+
+  /** Whether GommaRush will offer it, and why not when it will not. */
+  sellable: boolean;
+  sellabilityReason: SellabilityReason;
+  minimumOfferQuantity: number;
+
   /** Internal supplier reference. Opaque to the customer projection. */
   supplierListingId: string;
   supplierName: string | null;
@@ -122,6 +137,12 @@ export interface PricedListing {
   supplierArticleId: string | null;
   costObservedAt: string | null;
   breakdown: PriceBreakdown;
+  /** The supplier's stock, verbatim. */
+  supplierStockExact: number | null;
+  supplierStockMinimum: number | null;
+  supplierStockRaw: string | null;
+  /** The GommaRush offer decision taken against that stock. */
+  sellability: SellabilityDecision;
 }
 
 /**
@@ -150,6 +171,12 @@ export function toInternalOffer(listing: PricedListing): InternalTyreOffer {
   return {
     tyre: listing.tyre,
     availability: listing.availability,
+    supplierStockExact: listing.supplierStockExact,
+    supplierStockMinimum: listing.supplierStockMinimum,
+    supplierStockRaw: listing.supplierStockRaw,
+    sellable: listing.sellability.sellable,
+    sellabilityReason: listing.sellability.reason,
+    minimumOfferQuantity: listing.sellability.minimumApplied,
     supplierListingId: listing.supplierListingId,
     supplierName: listing.supplierName,
     supplierArticleId: listing.supplierArticleId,
@@ -178,6 +205,11 @@ export function toInternalOffer(listing: PricedListing): InternalTyreOffer {
  * reviewer reads, rather than a copy that can drift out of step.
  */
 export const FORBIDDEN_CUSTOMER_FIELDS: readonly string[] = [
+  "supplierStockExact",
+  "supplierStockMinimum",
+  "supplierStockRaw",
+  "sellabilityReason",
+  "minimumOfferQuantity",
   "supplierCostCents",
   "supplierName",
   "supplierArticleId",

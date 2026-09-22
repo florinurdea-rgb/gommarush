@@ -1,9 +1,9 @@
 {
   "project": "GommaRush",
-  "mission_id": "M8-INTERSPRINT-PRICE-STOCK-INGESTION",
-  "mission_title": "Inter-Sprint price & stock feed ingestion into the normalized catalogue",
+  "mission_id": "M9-INTERSPRINT-FTP-INGESTION",
+  "mission_title": "Inter-Sprint FTP ingestion chain and commercial activation",
   "status": "READY_FOR_REVIEW",
-  "phase": "Complete at code level. The supplier's real feed format is parsed, priced through the M7 engine and projected safely. Nothing fetches a file yet, and the price basis is unconfirmed, so no Inter-Sprint cost is commercially usable.",
+  "phase": "Complete at code level. The whole chain exists and is tested except the FTP socket itself, which could not be reached or credentialed from this session. Prices are now commercially usable under the owner's confirmation.",
   "last_updated": "2026-09-22",
   "canonical_branch": "main",
   "working_branch": "claude/confident-albattani-p43rkj",
@@ -25,7 +25,15 @@
     "pricing_spec": "docs/architecture/03_PRICING_PFU_VAT.md",
     "intersprint_feed_adapter": "src/lib/catalogue/intersprint-feed-adapter.ts",
     "intersprint_observations": "src/lib/suppliers/intersprint/feed/observation.ts",
-    "intersprint_lane": "docs/suppliers/intersprint/README.md"
+    "intersprint_lane": "docs/suppliers/intersprint/README.md",
+    "intersprint_commercial_policy": "src/lib/suppliers/intersprint/commercial-policy.ts",
+    "selling_policy": "src/lib/commerce/selling-policy.ts",
+    "feed_lifecycle": "src/lib/suppliers/intersprint/feed/lifecycle.ts",
+    "feed_runner": "src/lib/suppliers/intersprint/feed/runner.ts",
+    "feed_csv_reader": "src/lib/suppliers/intersprint/feed/csv-reader.ts",
+    "feed_ftp_transport": "src/lib/suppliers/intersprint/feed/ftp-transport.ts",
+    "ftp_provisioning": "infra/ftp/provision-intersprint-ftp.sh",
+    "pending_approval_sql": "supabase/pending-approval/0002_intersprint_supplier_identity.sql"
   },
   "source_authority": {
     "deldo": "API documentation.pdf and 26933TEST.csv, supplied by Jan Van Dyck (Deldo NV), subject 'RE: Connect platform and orders for - 026933 (Go Rush Trasporti srl)'. Both inspected directly in this session. GoRush customer number 026933.",
@@ -35,6 +43,7 @@
     "intersprint_catalogue_provenance_proof": "PROVEN 2026-09-22: the sorted sysnr set of vrd-pcr and the sorted supplier_article_id set of production's 9,559 listings share the same MD5 (4901cdbd6bb6b4a3be9ef1db0ba9314b), the same sum (4066526316), the same min (12851) and max (538231). production.source_row runs 2..9560, matching the file's data rows exactly, and supplier_item_code reproduces itemcode byte for byte including internal spacing. The current catalogue was therefore built from this feed family, keyed on sysnr."
   },
   "completed": [
+    "M9: Inter-Sprint FTP ingestion chain. commercial-policy.ts records the owner's confirmations with POLICY_OWNER provenance kept structurally distinct from supplier-documented facts; transport inclusion resolves per RELEASE (>= 60 PCR / 10 truck = transport_included, below = transport_separate, unknown quantity = fails closed). selling-policy.ts implements the minimum-5 customer offer rule centrally, as a lookup extensible by supplier/customer/channel, and NEVER alters supplier stock - a listing showing 3 keeps showing 3 internally and is filtered out of the customer projection in searchCatalogue rather than in the UI. csv-reader.ts DETECTS the delimiter against the verified column contract and fails closed on anything unproven, then hands header-keyed rows to the existing M8 adapter so there is still one commercial mapping. lifecycle.ts is pure decision logic: SHA-256 identity (not filename), duplicate/in-progress/abandoned-lock handling, and planCompletion treating a zero-row commit as a FAILURE. runner.ts sequences it against a FeedTransport interface. ftp-transport.ts implements that over basic-ftp, credentials from env only, read-only unless explicitly enabled. +80 tests.",
     "M8: Inter-Sprint price & stock feed ingestion. New adapter src/lib/catalogue/intersprint-feed-adapter.ts reads the supplier's REAL columns (sysnr, itemcode, nett-price, available, eancode, weight, EPREL) and writes the same NormalizedCatalogueRow as the existing pre-normalised 'isb' adapter, so there is one commercial mapping downstream and no parallel catalogue. sysnr is the listing identity (proven, not chosen). '>  20' is preserved as stock_minimum with stock_exact NULL. Excel grid padding (1,039,016 PCR rows carrying a stray '20' in the nett-price column) is dropped by adapter.isPaddingRow before validation and counted as summary.paddingRows. SupplierObservation gained stockMinimum and classifyObservation now accepts a banded minimum as known stock - without that, 7,991 of 9,559 rows would have been unusable while only the LOW-stock rows stayed usable. src/lib/suppliers/intersprint/feed/observation.ts builds lane observations with run-time-asserted classification, null currency, and commercialMode 'unknown' so nothing is marked up yet. +68 tests. Verified against both real sample workbooks: 0 rejected rows, every real row priced, both availability forms present.",
     "M7: central GommaRush pricing layer in src/lib/pricing/, deliberately OUTSIDE any supplier adapter. settings.ts holds markup 20% (provenance POLICY_OWNER), optional minimum profit, VAT 22% (STATUTORY) and pfuVatBase='unresolved'; every figure carries a provenance marker and an UNRESOLVED one is refused, not defaulted. pfu.ts implements SUPPLIER_EXACT/RULE_CALCULATED/MANUAL_CONFIRMED/TO_CONFIRM with an EMPTY verified-tariff table and refuses to derive an amount from weight. calculate.ts computes cost -> markup -> net -> PFU -> taxable -> VAT -> total in integer cents, failing closed at three points. projection.ts makes the customer/internal split two DIFFERENT TYPES so a supplier cost has nowhere to sit in a customer payload. catalogue-search.ts searches the existing normalized catalogue (no parallel catalogue) by width/aspect/rim/season. Internal preview at /admin/catalogue/ricerca, admin-guarded by the (secure) layout AND re-checked in the route. 56 new tests.",
     "M6: runtime data-classification guard at the Deldo import boundary (assertDataClassification / assertFeedCommercialMode in observation.ts); classification re-asserted and surfaced explicitly on DeldoListingPersistencePlan as dataClassification/commercialMode/observationSource; 24 new tests; Quality=season and Vehicle=vehicle-class locked by regression tests.",
@@ -44,29 +53,34 @@
   ],
   "in_progress": [],
   "tests": {
-    "npm test": "746 passed / 4 skipped (49 files, 1 skipped file). Up from 678: +68 (37 adapter, 23 feed-to-pricing, 8 re-import safety).",
+    "npm test": "826 passed / 6 skipped (54 files, 2 skipped files). Up from 746: +80 (16 selling policy, 23 CSV reader, 17 lifecycle, 18 runner, plus commercial-mode and search-filtering coverage).",
     "npm run typecheck": "PASS (tsc --noEmit, clean).",
-    "npm run lint": "0 errors, 7 warnings - all pre-existing UI warnings, none in supplier, catalogue or pricing code.",
+    "npm run lint": "0 errors, 7 warnings - all pre-existing UI warnings.",
     "npm run build": "PASS.",
-    "real-file verification": "tests/intersprint-feed-real-file.test.ts is GATED behind INTERSPRINT_FEED_FILE and skipped by default, because the supplier's full price list is not committed. Run on 2026-09-22 against BOTH supplied workbooks: PASS for each - sheet resolved by suffix, 0 rejected rows, every non-padding row priced, distinct listing keys equal to priced rows, padding rows > 0, and both banded and exact availability present.",
-    "verify-migration-baseline.sh": "NOT RE-RUN. No migration, schema or baseline file was touched."
+    "ftp transport": "NOT TESTED AGAINST A REAL SERVER, and cannot be from here. Every lifecycle and runner test uses an in-memory FeedTransport, so no test depends on the unverified client."
   },
-  "production_changes": "NONE. Production was READ ONLY: SELECT-only introspection to prove the sysnr/supplier_article_id identity match.",
-  "database_changes": "NONE. No migration written or applied. M8 changes only how a file is parsed and observed.",
-  "external_actions": "NONE. No Inter-Sprint contact, no API call, no FTP connection, no credential touched, no order.",
+  "production_changes": "NONE. No hosted write of any kind.",
+  "database_changes": "NONE applied. supabase/pending-approval/0002_intersprint_supplier_identity.sql is written and deliberately UNAPPLIED.",
+  "external_actions": "NONE beyond two read-only connectivity probes to the FTP host's port 21, both of which TIMED OUT. No login was attempted, no credential was used or held, no file was listed, read, moved or deleted. No Inter-Sprint contact, no API call, no order.",
   "blockers": [
-    "M8 BLOCKER - PRICE BASIS UNCONFIRMED. nett-price is present on all 9,559 rows (41.13-655.70, no zeros) but nothing states whether it is the price Go Rush actually pays: it may be a list net before account discount, and transport inclusion is unstated. Every observation therefore carries commercialMode 'unknown' and fails closed BEFORE the freshness check. One sentence from Inter-Sprint closes this. See D12.",
-    "M8 BLOCKER - NO FTP INGESTION EXISTS. Nothing in the repository fetches an Inter-Sprint file: no FTP client, no credential, no scheduled job, no path config. INTERSPRINT_GATEWAY_* configures the ordering/stock API, a different channel. Between a file arriving and the catalogue updating, only the last three steps exist (analyze -> review -> commit). See D13.",
-    "M8 BLOCKER - SNAPSHOT VS DELTA UNKNOWN. Inter-Sprint has not said whether a delivered file is the complete catalogue or only changes. Until they do, a listing absent from a file means NOTHING about its stock, and only an operator explicitly declaring importMode 'complete' may propose deactivations. See D14.",
-    "M8 BLOCKER - CURRENCY. No currency column anywhere in the feed. Observations carry currency null. NOTE: the pre-existing supplier_listing_prices.currency column is NOT NULL DEFAULT 'EUR', so a committed price row still records EUR. That default predates M8 and was not changed; it should not be read as a verified currency.",
-    "M8 BLOCKER - REFRESH CADENCE. Not published, so INTERSPRINT_FRESHNESS_POLICY is deliberately null and callers must supply a policy as an explicit GommaRush business decision.",
-    "PFU: no verified tariff exists, so every listing resolves to TO_CONFIRM and no customer total is produced. Inter-Sprint stated on 5 August that PFU is NOT in their feed and its handling is ours under local rules. Blocked on D3.",
+    "M9 BLOCKER - NO FTP ACCESS FROM THIS ENVIRONMENT. Two things are missing and BOTH are needed: (1) credentials - no INTERSPRINT_FTP_* variable is set in this session, correctly, since they are secrets; (2) network egress - HTTPS works but TCP/21 to the host times out, so raw FTP is not routable from here. Consequence: it is UNKNOWN whether Inter-Sprint has uploaded any file, and no real CSV has ever been seen.",
+    "M9 BLOCKER - REAL CSV DIALECT UNVERIFIED. Inter-Sprint said the deliveries are CSV; we hold only XLSX exports. The reader detects the delimiter against the verified column contract and refuses what it cannot prove, so this is handled safely rather than guessed - but the first real file should still be inspected to confirm.",
+    "M9 BLOCKER - FTP CLIENT UNVERIFIED. ftp-transport.ts has never run against the real endpoint. It is read-only unless INTERSPRINT_FTP_ALLOW_WRITES=true. Do NOT enable writes until a human has watched it list, download and move one file: a bad move loses the supplier's only copy of a delivery.",
+    "M9 BLOCKER - SNAPSHOT VS DELTA STILL UNKNOWN (D14). No supplier statement, and the two samples are single point-in-time files that cannot settle it. Absence from a file therefore still means NOTHING, and no deactivation path was built. Updating rows present in a file is safe and is what the chain does.",
+    "M9 BLOCKER - CURRENCY (D15). The owner confirmed what nett-price IS, not what it is denominated in, and no Inter-Sprint document states a currency. Observations carry currency null. NOTE the pre-existing supplier_listing_prices.currency column is NOT NULL DEFAULT 'EUR' - that default predates M8 and must not be read as verification.",
+    "PFU: no verified tariff. Every listing resolves to TO_CONFIRM; Inter-Sprint stated PFU is not in their feed. D3.",
     "PFU/VAT base: pfuVatBase is 'unresolved' pending the commercialista, which independently blocks the customer total. D11.",
-    "Deldo persistence is gated by the schema reconciliation. persistDeldoImport throws DeldoPersistenceUnavailableError by design.",
-    "No Deldo feed can be fetched: no FTP credentials, and SFTP/FTPS support is unconfirmed.",
-    "No Deldo GET_STOCK test token has been issued, so that API path has never executed."
+    "Plain FTP (security finding 2): password and payload cross the internet in clear text. FTPS/SFTP remains the standing recommendation.",
+    "Deldo persistence remains gated; no Deldo change in M9."
   ],
   "risks": [
+    "M9: the FTP client is the one unverified component in the chain. It is deliberately read-only by default and no test depends on it - the lifecycle and runner are tested against an in-memory FeedTransport - so the untested surface is confined to the socket conversation itself.",
+    "M9: transport inclusion is a property of the RELEASE, not of a catalogue row. An observation built without a release quantity resolves to commercialMode 'unknown' and fails closed. The internal preview prices on the assumption that a consolidated order reaches the minimum, and the screen states that assumption rather than letting a per-tyre figure imply one tyre ships free.",
+    "M9: categoryForProductClass defaults an unrecognised product class to the PCR minimum of 60 - the HIGHER of the two - because being wrong toward 'we have not reached the minimum' costs a transport charge we expected, while the opposite promises free transport we were never entitled to.",
+    "M9: the minimum-5 rule filters the CUSTOMER projection inside searchCatalogue, not in the UI, so a future export, feed or public API cannot accidentally publish a suppressed listing. The internal projection still carries the real stock plus the suppression reason.",
+    "M9: a commit applying zero rows is treated as a FAILURE and the file goes to failed/. An Inter-Sprint delivery always carries rows, so zero means the wrong file was read or something broke; filing it under processed would hide that and suppress the retry.",
+    "M9: the completion record is written BEFORE the file is moved. A crash between the two leaves a correct database and a misplaced file rather than the reverse - a file in the wrong directory is a tidying problem, a file marked processed that never was is a double-charge.",
+    "M9: added the runtime dependency basic-ftp ^5.3.1 for the transport. Chosen over hand-rolling the protocol; it is dependency-free and typed. npm audit reports pre-existing advisories in the tree unrelated to this addition.",
     "M8: the sample files are AUGUST 2026 SAMPLES, not current prices. They must be imported with classification 'test'. buildIntersprintObservation asserts the classification at run time and has no default, so an importer cannot omit it.",
     "M8: the samples are saved to Excel's full 1,048,576-row grid and 1,039,016 PCR padding rows carry a stray '20' in the nett-price column - read naively, a million EUR 20 tyres with no identity. isPaddingRow drops them. Note that xlsx-reader's MAX_SHEET_ROWS is 200,000, so such a file reports truncated=true; the real data occupies the first 9,559 rows so nothing is lost, but the flag is expected rather than alarming.",
     "M8: the real FTP delivery is probably a true .csv - the sample names are '*.csv.xlsx', i.e. a CSV opened in Excel. The CSV dialect (delimiter, quoting, encoding) is UNVERIFIED and must be read off a real file. The commercial mapping lives in the adapter and is container-independent, so a CSV reader wires to the same adapter; do NOT write a second commercial parser.",
@@ -160,15 +174,29 @@
   ],
   "owner_decisions_required": [
     {
+      "id": "D15",
+      "question": "In what currency does Inter-Sprint denominate nett-price?",
+      "why": "The owner confirmed what the number IS but not its currency, and no Inter-Sprint document in this repository states one. Observations carry null rather than an inferred EUR.",
+      "blocks": "Nothing today - the preview is single-currency - but it must be settled before any multi-currency or accounting use."
+    },
+    {
+      "id": "D16",
+      "question": "Approve granting this system the Inter-Sprint FTP credentials and network egress to port 21, and approve enabling file moves once the client is verified by hand.",
+      "why": "The ingestion chain is complete and tested apart from the socket. Without credentials and egress it cannot read /incoming, so we still do not know whether Inter-Sprint has delivered anything.",
+      "blocks": "Live ingestion, and any answer to whether files are arriving.",
+      "note": "INTERSPRINT_FTP_ALLOW_WRITES must stay false until someone has watched it list, download and move one file."
+    },
+    {
       "id": "D12",
-      "question": "Ask Inter-Sprint: is `nett-price` the price Go Rush actually pays, or a list net before account discount - and does it include transport? In what currency?",
+      "question": "RESOLVED BY OWNER 2026-09-22: nett-price is the net purchase price GommaRush pays, and transport is included once Inter-Sprint's minimum release is reached (PCR 60, truck 10). Recorded in commercial-policy.ts with POLICY_OWNER provenance. Not to be re-asked of Inter-Sprint.",
       "why": "The number is on every row and is carried faithfully, but its commercial meaning is unstated. Until answered every observation carries commercialMode 'unknown' and fails closed, so no Inter-Sprint cost can be marked up or quoted. This is the single blocker between the finished pipeline and a real selling price.",
-      "blocks": "Any commercial use of an Inter-Sprint price.",
-      "note": "One email. Can be combined with D13 and D14."
+      "blocks": "Nothing. Inter-Sprint prices are now commercially usable.",
+      "note": "One email. Can be combined with D13 and D14.",
+      "status": "RESOLVED"
     },
     {
       "id": "D13",
-      "question": "Approve building the FTP ingestion for Inter-Sprint, and confirm the delivery path, filename pattern and file format.",
+      "question": "PARTLY RESOLVED. The endpoint, protocol (plain FTP), port 21, passive mode, /incoming path and dedicated account are confirmed, and the ingestion chain is built. What remains is operational: grant this system the FTP credentials and network egress so it can actually read /incoming.",
       "why": "Inter-Sprint say their integration is complete and files are being placed on our FTP folder, but nothing in this system fetches or looks for them, and we have never observed one arrive. The sample names ('*.csv.xlsx') suggest the real delivery is CSV, whose dialect is unverified.",
       "blocks": "Any automatic price refresh. Manual upload of a supplied file already works."
     },
@@ -249,18 +277,29 @@
     }
   ],
   "not_verified": [
-    "Whether nett-price is Go Rush's contracted cost, whether it includes transport, and in what currency. D12.",
-    "Whether any Inter-Sprint file has ever arrived on the GommaRush FTP endpoint. Antonello's 18 September 'integration has been completed' is SECOND-HAND and unobserved.",
-    "The real delivered file format and CSV dialect. The samples are xlsx exports of CSVs; delimiter, quoting and encoding are unknown.",
-    "Whether a delivered file is a complete snapshot or a delta. D14.",
-    "Inter-Sprint's feed refresh cadence. Not published, so no freshness threshold is declared.",
-    "That the August 2026 sample prices bear any relation to current prices. They must be treated as test data.",
-    "The 'vrd-' filename/sheet prefix. Presumed an account or route code; the importer matches on the -pcr/-truck suffix instead.",
-    "Any PFU tariff value, scheme, category or effective date. Inter-Sprint confirmed PFU is NOT in their feed.",
+    "Whether Inter-Sprint has uploaded ANY file. /incoming has never been listed from this system: no credentials and no route to port 21.",
+    "The real delivered CSV dialect - delimiter, quoting, encoding. Detected at read time and refused when unproven, never defaulted.",
+    "That ftp-transport.ts works. It has never run against the real endpoint.",
+    "Whether a delivery is a complete snapshot or a delta. D14. Absence still means nothing.",
+    "The currency of nett-price. D15.",
+    "Inter-Sprint's refresh cadence as a freshness threshold. Three deliveries a day is a requested cadence, not a promise, so no threshold is declared.",
+    "That the August 2026 sample prices bear any relation to current prices.",
+    "Any PFU tariff value. Inter-Sprint confirmed PFU is NOT in their feed.",
     "Whether 22% is the correct VAT rate for every line GommaRush sells.",
-    "Whether the LIVE Deldo feed uses the same CSV dialect as 26933TEST.csv.",
-    "Deldo: Discount meaning, pricing mode for 026933, currency, Stock semantics, Demo meaning, GET_STOCK parameter contract, FTPS/SFTP support. Jan has NOT replied."
+    "Deldo: Discount meaning, pricing mode, currency, Stock semantics, Demo meaning, GET_STOCK contract, FTPS/SFTP support. Jan has NOT replied."
   ],
-  "next_recommended_mission": "Send Inter-Sprint one email covering D12 (what nett-price means, and currency), D13 (FTP path, filename pattern, real file format) and D14 (snapshot or delta). Those three answers are all that stand between the finished pipeline and real selling prices in /admin/catalogue/ricerca. Engineering next, in order: (1) FTP ingestion wired to the existing adapter once D13 is answered, (2) a CSV reader for the real delivery format - the same adapter, never a second commercial parser, (3) PFU tariffs (D3) and the PFU/VAT base (D11), (4) price snapshots for quotes/orders, (5) the customer-facing catalogue served from toCustomerOffer. The autonomous development runner (M4) remains NOT the priority.",
-  "head_at_completion": "see commits[0]; branch claude/confident-albattani-p43rkj"
+  "next_recommended_mission": "Grant the FTP credentials and egress (D16), then run the ingestion once by hand with INTERSPRINT_FTP_ALLOW_WRITES=false and watch it: that single run answers whether files are arriving, confirms the real CSV dialect, and verifies the one unverified component. Enable moves only afterwards. Then: wire the runner to a scheduled job and to analyzeCatalogueImport/commit so observations actually land in supplier_listing_prices; settle snapshot-vs-delta (D14) before building any deactivation; PFU tariffs (D3) and the PFU/VAT base (D11); price snapshots for quotes/orders; then the customer-facing catalogue served from toCustomerOffer. Also pending: supabase/pending-approval/0002 renames the 'asdas' supplier - needs a backup, the approved legal name, and an explicit decision. The autonomous development runner (M4) remains NOT the priority.",
+  "head_at_completion": "see commits[0]; branch claude/confident-albattani-p43rkj",
+  "owner_decisions_confirmed_m9": {
+    "provenance": "POLICY_OWNER - GommaRush business decisions recorded 2026-09-22. NOT Inter-Sprint statements. Never cite these as supplier-documented.",
+    "nett_price_is_net_purchase_cost": true,
+    "transport_included_at_minimum_release": {
+      "pcr": 60,
+      "truck": 10
+    },
+    "customer_minimum_offer_quantity": 5,
+    "minimum_offer_is_gommarush_selling_policy_not_supplier_semantic": true,
+    "supplier_stock_preserved_when_suppressed": true,
+    "banded_stock_never_resolved_to_exact": true
+  }
 }

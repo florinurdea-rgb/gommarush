@@ -6,6 +6,11 @@ import { DEFAULT_PRICING_SETTINGS, type PricingSettings } from "@/lib/pricing/se
 import { calculateTyrePrice } from "@/lib/pricing/calculate";
 import { resolvePfu } from "@/lib/pricing/pfu";
 import {
+  assessSellability,
+  DEFAULT_SELLING_POLICY,
+  type SellingPolicy,
+} from "@/lib/commerce/selling-policy";
+import {
   toCustomerOffer,
   toInternalOffer,
   type AvailabilityView,
@@ -162,6 +167,7 @@ export interface CatalogueSearchResult {
   /** True when the catalogue tables are not present in this environment. */
   schemaAvailable: boolean;
   settings: PricingSettings;
+  sellingPolicy: SellingPolicy;
 }
 
 function clampLimit(limit: number | undefined): number {
@@ -227,12 +233,13 @@ async function fetchListings(query: CatalogueSearchQuery): Promise<ListingRow[] 
  */
 export async function searchCatalogue(
   query: CatalogueSearchQuery,
-  settings: PricingSettings = DEFAULT_PRICING_SETTINGS
+  settings: PricingSettings = DEFAULT_PRICING_SETTINGS,
+  sellingPolicy: SellingPolicy = DEFAULT_SELLING_POLICY
 ): Promise<CatalogueSearchResult> {
   const rows = await fetchListings(query);
 
   if (rows === null) {
-    return { internal: [], customer: [], schemaAvailable: false, settings };
+    return { internal: [], customer: [], schemaAvailable: false, settings, sellingPolicy };
   }
 
   const priced: PricedListing[] = [];
@@ -252,6 +259,17 @@ export async function searchCatalogue(
       productClass: (product.product_class as string | null) ?? null,
     });
 
+    const stockExact = price?.stock_exact ?? null;
+    const stockMinimum = price?.stock_minimum ?? null;
+
+    // The offer decision is taken here, once, against the supplier's real
+    // figures — and it changes NOTHING about them. A listing showing 3 keeps
+    // showing 3 internally; it simply does not reach the customer projection.
+    const sellability = assessSellability(
+      { stock: { stockExact, stockMinimum }, laneCode: "intersprint" },
+      sellingPolicy
+    );
+
     priced.push({
       tyre: toTyreSpec(product, row.old_dot === true),
       availability: toAvailability(price),
@@ -260,6 +278,10 @@ export async function searchCatalogue(
       supplierArticleId: row.supplier_article_id ?? null,
       costObservedAt: price?.observed_at ?? null,
       breakdown: calculateTyrePrice({ supplierCostCents, pfu }, settings),
+      supplierStockExact: stockExact,
+      supplierStockMinimum: stockMinimum,
+      supplierStockRaw: price?.stock_raw ?? null,
+      sellability,
     });
   }
 
@@ -274,10 +296,15 @@ export async function searchCatalogue(
   });
 
   return {
+    // The operator sees everything, including what is suppressed and why.
     internal: priced.map(toInternalOffer),
-    customer: priced.map(toCustomerOffer),
+    // The customer sees only what GommaRush is willing to offer. Filtering
+    // here rather than in the UI means a future export, feed or API cannot
+    // accidentally publish a listing the policy excluded.
+    customer: priced.filter((row) => row.sellability.sellable).map(toCustomerOffer),
     schemaAvailable: true,
     settings,
+    sellingPolicy,
   };
 }
 

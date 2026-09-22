@@ -197,6 +197,14 @@ function SettingsBanner({ settings }: { settings: PreviewSettings }) {
           "Impostazione commerciale centrale, non un valore fisso nel codice. Il ricarico non viene mai applicato al PFU."
         )}
       </p>
+      <p className="mt-1 text-xs text-ink-soft">
+        {tr(
+          "I prezzi presuppongono un ordine consolidato che raggiunge il minimo Inter-Sprint (60 vetture, 10 autocarro), con trasporto incluso."
+        )}
+      </p>
+      <p className="mt-1 text-xs text-ink-soft">
+        {tr("Articoli con meno di 5 pezzi non vengono offerti ai clienti.")}
+      </p>
       {settings.pfuVatBase === "unresolved" && (
         <p className="mt-1 text-xs text-ink-soft">
           {tr(
@@ -231,6 +239,9 @@ function ResultCard({ row }: { row: InternalTyreOffer }) {
           {tyre.runFlat && <Tag label="Run Flat" />}
           {tyre.oldDot && <Tag label={tr("DOT vecchio")} tone="waiting" />}
           {tyre.eprelId && <Tag label={`EPREL ${tyre.eprelId}`} tone="neutral" />}
+          {!row.sellable && (
+            <Tag label={tr(sellabilityLabel(row.sellabilityReason))} tone="waiting" />
+          )}
         </div>
       </div>
 
@@ -268,6 +279,7 @@ function ResultCard({ row }: { row: InternalTyreOffer }) {
           }
         />
         <Row label={tr("Disponibilità")} value={tr(availabilityLabel(row.availability))} />
+        <Row label={tr("Stock fornitore")} value={supplierStock(row)} />
       </dl>
 
       {row.blockedReasons.length > 0 && (
@@ -288,6 +300,25 @@ function seasonLabel(season: string): string {
   if (season === "winter") return "Invernale";
   if (season === "all_season") return "Quattro stagioni";
   return season;
+}
+
+/**
+ * The supplier's real figure, shown to the operator exactly as supplied.
+ *
+ * A band stays a band. Rendering '>  20' as '21' here would be the same
+ * invention the whole pipeline refuses, just at the last possible moment.
+ */
+function supplierStock(row: InternalTyreOffer): string {
+  if (row.supplierStockExact !== null) return String(row.supplierStockExact);
+  if (row.supplierStockMinimum !== null) return `> ${row.supplierStockMinimum}`;
+  return "—";
+}
+
+function sellabilityLabel(reason: string): string {
+  if (reason === "below_minimum_offer_quantity") return "Sotto il minimo di vendita";
+  if (reason === "supplier_out_of_stock") return "Esaurito";
+  if (reason === "stock_unknown") return "Stock non noto";
+  return "Non in vendita";
 }
 
 function availabilityLabel(availability: string): string {
