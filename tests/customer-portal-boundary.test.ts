@@ -20,7 +20,7 @@ describe("customer catalogue projection boundary", () => {
       pfuAmountCents: null,
       vatAmountCents: null,
       customerTotalCents: null,
-      priceAvailable: false,
+      priceAvailable: true,
     };
     const json=JSON.stringify(offer);
     for(const forbidden of ["supplierName","supplierArticleId","supplierListingId","supplierCostCents","supplierStockExact","supplierStockMinimum","supplierStockRaw","markupPercentApplied","grossProfitCents","grossMarginPercent","costObservedAt"]){
