@@ -34,7 +34,6 @@ const SECONDARY_NAV: NavItem[] = [
   { href: "/admin/customers", label: "Clienti" },
   { href: "/admin/suppliers", label: "Fornitori" },
   { href: "/admin/catalogue", label: "Catalogo" },
-  { href: "/admin/catalogue/ricerca", label: "Ricerca e prezzi" },
   { href: "/admin/sistema", label: "Sistema" },
 ];
 

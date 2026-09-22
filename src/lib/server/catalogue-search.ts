@@ -5,6 +5,7 @@ import { logError } from "@/lib/logger";
 import { DEFAULT_PRICING_SETTINGS, type PricingSettings } from "@/lib/pricing/settings";
 import { calculateTyrePrice } from "@/lib/pricing/calculate";
 import { resolvePfu } from "@/lib/pricing/pfu";
+import { laneForAdapter } from "@/lib/catalogue/supplier-lanes";
 import {
   assessSellability,
   DEFAULT_SELLING_POLICY,
@@ -36,6 +37,13 @@ import {
  * Pricing is applied ABOVE this layer's data access and below its projections,
  * so the same rows can be served to an operator with full cost visibility or
  * to a customer with none, from one query.
+ *
+ * SCOPE, since M11B: this module owns the LISTING-level read and the
+ * customer/internal projection pair. The admin browse workspace is
+ * src/lib/server/catalogue-browse.ts, which reads the same tables rooted at
+ * catalogue_products so it can paginate and group canonically. They are two
+ * reads of ONE catalogue, not two catalogues — nothing here is duplicated
+ * there, and the pricing engine and selling policy are shared.
  */
 
 /** Season values the catalogue actually holds, verified against the data. */
@@ -98,6 +106,7 @@ interface ListingRow {
   old_dot: boolean | null;
   catalogue_products: Record<string, unknown> | null;
   suppliers: { name: string | null } | null;
+  catalogue_import_runs: { adapter: string | null } | null;
   supplier_listing_prices: PriceRow[] | null;
 }
 
@@ -184,6 +193,7 @@ async function fetchListings(query: CatalogueSearchQuery): Promise<ListingRow[] 
       `id, supplier_article_id, old_dot,
        catalogue_products!inner(${PRODUCT_COLUMNS}),
        suppliers(name),
+       catalogue_import_runs(adapter),
        supplier_listing_prices(purchase_price, currency, stock_raw, stock_exact, stock_minimum, observed_at)`
     )
     .eq("active", true)
@@ -265,8 +275,14 @@ export async function searchCatalogue(
     // The offer decision is taken here, once, against the supplier's real
     // figures — and it changes NOTHING about them. A listing showing 3 keeps
     // showing 3 internally; it simply does not reach the customer projection.
+    // The lane comes from the adapter that wrote this listing, never from a
+    // constant. Hard-coding "intersprint" was true while Inter-Sprint was the
+    // only supplier with data and would have silently applied its offer policy
+    // to every other lane the moment a second one had any.
+    const laneCode = laneForAdapter(row.catalogue_import_runs?.adapter ?? null);
+
     const sellability = assessSellability(
-      { stock: { stockExact, stockMinimum }, laneCode: "intersprint" },
+      { stock: { stockExact, stockMinimum }, laneCode },
       sellingPolicy
     );
 
