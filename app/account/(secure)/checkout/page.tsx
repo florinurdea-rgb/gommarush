@@ -1,0 +1,2 @@
+import {getCurrentCustomerAccount} from "@/lib/server/customer-account";import {CustomerCheckout} from "@/components/customer/CustomerCheckout";
+export default async function CheckoutPage(){const {locations}=await getCurrentCustomerAccount();const valid=locations.filter(l=>l.address_line1.trim()!==""&&l.address_line1!=="—"&&l.city.trim()!==""&&l.city!=="—");return <CustomerCheckout locations={valid}/>}
