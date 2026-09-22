@@ -517,4 +517,18 @@ export const EN_STRINGS: Record<string, string> = {
   "Senza prezzo attuale": "No current price",
   "Conflitto": "Conflict",
   "non aggiornato": "not refreshed",
+  // --- M11B amendment: sorting and brand tiers ---
+  "Ordina": "Sort",
+  "Marca A–Z": "Brand A–Z",
+  "Prezzo più basso": "Lowest price",
+  "Aggiornati di recente": "Recently updated",
+  "Più disponibilità": "Most availability",
+  "Fascia": "Tier",
+  "Fasce di marca non ancora configurate": "Brand tiers not configured yet",
+  "Fascia media": "Mid-range",
+  "Economiche": "Value",
+  "Ordinamento non applicato": "Sort not applied",
+  "articoli superano il limite di": "listings exceed the limit of",
+  "per questo ordinamento. Restringi la ricerca, per esempio scegliendo una misura.":
+    "for this sort. Narrow the search, for example by choosing a size.",
 };

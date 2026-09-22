@@ -18,6 +18,13 @@ import {
   type ListingState,
   type VehicleClass,
 } from "@/lib/catalogue/listing-state";
+import { brandsInTier, isBrandTier, type BrandTier } from "@/lib/catalogue/brand-tiers";
+import {
+  isDatabaseNativeSort,
+  OFFER_SORT_MAX_PRODUCTS,
+  sortRows,
+  type CatalogueSort,
+} from "@/lib/catalogue/catalogue-sort";
 import type { TyreSpecView } from "@/lib/pricing/projection";
 
 // The admin Catalogue workspace: browse tyres, compare supplier offers.
@@ -67,6 +74,10 @@ export interface CatalogueBrowseQuery {
   readonly brand?: string | null;
   /** EAN, model/pattern or supplier article. Exact-ish, never fuzzy. */
   readonly search?: string | null;
+  /** Commercial brand tier. Only narrows when an approved mapping exists. */
+  readonly brandTier?: BrandTier | null;
+  /** Display order. Offer-derived orders need a narrowed selection. */
+  readonly sort?: CatalogueSort;
   readonly limit?: number;
   readonly offset?: number;
 }
@@ -205,6 +216,13 @@ export interface CatalogueFacets {
   readonly brands: readonly string[];
 }
 
+/** Why an offer-derived sort could not be honoured. */
+export type SortRefusal = {
+  readonly reason: "selection_too_large";
+  readonly matched: number;
+  readonly maximum: number;
+};
+
 export interface CatalogueBrowseResult {
   readonly rows: readonly CatalogueRow[];
   /** Total canonical products matching, for correct pagination controls. */
@@ -214,6 +232,14 @@ export interface CatalogueBrowseResult {
   readonly schemaAvailable: boolean;
   readonly settings: PricingSettings;
   readonly sellingPolicy: SellingPolicy;
+  /** The order actually applied. May differ from the one requested. */
+  readonly sort: CatalogueSort;
+  /**
+   * Set when an offer-derived sort was refused and the default was used
+   * instead. Surfaced rather than silently substituted: a page that claims to
+   * be cheapest-first and is not is worse than one that says why it cannot be.
+   */
+  readonly sortRefused: SortRefusal | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -274,7 +300,9 @@ function toProductView(row: ProductRow): CatalogueRow["product"] {
  * Shared by the page query, the count query and every facet query, so a facet
  * can never disagree with the results it is meant to describe.
  */
-function applyProductFilters<T extends { eq: (c: string, v: unknown) => T; or: (f: string) => T }>(
+function applyProductFilters<
+  T extends { eq: (c: string, v: unknown) => T; or: (f: string) => T }
+>(
   request: T,
   query: CatalogueBrowseQuery
 ): T {
@@ -285,6 +313,16 @@ function applyProductFilters<T extends { eq: (c: string, v: unknown) => T; or: (
   if (query.season) out = out.eq("season", query.season);
   if (query.brand) out = out.eq("brand", query.brand);
   if (query.needsReviewOnly) out = out.eq("review_required", true);
+
+  // A tier narrows to its approved brands. With no approved mapping the list
+  // is empty, and an empty tier must match NOTHING rather than everything —
+  // silently ignoring the filter would show premium and value as identical.
+  if (query.brandTier && isBrandTier(query.brandTier)) {
+    const brands = brandsInTier(query.brandTier);
+    out = brands.length > 0
+      ? (out as unknown as { in: (c: string, v: unknown[]) => typeof out }).in("brand", brands)
+      : out.eq("brand", "\u0000__no_brand_is_classified__");
+  }
 
   const term = query.search?.trim();
   if (term) {
@@ -309,7 +347,8 @@ function applyProductFilters<T extends { eq: (c: string, v: unknown) => T; or: (
  * "Inter-Sprint winter tyres" is one indexed query, not a fetch-then-filter.
  */
 async function fetchProductPage(
-  query: CatalogueBrowseQuery
+  query: CatalogueBrowseQuery,
+  materialiseAll = false
 ): Promise<{ rows: ProductRow[]; total: number } | null> {
   const supabase = createSupabaseAdminClient();
   const limit = clampLimit(query.limit);
@@ -333,13 +372,19 @@ async function fetchProductPage(
     request = request.eq("supplier_product_listings.active", true);
   }
 
-  const { data, error, count } = await request
+  const ordered = request
     // Ordering on indexed root columns. Stable through id so a page boundary
     // can never repeat or skip a row between requests.
     .order("brand", { ascending: true, nullsFirst: false })
     .order("model_pattern", { ascending: true, nullsFirst: false })
-    .order("id", { ascending: true })
-    .range(offset, offset + limit - 1);
+    .order("id", { ascending: true });
+
+  // An offer-derived sort cannot be expressed here — the key lives on a
+  // different table — so the whole filtered set is fetched and ordered above
+  // the database. Bounded by the caller, which checks the count first.
+  const { data, error, count } = materialiseAll
+    ? await ordered.range(0, OFFER_SORT_MAX_PRODUCTS - 1)
+    : await ordered.range(offset, offset + limit - 1);
 
   if (error) {
     if (isMissingSchemaError(error)) {
@@ -492,11 +537,42 @@ export async function browseCatalogue(
   const limit = clampLimit(query.limit);
   const offset = Math.max(Math.trunc(query.offset ?? 0), 0);
 
-  const page = await fetchProductPage(query);
+  const requestedSort: CatalogueSort = query.sort ?? "brand_asc";
+  const offerDerived = !isDatabaseNativeSort(requestedSort);
+
+  // Probe the size before materialising anything. One cheap count decides
+  // between a normal paged read and the bounded whole-set read, so an
+  // offer-derived sort over the entire catalogue is refused rather than
+  // attempted and truncated.
+  let sortRefused: SortRefusal | null = null;
+  let materialise = offerDerived;
+
+  if (offerDerived) {
+    const probe = await fetchProductPage({ ...query, limit: 1, offset: 0 });
+    if (probe === null) {
+      return {
+        rows: [], total: 0, limit, offset, schemaAvailable: false,
+        settings, sellingPolicy, sort: requestedSort, sortRefused: null,
+      };
+    }
+    if (probe.total > OFFER_SORT_MAX_PRODUCTS) {
+      sortRefused = {
+        reason: "selection_too_large",
+        matched: probe.total,
+        maximum: OFFER_SORT_MAX_PRODUCTS,
+      };
+      materialise = false;
+    }
+  }
+
+  const effectiveSort: CatalogueSort = sortRefused ? "brand_asc" : requestedSort;
+
+  const page = await fetchProductPage(query, materialise);
   if (page === null) {
     return {
       rows: [], total: 0, limit, offset,
       schemaAvailable: false, settings, sellingPolicy,
+      sort: effectiveSort, sortRefused,
     };
   }
 
@@ -544,7 +620,36 @@ export async function browseCatalogue(
     };
   });
 
-  return { rows, total: page.total, limit, offset, schemaAvailable: true, settings, sellingPolicy };
+  // A database-native order is already correct and is NOT re-sorted here;
+  // re-sorting a page would reintroduce the local-order bug. Only the
+  // materialised path sorts, and it sorts the whole filtered set before
+  // slicing, so its pages are genuine slices of a globally ordered sequence.
+  const finalRows = materialise
+    ? sortRows(
+        rows.map((row) => ({
+          brand: row.product.brand,
+          modelPattern: row.product.modelPattern,
+          productId: row.product.productId,
+          offers: row.offers,
+          row,
+        })),
+        effectiveSort
+      )
+        .slice(offset, offset + limit)
+        .map((entry) => entry.row)
+    : rows;
+
+  return {
+    rows: finalRows,
+    total: page.total,
+    limit,
+    offset,
+    schemaAvailable: true,
+    settings,
+    sellingPolicy,
+    sort: effectiveSort,
+    sortRefused,
+  };
 }
 
 /**

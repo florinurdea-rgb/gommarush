@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useTr } from "@/lib/i18n/tr";
 import { formatCents } from "@/lib/documents/pipeline/money";
 import { SUPPLIER_LANES, type LaneCode } from "@/lib/catalogue/supplier-lanes";
+import { BRAND_TIER_LABELS, type BrandTier } from "@/lib/catalogue/brand-tiers";
+import type { CatalogueSort } from "@/lib/catalogue/catalogue-sort";
 import type { CatalogueRow, SupplierOffer } from "@/lib/server/catalogue-browse";
 
 /**
@@ -35,7 +37,17 @@ interface BrowseResponse {
   facets?: Facets;
   settings?: { markupPercent: number; pfuVatBase: string };
   minimumOfferQuantity?: number;
+  sort?: CatalogueSort;
+  sortRefused?: { reason: string; matched: number; maximum: number } | null;
+  brandTiers?: { configured: boolean; options: { tier: BrandTier; label: string }[] };
 }
+
+const SORTS: { value: CatalogueSort; label: string }[] = [
+  { value: "brand_asc", label: "Marca A–Z" },
+  { value: "price_asc", label: "Prezzo più basso" },
+  { value: "freshest", label: "Aggiornati di recente" },
+  { value: "stock_desc", label: "Più disponibilità" },
+];
 
 const VEHICLES = [
   { value: "all", label: "Tutti" },
@@ -73,6 +85,8 @@ export function CatalogueWorkspace({ initialFacets }: { initialFacets: Facets })
   const [season, setSeason] = useState("");
   const [brand, setBrand] = useState("");
   const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<CatalogueSort>("brand_asc");
+  const [tier, setTier] = useState("");
   const [page, setPage] = useState(0);
 
   const [rows, setRows] = useState<CatalogueRow[] | null>(null);
@@ -80,6 +94,8 @@ export function CatalogueWorkspace({ initialFacets }: { initialFacets: Facets })
   const [facets, setFacets] = useState<Facets>(initialFacets);
   const [markup, setMarkup] = useState<number | null>(null);
   const [minimumOffer, setMinimumOffer] = useState<number | null>(null);
+  const [sortRefused, setSortRefused] = useState<BrowseResponse["sortRefused"]>(null);
+  const [tiersConfigured, setTiersConfigured] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -99,6 +115,8 @@ export function CatalogueWorkspace({ initialFacets }: { initialFacets: Facets })
       if (season) params.set("season", season);
       if (brand) params.set("brand", brand);
       if (search.trim()) params.set("q", search.trim());
+      if (sort !== "brand_asc") params.set("sort", sort);
+      if (tier) params.set("tier", tier);
       params.set("limit", String(LIMIT));
       params.set("offset", String(page * LIMIT));
 
@@ -114,13 +132,15 @@ export function CatalogueWorkspace({ initialFacets }: { initialFacets: Facets })
       if (payload.facets) setFacets(payload.facets);
       setMarkup(payload.settings?.markupPercent ?? null);
       setMinimumOffer(payload.minimumOfferQuantity ?? null);
+      setSortRefused(payload.sortRefused ?? null);
+      setTiersConfigured(payload.brandTiers?.configured ?? false);
     } catch {
       setError(tr("Ricerca non riuscita."));
       setRows(null);
     } finally {
       setLoading(false);
     }
-  }, [lane, vehicle, needsReview, width, aspect, rim, season, brand, search, page, tr]);
+  }, [lane, vehicle, needsReview, width, aspect, rim, season, brand, search, sort, tier, page, tr]);
 
   useEffect(() => {
     const timer = setTimeout(() => void load(), 180);
@@ -130,7 +150,7 @@ export function CatalogueWorkspace({ initialFacets }: { initialFacets: Facets })
   // Any filter change invalidates the current page number.
   useEffect(() => {
     setPage(0);
-  }, [lane, vehicle, needsReview, width, aspect, rim, season, brand, search]);
+  }, [lane, vehicle, needsReview, width, aspect, rim, season, brand, search, sort, tier]);
 
   const activeLane = lane === "all" ? null : lane;
   const pages = Math.max(1, Math.ceil(total / LIMIT));
@@ -178,18 +198,67 @@ export function CatalogueWorkspace({ initialFacets }: { initialFacets: Facets })
       </div>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <label className="flex items-center gap-2 text-sm text-ink">
-          <input type="checkbox" checked={needsReview}
-            onChange={(event) => setNeedsReview(event.target.checked)}
-            className="h-4 w-4 rounded border-ink/30" />
-          {tr("Solo da verificare")}
-        </label>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <input type="checkbox" checked={needsReview}
+              onChange={(event) => setNeedsReview(event.target.checked)}
+              className="h-4 w-4 rounded border-ink/30" />
+            {tr("Solo da verificare")}
+          </label>
+
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <span className="text-ink-soft">{tr("Ordina")}</span>
+            <select
+              value={sort}
+              onChange={(event) => setSort(event.target.value as CatalogueSort)}
+              className="rounded-lg border border-ink/15 bg-white px-2 py-1 text-sm text-ink focus:border-accent focus:outline-none"
+            >
+              {SORTS.map((option) => (
+                <option key={option.value} value={option.value}>{tr(option.label)}</option>
+              ))}
+            </select>
+          </label>
+
+          {/* Tier filters appear only once an approved mapping exists. Showing
+              three buckets that all return nothing would look broken. */}
+          {tiersConfigured ? (
+            <label className="flex items-center gap-2 text-sm text-ink">
+              <span className="text-ink-soft">{tr("Fascia")}</span>
+              <select
+                value={tier}
+                onChange={(event) => setTier(event.target.value)}
+                className="rounded-lg border border-ink/15 bg-white px-2 py-1 text-sm text-ink focus:border-accent focus:outline-none"
+              >
+                <option value="">{tr("Tutte")}</option>
+                {BRAND_TIER_LABELS.map((option) => (
+                  <option key={option.tier} value={option.tier}>{tr(option.label)}</option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <span className="text-xs text-ink-soft">
+              {tr("Fasce di marca non ancora configurate")}
+            </span>
+          )}
+        </div>
         <p className="text-sm text-ink-soft">
           {total} {tr("pneumatici")}
           {markup !== null && ` · ${tr("ricarico")} ${markup}%`}
           {minimumOffer !== null && ` · ${tr("minimo vendita")} ${minimumOffer}`}
         </p>
       </div>
+
+      {sortRefused && (
+        <div className="mb-4 rounded-xl border border-state-waiting/40 bg-state-waiting-soft px-4 py-3">
+          <p className="text-sm font-semibold text-state-waiting">
+            {tr("Ordinamento non applicato")}
+          </p>
+          <p className="mt-0.5 text-xs text-ink">
+            {sortRefused.matched} {tr("articoli superano il limite di")} {sortRefused.maximum}{" "}
+            {tr("per questo ordinamento. Restringi la ricerca, per esempio scegliendo una misura.")}
+          </p>
+        </div>
+      )}
 
       {error && (
         <div className="mb-4 rounded-xl border border-state-danger/40 bg-state-danger-soft p-4">

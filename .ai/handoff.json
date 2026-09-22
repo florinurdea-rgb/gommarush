@@ -1,7 +1,7 @@
 {
   "project": "GommaRush",
   "mission_id": "M11B-ADMIN-CATALOGUE-WORKSPACE",
-  "mission_title": "Admin Catalogue Browse & Compare",
+  "mission_title": "Admin Catalogue Browse & Compare (incl. sorting and brand-tier taxonomy)",
   "status": "READY_FOR_REVIEW",
   "phase": "Built and tested. No production mutation; the pending 0003/0004 operations remain unapplied.",
   "last_updated": "2026-09-22",
@@ -48,7 +48,9 @@
     "catalogue_browse_read": "src/lib/server/catalogue-browse.ts",
     "supplier_lanes": "src/lib/catalogue/supplier-lanes.ts",
     "listing_state": "src/lib/catalogue/listing-state.ts",
-    "catalogue_import_ui": "app/admin/(secure)/catalogue/importa/page.tsx (secondary)"
+    "catalogue_import_ui": "app/admin/(secure)/catalogue/importa/page.tsx (secondary)",
+    "brand_tiers": "src/lib/catalogue/brand-tiers.ts (mechanism present, mapping EMPTY pending approval)",
+    "catalogue_sort": "src/lib/catalogue/catalogue-sort.ts"
   },
   "source_authority": {
     "deldo": "API documentation.pdf and 26933TEST.csv, supplied by Jan Van Dyck (Deldo NV), subject 'RE: Connect platform and orders for - 026933 (Go Rush Trasporti srl)'. Both inspected directly in this session. GoRush customer number 026933.",
@@ -60,6 +62,7 @@
     "m10_production_verification": "READ-ONLY inspection of the production database on 2026-09-22, after two real Inter-Sprint feeds were processed by the deployed worker. Run ef834c00-3326-4c47-916e-4f18561e03aa (PCR, vrd-001-21185-107.csv, 3,060,504 B, checksum 04fa0b3c6a25) and run 77b811d4-5b0f-41ed-89ca-ec67b67fd060 (truck, vrd-001-21185.csv, 46,527 B, checksum 70a5d9196b13). Both status='committed', both supplier_id=4ce0b557-9575-4784-aa80-99e78af4da2f, both adapter='intersprint-feed', both import_mode='partial', both deactivated_listings=0, both rejected_rows=0."
   },
   "completed": [
+    "M11B amendment: catalogue sorting and the brand-tier taxonomy. brand-tiers.ts is the central, reusable mechanism the customer catalogue will share - premium / mid_range / value, with provenance and approver on each assignment - and its mapping is DELIBERATELY EMPTY because no approved classification exists and none can be derived (Inter-Sprint's 'LUXE BANDEN' is a product segment spanning many brands, not a brand statement). An unclassified brand resolves to null, never to 'value' by omission, and the UI hides the tier filter with an explanation rather than showing three buckets that all return nothing. catalogue-sort.ts separates DATABASE-NATIVE ordering (brand A-Z) from OFFER-DERIVED ordering (lowest price, freshest, most stock), whose keys live on another table: those materialise the whole filtered set before slicing, bounded at 1,000 products, and are REFUSED with a visible message above that rather than sorting a page in isolation - which is the exact bug M11B removed. +32 tests.",
     "M11B: /admin/catalogue is now Browse & Compare. New read at src/lib/server/catalogue-browse.ts rooted at catalogue_products rather than supplier_product_listings, which makes ordering and pagination DATABASE-CORRECT (the previous search ordered a page by listing id then sorted that page by brand in JS - a locally sorted page in a globally unsorted sequence) and makes canonical grouping free, since one row IS one catalogue_product_id. Three narrow reads - products paginated, their listings with the latest observation only, open conflicts - each on an index that already exists. Supplier lanes (Inter-Sprint 7d, Deldo 7d, Carlini 48h) with attribution by import ADAPTER, replacing the hard-coded laneCode 'intersprint' in catalogue-search.ts. Vehicle classification by run provenance with product_class fallback. States CURRENT / NO_CURRENT_PRICE / NEEDS_REVIEW / CONFLICT. Dependent facets computed with every filter except the one being listed. Importer moved to /admin/catalogue/importa and /ricerca now redirects, so there is one Catalogue experience. Feed health compacted to a strip. +43 tests.",
     "M11A: production reconciliation, READ-ONLY. (A) Corrected the last stale handoff risk still claiming the worker was 'NOT DEPLOYED'. (B) Full PRESERVE/RESET/VERIFY matrix over all 25 populated tables in docs/PRODUCTION_RECONCILIATION.md; exactly ONE provable RESET set was identified and NOT executed. (C) Inter-Sprint identity RE-ESTABLISHED on provenance rather than the stale 9,559 listing count; 0003 replaces 0002 and was proven against a disposable PostgreSQL 16 - happy path, idempotent re-run, documented rollback, and all six refusal cases blocking with distinct messages. (D) M11B foundation: Car/Van vs Truck resolves DETERMINISTICALLY for 100% of 13,206 listings via run provenance with a product_class fallback; two missing indexes prepared in 0004 and verified locally. (E) Retention measured and designed, nothing deleted. F1: found that the supplier's own 'group description' column maps 1:1 to product_class across 6,215 legacy rows - a real field, not an invention.",
     "M10: production feed activation. Architecture chosen: the worker runs ON the FTP VM and calls a protected application endpoint over HTTPS (option B), rejecting direct Supabase writes (option A) because that would put the RLS-bypassing service-role key on a box exposed on port 21. The worker is a dependency-free bash script - no Node, no npm tree on that VM - that reads the spool directory LOCALLY, so no FTP client and no FTP credentials are involved in ingestion at all. It checks file stability (vsftpd STOR is not atomic), claims by atomic mv, checksums, gzips and uploads, drives the batched commit to completion, and archives ONLY then. Server side: bearer-token auth with constant-time compare, checksum re-verified against the received bytes, category detected from the wcat column (never the filename - truck's name is a strict prefix of PCR's), then analyzeCatalogueImport/commitCatalogueImport - the SAME path the admin upload screen uses, so there is one catalogue pipeline. importMode is hard-wired to 'partial' while D14 is open. The importer now dispatches its reader on the bytes (zip magic = workbook, else delimited text) so real CSV and the XLSX samples reach the same M8 commercial mapping. Admin feed-status block on /admin/catalogue reports last success AND last attempt per feed, freshness, filename, short checksum and row counts. +50 tests, including the bash worker executed against a stub server.",
@@ -73,15 +76,16 @@
   ],
   "in_progress": [],
   "tests": {
-    "npm test": "919 passed / 6 skipped (60 files). Up from 876: +43 (16 lanes and listing state, 25 browse read, 2 lane-derivation regression on the old search path).",
+    "npm test": "948 passed / 6 skipped (61 files). Up from 919: +29 (22 sort and tier units, 7 browse integration incl. the refusal path).",
     "npm run typecheck": "PASS (tsc --noEmit, clean).",
     "npm run lint": "0 errors, 7 warnings - all pre-existing UI warnings.",
-    "npm run build": "PASS. /admin/catalogue, /admin/catalogue/importa, /admin/catalogue/ricerca (redirect) and /api/admin/catalogue/browse all built."
+    "npm run build": "PASS."
   },
   "production_changes": "NONE. No database mutation, no migration applied. 0003 (rename) and 0004 (indexes) remain prepared and unapplied.",
   "database_changes": "NONE.",
   "external_actions": "NONE.",
   "blockers": [
+    "D18: no approved brand-tier mapping, so the tier filters match nothing. Mechanism is ready; only the commercial decision is missing.",
     "M11B: 0004 indexes unapplied - product_class and season-alone filters scan until they are.",
     "M11A: the RESET manifest (Furnizor Demo supplier + its 7 seeded orders) needs a backup and owner confirmation. NOT executed.",
     "M11A: the Inter-Sprint rename (0003) needs a backup and approval. Verified locally, NOT applied. The supplier still shows as 'asdas' in the workspace, which is honest rather than relabelled in the UI.",
@@ -94,6 +98,8 @@
     "Deldo persistence remains gated; untouched."
   ],
   "risks": [
+    "M11B amendment: offer-derived sorts (price, freshness, stock) materialise the filtered set and are capped at 1,000 products. Beyond that the sort is refused and the default brand order is used, with sortRefused surfaced to the UI. This is deliberate: sorting an already-paginated page by a key from another table produces a locally sorted page in a globally unsorted sequence. The durable fix is a current-offer view or a denormalised current_price_cents on supplier_product_listings maintained by the importer, which would make these sorts database-native - a schema change, so it needs approval and is not attempted here.",
+    "M11B amendment: APPROVED_BRAND_TIERS is empty, so every tier filter matches nothing by construction (an empty tier filters on an impossible brand rather than being ignored - ignoring it would make premium and value return identical results and look like a working feature). Populating it is an owner decision; see D18.",
     "M11B: the 0004 indexes are NOT yet applied. product_class has no index and season alone is only the fourth column of catalogue_products_size_idx, so the Vehicle tab and a season-only filter sequentially scan 13,183 products. Correct but slow; apply 0004 through the documented procedure before browse traffic leans on those two facets.",
     "M11B: browse filters lane and vehicle on the OFFERS after the product page is chosen. A product whose only offers are filtered out still occupies a row in that page, so a lane-filtered page can show fewer populated rows than its page size. The total and the page boundaries stay correct; it is a density artefact, not a correctness one, and it is the price of keeping pagination in the database.",
     "M11B: supplier lane attribution is by import ADAPTER, not by supplier id or name. That is deliberate - the Inter-Sprint supplier row is still named 'asdas' and duplicate supplier records exist (D2) - but it means a lane gains rows only once an importer for it exists. Deldo and Carlini correctly render empty.",
@@ -205,6 +211,13 @@
     }
   ],
   "owner_decisions_required": [
+    {
+      "id": "D18",
+      "question": "Approve a brand-tier mapping: which catalogue brands are premium, mid-range and value for GommaRush?",
+      "why": "The taxonomy mechanism exists and is wired into the admin catalogue and ready for the customer catalogue, but no classification is populated. Whether a brand is premium is a positioning decision about GommaRush's market, not a fact about the manufacturer, and nothing in the supplier data supports one. Two tyre businesses would answer differently.",
+      "blocks": "The Premium / Mid-range / Value filters. Everything else in the workspace works without it.",
+      "note": "Add entries to APPROVED_BRAND_TIERS in src/lib/catalogue/brand-tiers.ts, each carrying provenance and approver. The catalogue's brands include MICHELIN, BRIDGESTONE, VREDESTEIN, CONTINENTAL, HANKOOK, NEXEN, NANKANG, SUNNY, ROADHOG, MASTERSTEEL, DELINTE, LANDSAIL, DOUBLE COIN."
+    },
     {
       "id": "D17",
       "question": "RESOLVED 2026-09-22. The worker is deployed on the FTP VM, cron runs every 10 minutes as gr-ingest under flock, and TWO REAL Inter-Sprint feeds were processed end to end into production and independently verified. Runs ef834c00 (PCR) and 77b811d4 (truck).",
@@ -328,7 +341,7 @@
     "Conflict behaviour on a feed-to-feed import. All 1,555 current conflicts are legacy-vs-feed; the expectation that they fall after M11A is reasoned, not measured.",
     "Deldo: unchanged and untouched. Jan has NOT replied."
   ],
-  "next_recommended_mission": "Owner review of M11B, then the four prepared-but-unexecuted items: 0004 indexes (lowest risk, biggest immediate benefit), 0003 rename, the RESET manifest, and the F1 mapping decision. M12 (customer catalogue -> basket -> order request) follows, and should build on toCustomerOffer in src/lib/pricing/projection.ts rather than the browse read - browse is deliberately internal and carries supplier cost, article codes and raw stock. Do not start M12 until it is frozen.",
+  "next_recommended_mission": "Owner review of M11B and its amendment, then the prepared-but-unexecuted items: 0004 indexes (lowest risk, biggest immediate benefit), 0003 rename, the RESET manifest, the F1 mapping decision, and now D18 the brand-tier mapping. Consider also a current-offer view or denormalised current_price_cents so price/freshness/stock sorting becomes database-native and loses its 1,000-product cap. M12 (customer catalogue -> basket -> order request) follows and should build on toCustomerOffer plus the shared brand taxonomy, not on the browse read, which is deliberately internal. Do not start M12 until it is frozen.",
   "head_at_completion": "see commits[0]; branch claude/confident-albattani-p43rkj",
   "owner_decisions_confirmed_m9": {
     "provenance": "POLICY_OWNER - GommaRush business decisions recorded 2026-09-22. NOT Inter-Sprint statements. Never cite these as supplier-documented.",

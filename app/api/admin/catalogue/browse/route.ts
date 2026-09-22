@@ -8,6 +8,8 @@ import {
   type VehicleFilter,
 } from "@/lib/server/catalogue-browse";
 import { isLaneCode } from "@/lib/catalogue/supplier-lanes";
+import { isBrandTier, BRAND_TIERS_CONFIGURED, BRAND_TIER_LABELS } from "@/lib/catalogue/brand-tiers";
+import { isCatalogueSort } from "@/lib/catalogue/catalogue-sort";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,6 +49,16 @@ export async function GET(request: NextRequest) {
       return fail(400, "VALIDATION_FAILED");
     }
 
+    const sortRaw = params.get("sort");
+    if (sortRaw !== null && sortRaw !== "" && !isCatalogueSort(sortRaw)) {
+      return fail(400, "VALIDATION_FAILED");
+    }
+
+    const tierRaw = params.get("tier");
+    if (tierRaw !== null && tierRaw !== "" && !isBrandTier(tierRaw)) {
+      return fail(400, "VALIDATION_FAILED");
+    }
+
     const laneRaw = params.get("lane");
     if (laneRaw !== null && laneRaw !== "" && !isLaneCode(laneRaw)) {
       return fail(400, "VALIDATION_FAILED");
@@ -62,6 +74,8 @@ export async function GET(request: NextRequest) {
       season: isSearchableSeason(seasonRaw) ? seasonRaw : null,
       brand: params.get("brand")?.trim() || null,
       search: params.get("q")?.trim() || null,
+      brandTier: isBrandTier(tierRaw) ? tierRaw : null,
+      sort: isCatalogueSort(sortRaw) ? sortRaw : undefined,
       limit: dimension(params.get("limit")) ?? undefined,
       offset: dimension(params.get("offset")) ?? undefined,
     };
@@ -83,6 +97,14 @@ export async function GET(request: NextRequest) {
         pfuVatBase: result.settings.pfuVatBase,
       },
       minimumOfferQuantity: result.sellingPolicy.minimumOfferQuantity,
+      sort: result.sort,
+      // Surfaced so the UI can say the order was not applied, rather than
+      // showing a page that claims an order it does not have.
+      sortRefused: result.sortRefused,
+      brandTiers: {
+        configured: BRAND_TIERS_CONFIGURED,
+        options: BRAND_TIER_LABELS,
+      },
     });
   });
 }

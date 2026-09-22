@@ -460,3 +460,126 @@ describe("lanes with no data", () => {
     expect(result.rows).toEqual([]);
   });
 });
+
+describe("sorting", () => {
+  it("defaults to brand order and does not re-sort the page", async () => {
+    const { browseCatalogue } = await import("@/lib/server/catalogue-browse");
+    mockReads({ products: [product()], listings: [listing()] });
+
+    const result = await browseCatalogue({}, undefined, undefined, NOW);
+    expect(result.sort).toBe("brand_asc");
+    expect(result.sortRefused).toBeNull();
+    // Database order was already correct; re-sorting would reintroduce the
+    // local-ordering bug this module exists to remove.
+    expect(captured.orders.map(([c]) => c)).toContain("brand");
+  });
+
+  it("orders by cheapest offer across the whole filtered set", async () => {
+    const { browseCatalogue } = await import("@/lib/server/catalogue-browse");
+    mockReads({
+      products: [
+        product({ id: "p-dear", brand: "AAA" }),
+        product({ id: "p-cheap", brand: "ZZZ" }),
+      ],
+      total: 2,
+      listings: [
+        listing({ id: "l-dear", catalogue_product_id: "p-dear",
+          supplier_listing_prices: [{ purchase_price: "200.00", currency: "EUR", stock_raw: "6", stock_exact: 6, stock_minimum: 6, observed_at: "2026-09-22T14:00:00Z" }] }),
+        listing({ id: "l-cheap", catalogue_product_id: "p-cheap",
+          supplier_listing_prices: [{ purchase_price: "50.00", currency: "EUR", stock_raw: "6", stock_exact: 6, stock_minimum: 6, observed_at: "2026-09-22T14:00:00Z" }] }),
+      ],
+    });
+
+    const result = await browseCatalogue({ sort: "price_asc" }, undefined, undefined, NOW);
+
+    expect(result.sort).toBe("price_asc");
+    // Cheapest first, even though its brand sorts last alphabetically.
+    expect(result.rows.map((r) => r.product.productId)).toEqual(["p-cheap", "p-dear"]);
+  });
+
+  /**
+   * The honest failure. An offer-derived sort over the entire catalogue cannot
+   * be executed correctly without materialising it, so beyond the cap the
+   * request is refused and the default order is used — and the caller is told.
+   * A page claiming to be cheapest-first while not being so is worse.
+   */
+  it("refuses an offer-derived sort over a selection that is too large", async () => {
+    const { browseCatalogue } = await import("@/lib/server/catalogue-browse");
+    const { OFFER_SORT_MAX_PRODUCTS } = await import("@/lib/catalogue/catalogue-sort");
+    mockReads({ products: [product()], total: OFFER_SORT_MAX_PRODUCTS + 1, listings: [listing()] });
+
+    const result = await browseCatalogue({ sort: "price_asc" }, undefined, undefined, NOW);
+
+    expect(result.sortRefused).toEqual({
+      reason: "selection_too_large",
+      matched: OFFER_SORT_MAX_PRODUCTS + 1,
+      maximum: OFFER_SORT_MAX_PRODUCTS,
+    });
+    // Falls back to the database-native order rather than a wrong one.
+    expect(result.sort).toBe("brand_asc");
+    expect(result.rows.length).toBeGreaterThan(0);
+  });
+
+  it("allows an offer-derived sort right up to the cap", async () => {
+    const { browseCatalogue } = await import("@/lib/server/catalogue-browse");
+    const { OFFER_SORT_MAX_PRODUCTS } = await import("@/lib/catalogue/catalogue-sort");
+    mockReads({ products: [product()], total: OFFER_SORT_MAX_PRODUCTS, listings: [listing()] });
+
+    const result = await browseCatalogue({ sort: "freshest" }, undefined, undefined, NOW);
+    expect(result.sortRefused).toBeNull();
+    expect(result.sort).toBe("freshest");
+  });
+
+  it("slices the materialised set, so a page is a slice of a global order", async () => {
+    const { browseCatalogue } = await import("@/lib/server/catalogue-browse");
+    const priceFor = (cents: string) => [{
+      purchase_price: cents, currency: "EUR", stock_raw: "6",
+      stock_exact: 6, stock_minimum: 6, observed_at: "2026-09-22T14:00:00Z",
+    }];
+    mockReads({
+      products: [
+        product({ id: "p1", brand: "A" }), product({ id: "p2", brand: "B" }),
+        product({ id: "p3", brand: "C" }),
+      ],
+      total: 3,
+      listings: [
+        listing({ id: "l1", catalogue_product_id: "p1", supplier_listing_prices: priceFor("300.00") }),
+        listing({ id: "l2", catalogue_product_id: "p2", supplier_listing_prices: priceFor("100.00") }),
+        listing({ id: "l3", catalogue_product_id: "p3", supplier_listing_prices: priceFor("200.00") }),
+      ],
+    });
+
+    // Page 2 of size 1 must be the SECOND cheapest globally, not the second
+    // row of an arbitrary page.
+    const page2 = await browseCatalogue(
+      { sort: "price_asc", limit: 1, offset: 1 }, undefined, undefined, NOW
+    );
+    expect(page2.rows.map((r) => r.product.productId)).toEqual(["p3"]);
+  });
+});
+
+describe("brand tiers", () => {
+  /**
+   * No approved mapping exists, so a tier must match nothing. Silently
+   * ignoring the filter would make premium and value return identical
+   * results, which reads as a working feature and is not one.
+   */
+  it("matches nothing while no brand is classified", async () => {
+    const { browseCatalogue } = await import("@/lib/server/catalogue-browse");
+    mockReads({ products: [], total: 0 });
+
+    const result = await browseCatalogue({ brandTier: "premium" }, undefined, undefined, NOW);
+
+    const brandFilter = captured.filters.filter(([column]) => column === "brand");
+    expect(brandFilter.length).toBeGreaterThan(0);
+    expect(result.rows).toEqual([]);
+  });
+
+  it("does not constrain brand when no tier is requested", async () => {
+    const { browseCatalogue } = await import("@/lib/server/catalogue-browse");
+    mockReads({ products: [product()], listings: [listing()] });
+
+    await browseCatalogue({}, undefined, undefined, NOW);
+    expect(captured.filters.filter(([c]) => c === "brand")).toEqual([]);
+  });
+});
