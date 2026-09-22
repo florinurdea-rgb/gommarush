@@ -1,7 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { createSupabaseAdminClient } from "@/lib/supabase/server-admin";
-import { readSheet, missingColumns, WorkbookError } from "@/lib/catalogue/xlsx-reader";
+import { readSheet, listSheetNames, missingColumns, WorkbookError } from "@/lib/catalogue/xlsx-reader";
 import { getAdapter } from "@/lib/catalogue/isb-adapter";
 import { matchRow, type ExistingListing, type ExistingProduct, type MatchContext } from "@/lib/catalogue/matching";
 import { logError, logEvent } from "@/lib/logger";
@@ -71,6 +71,12 @@ export interface ImportSummary {
   invalidEans: number;
   missingWeights: number;
   truncated: boolean;
+  /**
+   * Rows skipped as spreadsheet padding rather than data. Counted so a file
+   * exported through Excel's full grid is visibly explained, not silently
+   * shrunk.
+   */
+  paddingRows: number;
 }
 
 export interface AnalyzeResult {
@@ -88,6 +94,7 @@ function emptySummary(): ImportSummary {
     newProducts: 0, newListings: 0, updatedListings: 0, unchangedListings: 0,
     conflicts: 0, proposedDeactivations: 0, newEans: 0, newWeights: 0,
     missingEans: 0, invalidEans: 0, missingWeights: 0, truncated: false,
+    paddingRows: 0,
   };
 }
 
@@ -340,7 +347,17 @@ export async function analyzeCatalogueImport(input: AnalyzeInput): Promise<Analy
   const runId = String((created as { id: string }).id);
 
   try {
-    const { headers, rows, truncated } = await readSheet(input.bytes, adapter.sheetName);
+    // An adapter may choose its own sheet: Inter-Sprint names the sheet after
+    // the file, with an account prefix we have no document for.
+    let sheetName = adapter.sheetName;
+    if (adapter.resolveSheetName) {
+      const available = await listSheetNames(input.bytes);
+      const resolved = adapter.resolveSheetName(available);
+      if (!resolved) throw new WorkbookError("SHEET_NOT_FOUND", available.join(", "));
+      sheetName = resolved;
+    }
+
+    const { headers, rows, truncated } = await readSheet(input.bytes, sheetName);
 
     const missing = missingColumns(headers, adapter.requiredColumns);
     if (missing.length > 0) {
@@ -348,7 +365,7 @@ export async function analyzeCatalogueImport(input: AnalyzeInput): Promise<Analy
     }
 
     const summary = emptySummary();
-    summary.sourceRows = rows.length;
+    // Set after the loop, once padding has been discounted.
     summary.truncated = truncated;
 
     const context = await loadMatchContext(input.supplierId);
@@ -358,6 +375,13 @@ export async function analyzeCatalogueImport(input: AnalyzeInput): Promise<Analy
     const keysInFile = new Set<string>();
 
     for (const sheetRow of rows) {
+      // Padding is dropped before anything else. It is not data, so it is
+      // neither validated, counted as a source row, nor staged.
+      if (adapter.isPaddingRow?.(sheetRow.cells)) {
+        summary.paddingRows++;
+        continue;
+      }
+
       const outcome: NormalizedRowOutcome = adapter.normalizeRow(sheetRow.sourceRow, sheetRow.cells);
 
       if (!outcome.normalized) {
@@ -485,6 +509,10 @@ export async function analyzeCatalogueImport(input: AnalyzeInput): Promise<Analy
         review_reasons: [...row.reviewReasons, ...decision.reasons],
       });
     }
+
+    // Source rows are the rows that carried data. Padding is excluded so the
+    // count matches what an operator sees in the supplier's own file.
+    summary.sourceRows = rows.length - summary.paddingRows;
 
     // A listing we hold but the file does not mention. ONLY a complete
     // snapshot may propose deactivating it; a partial file says nothing

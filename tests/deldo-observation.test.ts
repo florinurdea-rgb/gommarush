@@ -37,6 +37,7 @@ function observation(
     purchasePrice: 48.5,
     currency: "EUR",
     stockExact: 13,
+    stockMinimum: 13,
     stockRaw: "13",
     commercialMode: "transport_separate",
     ...overrides,
@@ -72,12 +73,17 @@ describe("observation freshness", () => {
 
   it("distinguishes zero stock from unknown stock", () => {
     // Zero is a real answer — the supplier has none — and stays usable.
-    const zero = classifyObservation(observation({ stockExact: 0 }), POLICY, NOW);
+    const zero = classifyObservation(
+      observation({ stockExact: 0, stockMinimum: 0 }),
+      POLICY,
+      NOW
+    );
     expect(zero.state).toBe("current");
 
-    // Null means the supplier did not say, which cannot be reasoned about.
+    // Unknown means the supplier gave NEITHER a count nor a band. Nulling the
+    // exact count alone is not unknown — see the banded-stock test below.
     const unknown = classifyObservation(
-      observation({ stockExact: null }),
+      observation({ stockExact: null, stockMinimum: null }),
       POLICY,
       NOW
     );
@@ -85,6 +91,21 @@ describe("observation freshness", () => {
       state: "no_usable_observation",
       reason: "unknown_stock",
     });
+  });
+
+  /**
+   * Added with the Inter-Sprint feed, whose 'available' column reads '>  20'
+   * on 7,991 of 9,559 rows. Before this, an observation with no exact count
+   * was unusable, which would have discarded the supplier's strongest
+   * availability signal and left only the rows with LOW stock usable.
+   */
+  it("accepts a banded minimum as known stock", () => {
+    const banded = classifyObservation(
+      observation({ stockExact: null, stockMinimum: 20, stockRaw: ">  20" }),
+      POLICY,
+      NOW
+    );
+    expect(banded.state).toBe("current");
   });
 
   it("refuses an observation with no price", () => {
@@ -167,6 +188,7 @@ describe("test-data safety boundary", () => {
         observedAt: new Date("2020-01-01T00:00:00Z"),
         purchasePrice: null,
         stockExact: null,
+        stockMinimum: null,
       }),
       POLICY,
       NOW

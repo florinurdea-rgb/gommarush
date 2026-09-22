@@ -173,7 +173,7 @@ Run what is relevant to your change and report **actual output**, never a
 prediction. Current gates, all working:
 
 ```
-npx vitest run     # 677 passed, 4 skipped (Inter-Sprint live probe, gated)
+npx vitest run     # 746 passed, 4 skipped (Inter-Sprint live probe, gated)
 npx tsc --noEmit   # clean
 npx next lint      # 0 errors; 7 pre-existing warnings in UI components
 npm run build      # Next.js production build

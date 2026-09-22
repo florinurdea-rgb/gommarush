@@ -1,5 +1,6 @@
 import { looksLikeFormula } from "@/lib/catalogue/xlsx-reader";
 import { isScannable, validateGtin } from "@/lib/catalogue/gtin";
+import { intersprintFeedAdapter } from "@/lib/catalogue/intersprint-feed-adapter";
 import type {
   NormalizedCatalogueRow,
   NormalizedRowOutcome,
@@ -271,9 +272,19 @@ export class ISBImportAdapter implements SupplierImportAdapter {
 
 export const isbAdapter = new ISBImportAdapter();
 
-/** Every adapter the importer knows about, by id. */
+/**
+ * Every adapter the importer knows about, by id.
+ *
+ * Two Inter-Sprint entries, and the difference matters when choosing one:
+ *
+ *   isb              the already-normalised workbook that built the current
+ *                    catalogue. Its columns (supplier_listing_key, width_mm,
+ *                    season) exist in no file Inter-Sprint sends.
+ *   intersprint-feed the supplier's real price and stock feed, as delivered.
+ */
 export const IMPORT_ADAPTERS: Record<string, SupplierImportAdapter> = {
   [isbAdapter.id]: isbAdapter,
+  [intersprintFeedAdapter.id]: intersprintFeedAdapter,
 };
 
 export function getAdapter(id: string): SupplierImportAdapter | null {

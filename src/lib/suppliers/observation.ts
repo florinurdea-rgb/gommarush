@@ -196,6 +196,25 @@ export interface SupplierObservation {
    * turn "unknown" into "out of stock" or worse.
    */
   readonly stockExact: number | null;
+
+  /**
+   * The floor of a BANDED availability figure, where the supplier gave one.
+   *
+   * Some suppliers deliberately do not publish a count. Inter-Sprint's feed
+   * writes '>  20' on 7,991 of its 9,559 rows, which says "at least 21" and
+   * nothing more. That is not a missing answer - it is a strong one, and for
+   * sourcing purposes it is better news than an exact '4'.
+   *
+   * So a known minimum counts as known stock. What must never happen is the
+   * band being resolved into a number the supplier did not state: reading
+   * '>  20' as 21, 50 or 100 invents availability that nobody promised.
+   * `stockExact` stays null for a band; only this field is set.
+   *
+   * For an exact count both fields carry the same value, because an exact 4
+   * is also a floor of 4.
+   */
+  readonly stockMinimum: number | null;
+
   /** Whatever the source supplied, verbatim, for audit. */
   readonly stockRaw: string | null;
 
@@ -285,8 +304,11 @@ export function classifyObservation(
     return { state: "no_usable_observation", reason: "missing_price" };
   }
 
-  // Zero stock is a known answer and stays usable; only an absent one is not.
-  if (observation.stockExact === null) {
+  // Stock is known when the supplier gave EITHER an exact count or a band.
+  //
+  // Zero is a known answer and stays usable - the supplier has none, which is
+  // a fact worth acting on. Only a total absence of both figures is unknown.
+  if (observation.stockExact === null && observation.stockMinimum === null) {
     return { state: "no_usable_observation", reason: "unknown_stock" };
   }
 

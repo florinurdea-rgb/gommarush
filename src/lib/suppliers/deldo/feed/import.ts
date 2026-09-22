@@ -221,6 +221,9 @@ export function buildDeldoImport(request: DeldoImportRequest): DeldoImportResult
         // invented. See handoff decision D8.
         currency: null,
         stockExact: outcome.normalized.stockExact,
+        // Deldo supplies a count, not a band. An exact count is also its own
+        // floor, so the minimum mirrors it rather than being left unknown.
+        stockMinimum: outcome.normalized.stockExact,
         stockRaw: outcome.normalized.stockRaw,
         commercialMode: validated.commercialMode,
       },

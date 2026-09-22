@@ -202,6 +202,9 @@ export function parseGetStockBody(
       // rather than assumed to be EUR — see handoff decision D8.
       currency: null,
       stockExact: amount,
+      // GET_STOCK answers with a count, never a band; an exact count is its
+      // own floor.
+      stockMinimum: amount,
       stockRaw: String(amount),
       // A live lookup says nothing about whether transport is included in the
       // price; that is a property of the commercial agreement, not the call.

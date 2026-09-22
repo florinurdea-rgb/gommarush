@@ -129,9 +129,33 @@ export interface NormalizedRowOutcome {
 export interface SupplierImportAdapter {
   readonly id: string;
   readonly label: string;
+  /** The sheet to read when the adapter does not resolve one itself. */
   readonly sheetName: string;
   readonly requiredColumns: readonly string[];
   normalizeRow(sourceRow: number, cells: Record<string, string>): NormalizedRowOutcome;
+
+  /**
+   * Chooses the sheet to read from those the workbook contains.
+   *
+   * Optional: an adapter whose supplier always writes the same sheet name
+   * needs only `sheetName`. It exists because Inter-Sprint names the sheet
+   * after the file ('vrd-pcr'), and the leading account code is not something
+   * we have any document for.
+   *
+   * Returning null means "no sheet here looks like mine", which the importer
+   * reports rather than guessing at.
+   */
+  resolveSheetName?(available: readonly string[]): string | null;
+
+  /**
+   * True for a row that is spreadsheet padding rather than data.
+   *
+   * Optional, and separate from validation on purpose: a padding row is not a
+   * bad row to be reported, it is not a row at all. Supplier files exported
+   * through Excel can carry a million of them, and staging a rejection record
+   * for each would bury every genuine error under noise.
+   */
+  isPaddingRow?(cells: Record<string, string>): boolean;
 }
 
 /** The specification fields two products must agree on before they may merge. */

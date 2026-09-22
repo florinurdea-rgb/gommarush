@@ -30,3 +30,10 @@ can re-verify it against the same source.
 **Never commit credentials.** FTP hosts, usernames, passwords and API tokens do
 not belong in this repository. Record only that a credential exists and where it
 is held.
+
+## Lanes
+
+| Lane | Directory | Commercial data today |
+| --- | --- | --- |
+| Deldo | [`deldo/`](deldo/README.md) | Sample CSV inspected; persistence gated, no live feed |
+| Inter-Sprint | [`intersprint/`](intersprint/README.md) | Price and stock feed format verified; built the current 9,559-listing catalogue |
