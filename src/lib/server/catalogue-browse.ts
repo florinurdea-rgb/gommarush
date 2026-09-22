@@ -15,6 +15,7 @@ import { laneForAdapter, type LaneCode } from "@/lib/catalogue/supplier-lanes";
 import {
   classifyVehicle,
   deriveListingState,
+  productClassesFor,
   type ListingState,
   type VehicleClass,
 } from "@/lib/catalogue/listing-state";
@@ -74,6 +75,11 @@ export interface CatalogueBrowseQuery {
   readonly brand?: string | null;
   /** EAN, model/pattern or supplier article. Exact-ish, never fuzzy. */
   readonly search?: string | null;
+  /**
+   * Products resolved from an exact supplier-article match, filled in by
+   * browseCatalogue before the page query. Internal; callers do not set it.
+   */
+  readonly searchProductIds?: readonly string[];
   /** Commercial brand tier. Only narrows when an approved mapping exists. */
   readonly brandTier?: BrandTier | null;
   /** Display order. Offer-derived orders need a narrowed selection. */
@@ -261,7 +267,7 @@ function toCostCents(price: PriceRow | null): number | null {
 /** `category=pcr|truck` as the feed worker recorded it on the import run. */
 const CATEGORY_NOTE_PREFIX = "intersprint-feed:category=";
 
-function feedCategoryOf(run: ListingRow["catalogue_import_runs"]): string | null {
+function feedCategoryOf(run: { adapter: string | null; notes: string | null } | null): string | null {
   const notes = run?.notes ?? "";
   return notes.startsWith(CATEGORY_NOTE_PREFIX)
     ? notes.slice(CATEGORY_NOTE_PREFIX.length).trim()
@@ -330,7 +336,14 @@ function applyProductFilters<
     // match: two tyres whose model codes merely look alike are two tyres, and
     // the truncated `Type` field makes near-matches actively misleading.
     const escaped = term.replace(/[%,()]/g, "");
-    out = out.or(`ean.eq.${escaped},model_pattern.ilike.${escaped}%`);
+    if (query.searchProductIds && query.searchProductIds.length > 0) {
+      // The term also matched a supplier article, so those products join the
+      // result by id alongside the root matches.
+      const ids = query.searchProductIds.join(",");
+      out = out.or(`ean.eq.${escaped},model_pattern.ilike.${escaped}%,id.in.(${ids})`);
+    } else {
+      out = out.or(`ean.eq.${escaped},model_pattern.ilike.${escaped}%`);
+    }
   }
   return out;
 }
@@ -338,6 +351,95 @@ function applyProductFilters<
 // ---------------------------------------------------------------------------
 // Queries
 // ---------------------------------------------------------------------------
+
+interface RunRow {
+  id: string;
+  adapter: string | null;
+  notes: string | null;
+}
+
+export interface RunIndex {
+  /** Run ids whose adapter belongs to a lane. */
+  readonly byLane: ReadonlyMap<LaneCode, string[]>;
+  /** Run ids whose recorded feed category resolves to a vehicle class. */
+  readonly byVehicle: ReadonlyMap<VehicleClass, string[]>;
+  /** Runs that recorded no category, so their listings fall back to class. */
+  readonly uncategorised: readonly string[];
+}
+
+/**
+ * Indexes the import runs so lane and vehicle become filters on a COLUMN.
+ *
+ * This is what makes membership database-correct. Lane lives on the run's
+ * adapter and vehicle on its category note, neither of which PostgREST can
+ * filter a product by — but `supplier_product_listings.last_import_run_id` is
+ * a plain indexed column, and a run id set is something a query can use.
+ *
+ * The table is tiny (three rows in production, one per import) and read once
+ * per request.
+ */
+export async function loadRunIndex(): Promise<RunIndex> {
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("catalogue_import_runs")
+    .select("id, adapter, notes");
+
+  if (error) {
+    if (isMissingSchemaError(error)) {
+      return { byLane: new Map(), byVehicle: new Map(), uncategorised: [] };
+    }
+    throw error;
+  }
+
+  const byLane = new Map<LaneCode, string[]>();
+  const byVehicle = new Map<VehicleClass, string[]>();
+  const uncategorised: string[] = [];
+
+  for (const run of (data ?? []) as unknown as RunRow[]) {
+    const lane = laneForAdapter(run.adapter);
+    if (lane) byLane.set(lane, [...(byLane.get(lane) ?? []), run.id]);
+
+    const category = feedCategoryOf({ adapter: run.adapter, notes: run.notes });
+    if (category) {
+      const vehicle = classifyVehicle({ feedCategory: category, productClass: null });
+      byVehicle.set(vehicle, [...(byVehicle.get(vehicle) ?? []), run.id]);
+    } else {
+      uncategorised.push(run.id);
+    }
+  }
+
+  return { byLane, byVehicle, uncategorised };
+}
+
+/**
+ * The run ids a lane/vehicle selection admits, or null for "no constraint".
+ *
+ * An empty array is NOT the same as null: a lane with no imports must match
+ * nothing, exactly as an unpopulated brand tier does. Returning null there
+ * would show every product under an empty supplier tab.
+ */
+export function allowedRunIds(
+  index: RunIndex,
+  lane: LaneCode | null | undefined,
+  vehicle: VehicleFilter | undefined
+): string[] | null {
+  const laneRuns = lane ? (index.byLane.get(lane) ?? []) : null;
+
+  let vehicleRuns: string[] | null = null;
+  if (vehicle === "truck" || vehicle === "car_van") {
+    // Categorised runs state the vehicle outright. Uncategorised ones are
+    // admitted too, because their listings fall back to product_class — which
+    // the caller pairs with a root-level class filter.
+    vehicleRuns = [...(index.byVehicle.get(vehicle) ?? []), ...index.uncategorised];
+  }
+
+  if (laneRuns === null && vehicleRuns === null) return null;
+  if (laneRuns === null) return vehicleRuns as string[];
+  if (vehicleRuns === null) return laneRuns;
+
+  const allowed = new Set(vehicleRuns);
+  return laneRuns.filter((id) => allowed.has(id));
+}
 
 /**
  * The page of canonical products, ordered and paginated IN THE DATABASE.
@@ -348,17 +450,23 @@ function applyProductFilters<
  */
 async function fetchProductPage(
   query: CatalogueBrowseQuery,
+  runIndex: RunIndex,
   materialiseAll = false
 ): Promise<{ rows: ProductRow[]; total: number } | null> {
   const supabase = createSupabaseAdminClient();
   const limit = clampLimit(query.limit);
   const offset = Math.max(Math.trunc(query.offset ?? 0), 0);
 
-  const needsListingJoin =
-    query.lane != null || query.vehicle === "truck" || query.vehicle === "car_van" || !!query.search;
+  // Run ids are resolved BEFORE the query so lane and vehicle become filters
+  // on an indexed column of the joined relation. With !inner, PostgREST turns
+  // that into a join predicate, so it decides which PRODUCTS exist — and
+  // therefore the count and the page boundaries — rather than being applied to
+  // offers after a page has already been chosen.
+  const runIds = allowedRunIds(runIndex, query.lane, query.vehicle);
+  const needsListingJoin = runIds !== null;
 
   const embed = needsListingJoin
-    ? `, supplier_product_listings!inner(id, active, supplier_article_id, catalogue_import_runs(adapter, notes))`
+    ? `, supplier_product_listings!inner(id, active, last_import_run_id)`
     : "";
 
   let request = supabase
@@ -370,6 +478,38 @@ async function fetchProductPage(
 
   if (needsListingJoin) {
     request = request.eq("supplier_product_listings.active", true);
+
+    if (runIds.length === 0) {
+      // A lane with no imports, or a vehicle no run can satisfy. Must match
+      // NOTHING; an unconstrained join here would show the whole catalogue
+      // under an empty supplier tab.
+      request = (request as unknown as { in: (c: string, v: unknown[]) => typeof request }).in(
+        "supplier_product_listings.last_import_run_id",
+        ["00000000-0000-0000-0000-000000000000"]
+      );
+    } else {
+      request = (request as unknown as { in: (c: string, v: unknown[]) => typeof request }).in(
+        "supplier_product_listings.last_import_run_id",
+        runIds
+      );
+    }
+
+    // Uncategorised runs recorded no vehicle, so their listings fall back to
+    // the product's own class. That fallback is a ROOT column, so it is
+    // constrained here rather than after the fact.
+    //
+    // A product with NO class is admitted: every class in production was set
+    // by the legacy import, so a class-less product can only have come from a
+    // categorised run, which already stated its vehicle.
+    if (
+      (query.vehicle === "truck" || query.vehicle === "car_van") &&
+      runIndex.uncategorised.length > 0
+    ) {
+      const classes = productClassesFor(query.vehicle);
+      request = (request as unknown as { or: (f: string) => typeof request }).or(
+        `product_class.in.(${classes.join(",")}),product_class.is.null`
+      );
+    }
   }
 
   const ordered = request
@@ -395,6 +535,36 @@ async function fetchProductPage(
   }
 
   return { rows: (data ?? []) as unknown as ProductRow[], total: count ?? 0 };
+}
+
+/**
+ * Products whose supplier article matches the search term exactly.
+ *
+ * Bounded by construction: `(supplier_id, supplier_article_id)` is unique, so
+ * an exact term resolves to at most one listing per supplier. This keeps
+ * article search a real, database-side filter instead of the claim the join
+ * used to make and not honour.
+ */
+async function resolveArticleProductIds(term: string): Promise<string[]> {
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("supplier_product_listings")
+    .select("catalogue_product_id")
+    .eq("supplier_article_id", term)
+    .eq("active", true)
+    .limit(50);
+
+  if (error) {
+    if (isMissingSchemaError(error)) return [];
+    throw error;
+  }
+  return [
+    ...new Set(
+      ((data ?? []) as { catalogue_product_id: string | null }[])
+        .map((row) => row.catalogue_product_id)
+        .filter((id): id is string => !!id)
+    ),
+  ];
 }
 
 /** Every active listing for the products on this page, with its latest price. */
@@ -547,8 +717,17 @@ export async function browseCatalogue(
   let sortRefused: SortRefusal | null = null;
   let materialise = offerDerived;
 
+  const runIndex = await loadRunIndex();
+
+  // Resolve a supplier-article match once, before any page query, so every
+  // subsequent read (probe, page, facets) sees the same search scope.
+  const term = query.search?.trim();
+  const effectiveQuery: CatalogueBrowseQuery = term
+    ? { ...query, searchProductIds: await resolveArticleProductIds(term) }
+    : query;
+
   if (offerDerived) {
-    const probe = await fetchProductPage({ ...query, limit: 1, offset: 0 });
+    const probe = await fetchProductPage({ ...effectiveQuery, limit: 1, offset: 0 }, runIndex);
     if (probe === null) {
       return {
         rows: [], total: 0, limit, offset, schemaAvailable: false,
@@ -567,7 +746,7 @@ export async function browseCatalogue(
 
   const effectiveSort: CatalogueSort = sortRefused ? "brand_asc" : requestedSort;
 
-  const page = await fetchProductPage(query, materialise);
+  const page = await fetchProductPage(effectiveQuery, runIndex, materialise);
   if (page === null) {
     return {
       rows: [], total: 0, limit, offset,
@@ -595,9 +774,11 @@ export async function browseCatalogue(
       buildOffer(listing, product, hasOpenConflict, settings, sellingPolicy, now)
     );
 
-    // Lane and vehicle narrow which OFFERS are shown, after the product set is
-    // already correct. The product query decided membership; this decides what
-    // is displayed under each row.
+    // DISPLAY ONLY. Membership, the total and the page boundaries were all
+    // decided by the run-id join in fetchProductPage; this narrows which
+    // offers appear UNDER an already-correct row. It is not a substitute for
+    // the join and must never become one — filtering here alone would page
+    // over the wrong set, which is precisely the defect this replaced.
     if (query.lane) offers = offers.filter((offer) => offer.laneCode === query.lane);
     if (query.vehicle === "truck" || query.vehicle === "car_van") {
       offers = offers.filter((offer) => offer.vehicle === query.vehicle);
@@ -661,21 +842,37 @@ export async function browseCatalogue(
  * offered in the first place.
  */
 export async function getCatalogueFacets(
-  query: CatalogueBrowseQuery = {}
+  query: CatalogueBrowseQuery = {},
+  runIndex?: RunIndex
 ): Promise<CatalogueFacets & { schemaAvailable: boolean }> {
   const supabase = createSupabaseAdminClient();
+  const index = runIndex ?? (await loadRunIndex());
+  // Lane and vehicle constrain the facets too, through the same run-id join
+  // the page query uses. Without this a supplier tab would offer widths that
+  // exist only in another supplier's catalogue and return nothing when picked.
+  const runIds = allowedRunIds(index, query.lane, query.vehicle);
 
   async function distinct<K extends keyof ProductRow>(
     column: K,
     omit: keyof CatalogueBrowseQuery
   ): Promise<unknown[]> {
     const scoped: CatalogueBrowseQuery = { ...query, [omit]: null };
+    const embed = runIds !== null ? `, supplier_product_listings!inner(id)` : "";
+
     let request = supabase
       .from("catalogue_products")
-      .select(column as string)
+      .select(`${column as string}${embed}`)
       .eq("active", true)
       .not(column as string, "is", null);
     request = applyProductFilters(request as never, scoped) as never;
+
+    if (runIds !== null) {
+      request = request.eq("supplier_product_listings.active", true);
+      request = (request as unknown as { in: (c: string, v: unknown[]) => typeof request }).in(
+        "supplier_product_listings.last_import_run_id",
+        runIds.length > 0 ? runIds : ["00000000-0000-0000-0000-000000000000"]
+      );
+    }
 
     const { data, error } = await request.limit(20000);
     if (error) {

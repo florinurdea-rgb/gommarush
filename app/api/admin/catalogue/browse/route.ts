@@ -4,6 +4,7 @@ import {
   browseCatalogue,
   getCatalogueFacets,
   isSearchableSeason,
+  loadRunIndex,
   type CatalogueBrowseQuery,
   type VehicleFilter,
 } from "@/lib/server/catalogue-browse";
@@ -80,9 +81,12 @@ export async function GET(request: NextRequest) {
       offset: dimension(params.get("offset")) ?? undefined,
     };
 
+    // One run index for both reads, so the facets and the page can never be
+    // scoped differently.
+    const runIndex = await loadRunIndex();
     const [result, facets] = await Promise.all([
       browseCatalogue(query),
-      getCatalogueFacets(query),
+      getCatalogueFacets(query, runIndex),
     ]);
 
     return ok({

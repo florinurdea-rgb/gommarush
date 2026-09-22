@@ -35,6 +35,17 @@ const CAR_VAN_PRODUCT_CLASSES = new Set([
   "old_dot",
 ]);
 
+/**
+ * The product classes that belong to a vehicle group.
+ *
+ * Exported so the browse query can push the legacy fallback into SQL as a
+ * root-level filter, using the SAME vocabulary `classifyVehicle` applies in
+ * memory. Two lists would eventually disagree.
+ */
+export function productClassesFor(vehicle: Exclude<VehicleClass, "unknown">): string[] {
+  return vehicle === "truck" ? [...TRUCK_PRODUCT_CLASSES] : [...CAR_VAN_PRODUCT_CLASSES];
+}
+
 export interface VehicleClassInput {
   /** `category=pcr|truck` recorded on the import run that wrote the listing. */
   readonly feedCategory: string | null;
