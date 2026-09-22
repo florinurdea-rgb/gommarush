@@ -28,10 +28,13 @@ import {
   DELDO_LANE_CODE,
   DELDO_TEST_FEED_FILENAME,
 } from "@/lib/suppliers/deldo/capabilities";
-import type {
-  DataClassification,
-  FeedCommercialMode,
-  SupplierObservation,
+import {
+  assertDataClassification,
+  assertFeedCommercialMode,
+  type DataClassification,
+  type FeedCommercialMode,
+  type ObservationSource,
+  type SupplierObservation,
 } from "@/lib/suppliers/observation";
 
 /**
@@ -137,9 +140,30 @@ export function deldoFileChecksum(content: string): string {
  * collected instead, so one malformed tyre cannot cost an hourly feed.
  */
 export function buildDeldoImport(request: DeldoImportRequest): DeldoImportResult {
-  guardKnownTestFile(request);
+  // RUNTIME enforcement, before anything reads the file.
+  //
+  // The DeldoImportRequest type is erased at build time, so it stops nothing
+  // once a request arrives over HTTP, from an upload form, from a scheduler
+  // payload or from JSON on disk. These two calls are the point at which a
+  // caller must actually have stated what the data is. They fail closed: no
+  // default, no inference from filename, directory, FTP location, environment
+  // or supplier account.
+  const classification = assertDataClassification(
+    (request as { classification?: unknown }).classification,
+    `Deldo import of '${request.sourceFilename}'`
+  );
+  const commercialMode = assertFeedCommercialMode(
+    (request as { commercialMode?: unknown }).commercialMode,
+    `Deldo import of '${request.sourceFilename}'`
+  );
 
-  const { rows, malformed, totalDataLines } = readDeldoCsv(request.content, {
+  // Use the NARROWED values from here on, never the raw request fields, so a
+  // future edit cannot reintroduce an unvalidated path.
+  const validated: DeldoImportRequest = { ...request, classification, commercialMode };
+
+  guardKnownTestFile(validated);
+
+  const { rows, malformed, totalDataLines } = readDeldoCsv(validated.content, {
     delimiter: DELDO_FEED_DELIMITER,
     expectedHeader: DELDO_FEED_COLUMNS,
   });
@@ -189,27 +213,27 @@ export function buildDeldoImport(request: DeldoImportRequest): DeldoImportResult
             : "normal",
         // Carried from the request, never inferred from the content. A file's
         // rows cannot tell you whether the file is real.
-        classification: request.classification,
+        classification: validated.classification,
         source: "bulk_feed",
-        observedAt: request.observedAt,
+        observedAt: validated.observedAt,
         purchasePrice: outcome.normalized.purchasePrice,
         // Neither the feed nor the API supplies a currency, so none is
         // invented. See handoff decision D8.
         currency: null,
         stockExact: outcome.normalized.stockExact,
         stockRaw: outcome.normalized.stockRaw,
-        commercialMode: request.commercialMode,
+        commercialMode: validated.commercialMode,
       },
     });
   }
 
   return {
     laneCode: DELDO_LANE_CODE,
-    sourceFilename: request.sourceFilename,
-    classification: request.classification,
-    commercialMode: request.commercialMode,
-    observedAt: request.observedAt,
-    fileChecksum: deldoFileChecksum(request.content),
+    sourceFilename: validated.sourceFilename,
+    classification: validated.classification,
+    commercialMode: validated.commercialMode,
+    observedAt: validated.observedAt,
+    fileChecksum: deldoFileChecksum(validated.content),
     listings,
     rejected,
     malformed,
@@ -238,6 +262,18 @@ export function buildDeldoImport(request: DeldoImportRequest): DeldoImportResult
 export interface DeldoListingPersistencePlan {
   readonly supplierListingKey: string;
   readonly supplierArticleId: string;
+  /**
+   * The three facts the eventual write must record, surfaced HERE rather than
+   * left for the writer to dig out of `listing.observation`.
+   *
+   * These map one-to-one onto the columns in DELDO_REQUIRED_SCHEMA. The point
+   * is that the database write receives them explicitly and never derives,
+   * infers or defaults them at the last moment — which is exactly where a
+   * fictional row would otherwise acquire a "live" classification.
+   */
+  readonly dataClassification: DataClassification;
+  readonly commercialMode: FeedCommercialMode;
+  readonly observationSource: ObservationSource;
   readonly listing: DeldoImportListing;
 }
 
@@ -250,9 +286,26 @@ export function planDeldoListingPersistence(
   if (listing.observation.supplierArticleId !== listing.row.supplierArticleId) {
     throw new Error("Deldo persistence refused: observation/article id mismatch");
   }
+
+  // Re-assert at the persistence boundary rather than trusting that the
+  // observation was built by buildDeldoImport. A plan can be constructed from
+  // a hand-assembled listing, and this is the last point before a database
+  // write where refusing is still cheap.
+  const dataClassification = assertDataClassification(
+    (listing.observation as { classification?: unknown }).classification,
+    `Deldo persistence plan for '${listing.row.supplierListingKey}'`
+  );
+  const commercialMode = assertFeedCommercialMode(
+    (listing.observation as { commercialMode?: unknown }).commercialMode,
+    `Deldo persistence plan for '${listing.row.supplierListingKey}'`
+  );
+
   return {
     supplierListingKey: listing.row.supplierListingKey,
     supplierArticleId: listing.row.supplierArticleId,
+    dataClassification,
+    commercialMode,
+    observationSource: listing.observation.source,
     listing,
   };
 }

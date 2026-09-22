@@ -38,6 +38,67 @@ export type ObservationSource =
  */
 export type DataClassification = "live" | "test";
 
+export const DATA_CLASSIFICATIONS: readonly DataClassification[] = ["live", "test"];
+
+/**
+ * Runtime guard for a data classification.
+ *
+ * The TypeScript type is erased at build time, so it protects nothing at the
+ * edge of the system. The moment supplier data arrives over HTTP, from a form
+ * upload, from a scheduler payload or from JSON on disk, `classification` is
+ * whatever the caller happened to send — including `undefined`, `"LIVE"`, or
+ * `"production"` — and the compiler has already stopped looking.
+ *
+ * This is the one place that decides, and it FAILS CLOSED:
+ *
+ *   - there is NO default and no fallback to "live";
+ *   - matching is exact and case-sensitive, so "Live"/"LIVE"/"TEST" are
+ *     rejected rather than helpfully coerced. A caller that cannot spell its
+ *     own classification has not proven which one it means;
+ *   - nothing is inferred from a filename, a directory, an FTP location, an
+ *     environment variable or a supplier account. Every one of those has been
+ *     wrong somewhere: a test file can sit in a live directory, and a live file
+ *     can be replayed from a developer's laptop.
+ *
+ * Refusing an unknown value is the safe direction. The expensive failure is a
+ * fictional price that looks completely normal all the way to an invoice.
+ */
+export class DataClassificationError extends Error {
+  readonly received: unknown;
+  constructor(context: string, received: unknown) {
+    super(
+      `${context}: data classification must be exactly "live" or "test", ` +
+        `received ${describeClassificationValue(received)}. ` +
+        "There is no default - a caller that cannot state whether supplier data " +
+        "is real or fictional must not import it."
+    );
+    this.name = "DataClassificationError";
+    this.received = received;
+  }
+}
+
+function describeClassificationValue(value: unknown): string {
+  if (value === undefined) return "undefined (absent)";
+  if (value === null) return "null";
+  if (typeof value === "string") return JSON.stringify(value);
+  return `${typeof value}`;
+}
+
+export function isDataClassification(value: unknown): value is DataClassification {
+  return value === "live" || value === "test";
+}
+
+/** Narrows an untrusted value, or throws. Never returns a default. */
+export function assertDataClassification(
+  value: unknown,
+  context: string
+): DataClassification {
+  if (!isDataClassification(value)) {
+    throw new DataClassificationError(context, value);
+  }
+  return value;
+}
+
 /**
  * What a feed's price actually includes.
  *
@@ -55,6 +116,41 @@ export type FeedCommercialMode =
   | "transport_separate"
   | "transport_included"
   | "unknown";
+
+export const FEED_COMMERCIAL_MODES: readonly FeedCommercialMode[] = [
+  "transport_separate",
+  "transport_included",
+  "unknown",
+];
+
+export function isFeedCommercialMode(value: unknown): value is FeedCommercialMode {
+  return (
+    value === "transport_separate" ||
+    value === "transport_included" ||
+    value === "unknown"
+  );
+}
+
+/**
+ * Narrows an untrusted commercial mode, or throws.
+ *
+ * Note that `"unknown"` is a VALID mode and must be stated explicitly. It is
+ * not the same as omitting the field: "unknown" records that we know we do not
+ * know, which downstream code already treats as blocking for margin. An absent
+ * value records nothing at all and is refused here.
+ */
+export function assertFeedCommercialMode(
+  value: unknown,
+  context: string
+): FeedCommercialMode {
+  if (!isFeedCommercialMode(value)) {
+    throw new DataClassificationError(
+      `${context}: commercial mode must be one of ${FEED_COMMERCIAL_MODES.join(", ")}`,
+      value
+    );
+  }
+  return value;
+}
 
 /**
  * Supplier-reported stock condition. This is deliberately factual, not policy:

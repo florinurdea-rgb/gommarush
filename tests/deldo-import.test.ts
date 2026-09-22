@@ -12,7 +12,11 @@ import {
   CsvStructureError,
   type DeldoImportRequest,
 } from "@/lib/suppliers/deldo/feed/import";
-import { classifyObservation, isCommerciallyUsable } from "@/lib/suppliers/observation";
+import {
+  classifyObservation,
+  isCommerciallyUsable,
+  DataClassificationError,
+} from "@/lib/suppliers/observation";
 
 const FIXTURE = readFileSync(
   join(__dirname, "fixtures", "deldo-feed-sample.csv"),
@@ -258,5 +262,195 @@ describe("Deldo persistence boundary", () => {
     // run they came from and are queried on their own.
     expect(DELDO_REQUIRED_SCHEMA).toContain("catalogue_import_runs.data_classification");
     expect(DELDO_REQUIRED_SCHEMA).toContain("supplier_listing_prices.data_classification");
+  });
+});
+
+/**
+ * THE IMPORT SAFETY BOUNDARY.
+ *
+ * `DeldoImportRequest` is a TypeScript type, and TypeScript is erased at build
+ * time. It constrains code we compile; it constrains nothing that arrives over
+ * HTTP, from an upload form, from a scheduler payload or from JSON on disk.
+ *
+ * These tests therefore attack the boundary the way a real caller would: with
+ * values the compiler would have rejected, cast through `unknown`. If any of
+ * them reaches an observation, fictional supplier data has entered the
+ * commercial path wearing a live label.
+ */
+describe("Deldo import: explicit data classification", () => {
+  function untyped(overrides: Record<string, unknown>) {
+    return {
+      content: FIXTURE,
+      sourceFilename: "deldo-feed.csv",
+      classification: "live",
+      commercialMode: "unknown",
+      observedAt: OBSERVED_AT,
+      ...overrides,
+    } as unknown as DeldoImportRequest;
+  }
+
+  it("keeps an explicit test classification as test", () => {
+    const result = buildDeldoImport(untyped({ classification: "test" }));
+    expect(result.classification).toBe("test");
+    expect(result.listings.every((l) => l.observation.classification === "test")).toBe(true);
+  });
+
+  it("keeps an explicit live classification as live", () => {
+    const result = buildDeldoImport(untyped({ classification: "live" }));
+    expect(result.classification).toBe("live");
+    expect(result.listings.every((l) => l.observation.classification === "live")).toBe(true);
+  });
+
+  it("REFUSES a missing classification instead of defaulting", () => {
+    expect(() => buildDeldoImport(untyped({ classification: undefined }))).toThrow(
+      DataClassificationError
+    );
+    const { classification: _dropped, ...withoutKey } = untyped({});
+    expect(() => buildDeldoImport(withoutKey as unknown as DeldoImportRequest)).toThrow(
+      DataClassificationError
+    );
+  });
+
+  it("REFUSES null, empty string and non-strings", () => {
+    for (const bad of [null, "", 0, 1, true, false, {}, [], NaN]) {
+      expect(() => buildDeldoImport(untyped({ classification: bad }))).toThrow(
+        DataClassificationError
+      );
+    }
+  });
+
+  it("REFUSES a near-miss spelling rather than helpfully coercing it", () => {
+    // "LIVE" coerced to "live" is precisely how fictional data would acquire a
+    // real label. A caller that cannot spell its classification has not proven
+    // which one it means.
+    for (const bad of ["LIVE", "Live", "TEST", "Test", " live", "live ", "production", "prod", "real", "sample"]) {
+      expect(() => buildDeldoImport(untyped({ classification: bad }))).toThrow(
+        DataClassificationError
+      );
+    }
+  });
+
+  it("NEVER falls back to live - every refusal is a throw, not a value", () => {
+    for (const bad of [undefined, null, "", "LIVE", "production", 1]) {
+      let produced: unknown = "no-throw";
+      try {
+        produced = buildDeldoImport(untyped({ classification: bad })).classification;
+      } catch {
+        produced = "threw";
+      }
+      expect(produced).toBe("threw");
+    }
+  });
+
+  it("names the offending value so a broken caller is diagnosable", () => {
+    expect(() => buildDeldoImport(untyped({ classification: "LIVE" }))).toThrow(/"LIVE"/);
+    expect(() => buildDeldoImport(untyped({ classification: undefined }))).toThrow(
+      /undefined \(absent\)/
+    );
+    expect(() => buildDeldoImport(untyped({ classification: undefined }))).toThrow(
+      /no default/
+    );
+  });
+
+  it("refuses before reading the file, so a bad caller cannot even parse", () => {
+    // Garbage content AND a bad classification: the classification error must
+    // win, proving the check runs first.
+    expect(() =>
+      buildDeldoImport(untyped({ classification: undefined, content: "not;a;csv" }))
+    ).toThrow(DataClassificationError);
+  });
+
+  it("REFUSES a missing or invalid commercial mode", () => {
+    for (const bad of [undefined, null, "", "TRANSPORT_SEPARATE", "included", 0]) {
+      expect(() => buildDeldoImport(untyped({ commercialMode: bad }))).toThrow(
+        DataClassificationError
+      );
+    }
+  });
+
+  it("accepts 'unknown' as an EXPLICIT commercial mode - stating ignorance is not omitting it", () => {
+    const result = buildDeldoImport(untyped({ commercialMode: "unknown" }));
+    expect(result.commercialMode).toBe("unknown");
+  });
+
+  it("classification is not inferred from filename, directory or account", () => {
+    // Same bytes, live classification, innocuous names in 'live' locations.
+    // The only thing that decides is what the caller stated.
+    for (const name of [
+      "live/feed.csv",
+      "/ftp/deldo/production/026933.csv",
+      "026933LIVE.csv",
+      "hourly-snapshot.csv",
+    ]) {
+      const result = buildDeldoImport(
+        untyped({ classification: "test", sourceFilename: name })
+      );
+      expect(result.classification).toBe("test");
+    }
+  });
+
+  it("still refuses the known sample file when claimed as live", () => {
+    expect(() =>
+      buildDeldoImport(untyped({ classification: "live", sourceFilename: "26933TEST.csv" }))
+    ).toThrow(DeldoImportError);
+  });
+});
+
+describe("Deldo persistence plan carries classification to the database write", () => {
+  it("surfaces the three schema facts explicitly, not buried in the observation", () => {
+    const result = buildDeldoImport(request({ classification: "test" }));
+    const plan = planDeldoListingPersistence(result.listings[0]);
+    expect(plan.dataClassification).toBe("test");
+    expect(plan.commercialMode).toBe(result.commercialMode);
+    expect(plan.observationSource).toBe("bulk_feed");
+    // The eventual write reads these directly and derives nothing.
+    expect(Object.keys(plan)).toEqual(
+      expect.arrayContaining([
+        "dataClassification",
+        "commercialMode",
+        "observationSource",
+        "supplierListingKey",
+        "supplierArticleId",
+      ])
+    );
+  });
+
+  it("carries a live classification through unchanged", () => {
+    const result = buildDeldoImport(request({ classification: "live" }));
+    expect(planDeldoListingPersistence(result.listings[0]).dataClassification).toBe("live");
+  });
+
+  it("REFUSES to plan a hand-assembled listing with no classification", () => {
+    const result = buildDeldoImport(request());
+    const listing = result.listings[0];
+    const stripped = {
+      row: listing.row,
+      observation: { ...listing.observation, classification: undefined },
+    } as unknown as typeof listing;
+    expect(() => planDeldoListingPersistence(stripped)).toThrow(DataClassificationError);
+  });
+
+  it("REFUSES a hand-assembled listing with a bogus classification", () => {
+    const result = buildDeldoImport(request());
+    const listing = result.listings[0];
+    const forged = {
+      row: listing.row,
+      observation: { ...listing.observation, classification: "LIVE" },
+    } as unknown as typeof listing;
+    expect(() => planDeldoListingPersistence(forged)).toThrow(DataClassificationError);
+  });
+
+  it("still keeps the exact listing identity, never collapsing on EAN", () => {
+    const result = buildDeldoImport(request());
+    const pair = result.listings.filter(
+      (l) => l.row.supplierArticleId === "BR6727" || l.row.supplierArticleId === "BR672722"
+    );
+    const plans = pair.map(planDeldoListingPersistence);
+    expect(new Set(plans.map((p) => p.supplierListingKey)).size).toBe(plans.length);
+  });
+
+  it("persistence is still closed, whatever the plan says", () => {
+    const result = buildDeldoImport(request({ classification: "live" }));
+    expect(() => persistDeldoImport(result)).toThrow(DeldoPersistenceUnavailableError);
   });
 });

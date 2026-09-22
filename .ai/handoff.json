@@ -1,9 +1,9 @@
 {
   "project": "GommaRush",
-  "mission_id": "M5-RECONCILE",
-  "mission_title": "Deldo context reconciliation: re-verify primary artefacts, close the freshness test gap, record provenance",
+  "mission_id": "M6-IMPORT-SAFETY",
+  "mission_title": "Deldo import safety boundary: explicit data classification, enforced at run time",
   "status": "READY_FOR_REVIEW",
-  "phase": "Reconciliation complete. No Deldo implementation was rewritten. Two factual documentation errors corrected, one untested safety function covered, provenance recorded under docs/suppliers/.",
+  "phase": "Complete. Classification is enforced at run time at the import boundary and re-asserted at the persistence plan. Persistence remains gated.",
   "last_updated": "2026-09-22",
   "canonical_branch": "main",
   "working_branch": "claude/confident-albattani-p43rkj",
@@ -26,54 +26,30 @@
     "deldo_reverified": "Both primary artefacts were re-read independently on 2026-09-22 and every PRIMARY claim in docs/suppliers/deldo/README.md was re-derived from them: 26933TEST.csv (1,322,596 bytes, sha256 5e384ccf45d06ec3..., 6,729 data rows, 35 columns, ';' delimited, no quoting, POINT decimal separator on 6729/6729 Price values, pure ASCII, LF endings, 0 malformed rows) and API documentation.pdf (18 pages). The existing parser and GET_STOCK client were confirmed to match these artefacts."
   },
   "completed": [
+    "M6: runtime data-classification guard at the Deldo import boundary (assertDataClassification / assertFeedCommercialMode in observation.ts); classification re-asserted and surfaced explicitly on DeldoListingPersistencePlan as dataClassification/commercialMode/observationSource; 24 new tests; Quality=season and Vehicle=vehicle-class locked by regression tests.",
     "M5: reconciled the docs/suppliers provenance system with the existing Deldo implementation; corrected two factual errors; closed the lane-freshness test gap; recorded PRIMARY/SECOND-HAND/UNCONFIRMED provenance in docs/suppliers/deldo/README.md.",
     "DOCUMENTATION ONLY. Recorded the approved commercial architecture decisions in docs/architecture/04_SALES_SOURCING_MODEL.md: supplier identity invisible to customers; customer buys only from GommaRush; standard up to ~7 days vs express ~24-48h manually sourced from the Italian supplier; the 15-20% express share recorded explicitly as a planning assumption and not a rule; supplier minimum quantities and consolidation supported internally; customer order acceptance and supplier purchase/release as separate events; many customer orders per supplier batch; delivery promises must account for consolidation and cut-off rather than raw supplier availability; normal/older-DOT/Demo kept distinguishable; older-DOT offerable as a clearly identified cheaper GommaRush option; supplied DOT year preserved; Deldo Demo meaning unverified and not to be inferred; exact supplier listing/article survives sourcing and ordering; V1 payments bank transfer, POS on delivery, cash; manual review of every customer order; customer-specific pricing supported architecturally; portal and WhatsApp on one catalogue/pricing/order engine.",
     "Added Deldo activation question 8 (what does the Demo column mean), noting explicitly that no DOT-encoding question is needed because the feed already supplies the year."
   ],
   "in_progress": [],
   "tests": {
-    "vitest": "597 passed / 4 skipped (43 files). Up from 589 passed: 8 new lane-freshness tests added.",
-    "typecheck": "tsc --noEmit PASS. Was FAILING before this change on two unused imports in tests/deldo-observation.test.ts (TS6133).",
-    "lint": "next lint: 0 errors, 1 pre-existing warning (@next/next/no-img-element in src/components/site/Hero.tsx), unrelated to Deldo.",
-    "build": "next build PASS.",
-    "verify-migration-baseline.sh": "exit 0 against a local throwaway PostgreSQL 16. 56 checks, 12 uniques, 141 indexes, 28 functions, 23 triggers, 32 RLS tables, 0 policies; post-baseline 0001_deldo_classification.sql applies and data_classification is NOT NULL with no default (fail-closed confirmed)."
+    "npm test": "621 passed / 4 skipped (43 files). Up from 597: +24 tests (13 import-safety, 7 Quality/Vehicle semantics, 4 persistence-plan classification).",
+    "npm run typecheck": "PASS (tsc --noEmit, clean).",
+    "npm run lint": "0 errors, 7 warnings - all pre-existing UI warnings, none in supplier code. CLAUDE.md's documented '7 pre-existing warnings' is CORRECT; an earlier report of '1 warning' in this session was wrong because the output had been truncated.",
+    "npm run build": "PASS.",
+    "verify-migration-baseline.sh": "exit 0 against a disposable local PostgreSQL 16. Post-baseline 0001_deldo_classification.sql applies; data_classification is NOT NULL with no default."
   },
-  "production_changes": "NONE. Production was not read from or written to in this session.",
-  "database_changes": "NONE applied to staging or production. A throwaway LOCAL PostgreSQL 16 instance was created solely to run scripts/verify-migration-baseline.sh; it is disposable and touches no hosted project. supabase/post-baseline/0001_deldo_classification.sql remains intentionally unapplied.",
-  "external_actions": "NONE. No Deldo contact, no live API call, no CREATE_ORDER, no supplier communication.",
+  "production_changes": "NONE.",
+  "database_changes": "NONE applied to any hosted project. A disposable LOCAL PostgreSQL 16 was used only to run scripts/verify-migration-baseline.sh. supabase/post-baseline/0001_deldo_classification.sql remains intentionally unapplied.",
+  "external_actions": "NONE. No Deldo contact, no GET_STOCK call, no CREATE_ORDER, no FTP provisioning, no credentials handled.",
   "blockers": [
-    {
-      "id": "B9",
-      "blocks": "Reconciling production's migration ledger to the baseline",
-      "needs": "A verified RESTORABLE backup of production, plus owner go-ahead. The expected change is to the ledger only; production's schema must not change.",
-      "class": "OWNER_DECISION"
-    },
-    {
-      "id": "B7",
-      "blocks": "Persisting any Deldo observation",
-      "needs": "supabase/post-baseline/0001_deldo_classification.sql applied. Written and proved; waits on B9.",
-      "class": "Gated by B9"
-    },
-    {
-      "id": "B5",
-      "blocks": "Any live Deldo GET_STOCK call",
-      "needs": "Test API token from Jan@deldo.com. See docs/DELDO_ACTIVATION.md.",
-      "class": "PREREQUISITE, not a decision"
-    },
-    {
-      "id": "B6",
-      "blocks": "Receiving the hourly Deldo feed",
-      "needs": "FTP account for Deldo on the existing endpoint.",
-      "class": "PREREQUISITE, not a decision"
-    },
-    {
-      "id": "B3",
-      "blocks": "Any customer-facing price",
-      "needs": "No live commercial data in any lane.",
-      "class": "PREREQUISITE, not a decision"
-    }
+    "Deldo persistence is gated by the schema reconciliation. persistDeldoImport throws DeldoPersistenceUnavailableError by design and must stay closed until 0001_deldo_classification.sql is deliberately applied.",
+    "No Deldo feed can be fetched: no FTP credentials, and SFTP/FTPS support is unconfirmed.",
+    "No GET_STOCK test token has been issued, so the API path has never executed against Deldo."
   ],
   "risks": [
+    "buildDeldoImport currently has NO non-test caller: there is no admin route, upload route or server action that reaches Deldo import. So there was no live bypass to close. The runtime guard was added because the FIRST such route - the next mission is feed activation - would otherwise pass unvalidated JSON straight through an erased TypeScript type.",
+    "guardKnownTestFile only recognises the one named file 26933TEST.csv. It is a deliberate backstop, not a heuristic, and must not be broadened into 'looks like test data' - such a guess would eventually be wrong in the expensive direction.",
     "CORRECTED: a prior session working on the unrelated branch claude/sleepy-gauss-lezg26 concluded that no Deldo parser could be written because the primary files had never been inspected. That was wrong. The parser exists, is grounded in 26933TEST.csv, and is tested. That branch diverged from d6e2cda and never contained any of this Deldo work; it duplicated the schema baseline independently. Do not merge it over this branch.",
     "Discount range was misstated as '-407.69 to +63.23' in both src/lib/suppliers/deldo/feed/parse.ts and docs/DELDO_ACTIVATION.md. The true range across 3,639 non-zero values is -407.69 to +78.33; 644 rows exceeded the stated upper bound. Both corrected. The conclusion drawn from it - never apply Discount - was and remains correct.",
     "Stock in 26933TEST.csv has a hard floor of 3 and a hard ceiling of 100 (464 rows at exactly 100, none above, no zero-stock rows). That looks like deliberate banding rather than true counts, so it must not be presented as an exact quantity until Deldo confirms the semantics.",
@@ -212,15 +188,9 @@
     }
   ],
   "not_verified": [
-    "Whether the LIVE Deldo feed is generated with the same CSV dialect as 26933TEST.csv. Format facts are verified for the test file only.",
-    "Deldo Stock semantics (banding, per-warehouse, incoming stock), Discount meaning, pricing mode for 026933, and Demo meaning all remain UNCONFIRMED pending Jan's written reply.",
-    "GET_STOCK has never been called. No token has been issued and no live request was made."
+    "Whether the LIVE Deldo feed uses the same CSV dialect as 26933TEST.csv. Format facts are PRIMARY for the test file only.",
+    "Discount meaning, whether Price incorporates it, pricing mode for 026933, currency, Stock semantics, Demo meaning, PFU treatment, GET_STOCK parameter contract and rate limits, FTPS/SFTP support - all awaiting Jan. He has NOT replied.",
+    "GET_STOCK has never been called. No token issued, no live request made."
   ],
-  "next_recommended_mission": {
-    "id": "M4",
-    "title": "Autonomous development runner V1 (restart)",
-    "rationale": "Stopped before implementation at the owner's instruction. The inspection is done and recorded in not_verified, so a restart does not need to repeat it.",
-    "note": "Persistent execution cannot be switched on from this environment: there is no API key here to place in a GitHub secret, and creating one is an owner credential action. Everything else - mission and handoff contracts, state model, safety gates, verification loop, branch isolation, concurrency and timeout protection, documentation and a safe dry run - can be built without it.",
-    "do_not_start_automatically": true
-  }
+  "next_recommended_mission": "Reconcile Jan/Deldo answers and prepare real Deldo feed activation while respecting the DB persistence gate. The autonomous development runner (M4) is NOT the current priority. Sequence after this mission: (1) Jan/Deldo response reconciliation + DB persistence gate, (2) real Deldo feed ingestion, (3) commercial pricing/PFU, (4) customer catalogue/search/order journey."
 }

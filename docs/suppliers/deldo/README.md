@@ -232,6 +232,36 @@ preserved exactly.
 Tests: `tests/deldo-feed-parse.test.ts`, `tests/deldo-import.test.ts`,
 `tests/deldo-get-stock.test.ts`, `tests/deldo-observation.test.ts`.
 
+### The import safety boundary
+
+Deldo input → **explicit data classification** → parse → validate →
+observation → persistence plan → persistence boundary.
+
+`buildDeldoImport` validates `classification` and `commercialMode` at **run
+time**, before it reads a single byte of the file. The TypeScript types are
+erased at build time and protect nothing once data arrives over HTTP, from an
+upload form, from a scheduler payload or from JSON on disk, so the guard is a
+real check rather than a type annotation.
+
+It fails closed:
+
+- no default, and no fallback to `live`;
+- exact, case-sensitive matching — `"LIVE"`, `"Live"`, `"production"` and
+  `" live"` are all refused rather than coerced. Coercing them is exactly how
+  fictional data would acquire a real label;
+- nothing is inferred from filename, directory, FTP location, environment
+  variable or supplier account. A test file can sit in a live directory and a
+  live file can be replayed from a laptop;
+- `"unknown"` is a **valid, explicit** commercial mode. Stating that we do not
+  know is not the same as omitting the field, and only the first is accepted.
+
+`planDeldoListingPersistence` re-asserts both at the persistence boundary —
+the last point before a database write where refusing is still cheap — and
+surfaces `dataClassification`, `commercialMode` and `observationSource`
+directly on the plan. They map one-to-one onto the columns in
+`DELDO_REQUIRED_SCHEMA`, so the eventual write reads them explicitly and
+derives nothing at the moment it matters.
+
 ### Fail-closed behaviour that must not be relaxed
 
 - `Discount` is carried verbatim and never applied.
@@ -241,6 +271,8 @@ Tests: `tests/deldo-feed-parse.test.ts`, `tests/deldo-import.test.ts`,
   this into a general claim about what Demo means.
 - Test-classified observations are rejected before completeness and before age,
   so a fresh well-formed fictional row cannot be classified `current`.
+- Classification is validated at run time and again at the persistence plan;
+  there is no path to a default.
 - `freshnessPolicyForLane` **throws** for an unconfigured lane rather than
   applying a default, because a default would invent a commercial tolerance
   nobody approved. Deldo's documented hourly cadence is a supplier fact and is

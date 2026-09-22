@@ -345,3 +345,81 @@ describe("Deldo row mapping", () => {
     expect(rowFor("AF018989")).toEqual(rowFor("AF018989"));
   });
 });
+
+/**
+ * SEMANTIC REGRESSION — the two naming traps in the Deldo header.
+ *
+ * Both column names read as something they are not, and both were established
+ * from PRIMARY evidence in 26933TEST.csv:
+ *
+ *   `Quality` is the SEASON. Its only values across all 6,729 rows are
+ *   Summer (4,098), Winter (1,471), All Season (1,154) and empty (6). It is
+ *   NOT a condition or quality grade, and reading it as one would put a
+ *   "Summer" grade on a tyre and silently lose the season.
+ *
+ *   `Vehicle` is the VEHICLE CLASS: Passenger car (4,871), Jeep / 4x4 (1,162),
+ *   Light Truck (626), Truck (70).
+ *
+ * These tests exist so a future reader who guesses from the column name is
+ * corrected by a failing test rather than by a corrupted catalogue.
+ */
+describe("Deldo column semantics: Quality is the season, Vehicle is the class", () => {
+  function parseCell(overrides: Record<string, string>) {
+    const cells: Record<string, string> = {};
+    for (const column of DELDO_FEED_COLUMNS) cells[column] = "";
+    Object.assign(cells, {
+      Article: "SEM1",
+      Brand: "TESTBRAND",
+      Width: "205",
+      Height: "55",
+      Rim: "16",
+      Speed: "V",
+      Loadindex: "91V",
+      Stock: "10",
+      Price: "80.00",
+      Discount: "0",
+      EAN: "5420068618989",
+      ...overrides,
+    });
+    return normalizeDeldoRow(2, cells).normalized;
+  }
+
+  it("maps Quality onto season, never onto a condition grade", () => {
+    expect(parseCell({ Quality: "Summer" })?.season).toBe("summer");
+    expect(parseCell({ Quality: "Winter" })?.season).toBe("winter");
+    expect(parseCell({ Quality: "All Season" })?.season).toBe("all_season");
+  });
+
+  it("is case-insensitive on Quality, as the parser intends", () => {
+    expect(parseCell({ Quality: "SUMMER" })?.season).toBe("summer");
+    expect(parseCell({ Quality: "all season" })?.season).toBe("all_season");
+  });
+
+  it("leaves season null for an unknown Quality rather than guessing", () => {
+    expect(parseCell({ Quality: "" })?.season).toBeNull();
+    expect(parseCell({ Quality: "Premium" })?.season).toBeNull();
+    expect(parseCell({ Quality: "A-grade" })?.season).toBeNull();
+  });
+
+  it("maps Vehicle onto the product class, for every observed value", () => {
+    expect(parseCell({ Vehicle: "Passenger car" })?.productClass).toBe("passenger");
+    expect(parseCell({ Vehicle: "Light Truck" })?.productClass).toBe("light_truck");
+    expect(parseCell({ Vehicle: "Truck" })?.productClass).toBe("truck");
+    expect(parseCell({ Vehicle: "Jeep / 4x4" })?.productClass).toBe("suv_4x4");
+  });
+
+  it("leaves product class null for an unknown Vehicle rather than guessing", () => {
+    expect(parseCell({ Vehicle: "" })?.productClass).toBeNull();
+    expect(parseCell({ Vehicle: "Motorcycle" })?.productClass).toBeNull();
+  });
+
+  it("keeps the two columns independent - neither leaks into the other", () => {
+    const row = parseCell({ Quality: "Winter", Vehicle: "Truck" });
+    expect(row?.season).toBe("winter");
+    expect(row?.productClass).toBe("truck");
+    // The trap: a season value in Vehicle must NOT become a season.
+    const swapped = parseCell({ Quality: "Truck", Vehicle: "Winter" });
+    expect(swapped?.season).toBeNull();
+    expect(swapped?.productClass).toBeNull();
+  });
+});
