@@ -1,9 +1,9 @@
 {
   "project": "GommaRush",
-  "mission_id": "M10-VERIFIED",
-  "mission_title": "Inter-Sprint production feed activation — VERIFIED against the live database",
-  "status": "VERIFIED",
-  "phase": "The pipeline is LIVE and proven with real supplier data. Two real feeds committed to production and were independently verified read-only. Findings recorded below; none block automation.",
+  "mission_id": "M11A-PRODUCTION-RECONCILIATION",
+  "mission_title": "Production reconciliation: data classification, Inter-Sprint identity, M11B foundation, retention design",
+  "status": "READY_FOR_REVIEW",
+  "phase": "Analysis and preparation complete. NO production data was mutated. A RESET manifest, a provenance-guarded rename and two indexes are prepared and verified locally, all awaiting owner approval.",
   "last_updated": "2026-09-22",
   "canonical_branch": "main",
   "working_branch": "claude/confident-albattani-p43rkj",
@@ -40,7 +40,10 @@
     "feed_ingestion_server": "src/lib/server/feed-ingestion.ts",
     "feed_ingest_endpoints": "app/api/feed/intersprint/{ingest,commit}/route.ts",
     "feed_worker_auth": "src/lib/auth/feed-worker-auth.ts",
-    "feed_status": "src/lib/server/feed-status.ts (shown on /admin/catalogue)"
+    "feed_status": "src/lib/server/feed-status.ts (shown on /admin/catalogue)",
+    "production_reconciliation": "docs/PRODUCTION_RECONCILIATION.md",
+    "pending_approval_rename": "supabase/pending-approval/0003_intersprint_supplier_rename.sql (0002 is STALE)",
+    "pending_approval_indexes": "supabase/pending-approval/0004_m11b_catalogue_indexes.sql"
   },
   "source_authority": {
     "deldo": "API documentation.pdf and 26933TEST.csv, supplied by Jan Van Dyck (Deldo NV), subject 'RE: Connect platform and orders for - 026933 (Go Rush Trasporti srl)'. Both inspected directly in this session. GoRush customer number 026933.",
@@ -52,6 +55,7 @@
     "m10_production_verification": "READ-ONLY inspection of the production database on 2026-09-22, after two real Inter-Sprint feeds were processed by the deployed worker. Run ef834c00-3326-4c47-916e-4f18561e03aa (PCR, vrd-001-21185-107.csv, 3,060,504 B, checksum 04fa0b3c6a25) and run 77b811d4-5b0f-41ed-89ca-ec67b67fd060 (truck, vrd-001-21185.csv, 46,527 B, checksum 70a5d9196b13). Both status='committed', both supplier_id=4ce0b557-9575-4784-aa80-99e78af4da2f, both adapter='intersprint-feed', both import_mode='partial', both deactivated_listings=0, both rejected_rows=0."
   },
   "completed": [
+    "M11A: production reconciliation, READ-ONLY. (A) Corrected the last stale handoff risk still claiming the worker was 'NOT DEPLOYED'. (B) Full PRESERVE/RESET/VERIFY matrix over all 25 populated tables in docs/PRODUCTION_RECONCILIATION.md; exactly ONE provable RESET set was identified and NOT executed. (C) Inter-Sprint identity RE-ESTABLISHED on provenance rather than the stale 9,559 listing count; 0003 replaces 0002 and was proven against a disposable PostgreSQL 16 - happy path, idempotent re-run, documented rollback, and all six refusal cases blocking with distinct messages. (D) M11B foundation: Car/Van vs Truck resolves DETERMINISTICALLY for 100% of 13,206 listings via run provenance with a product_class fallback; two missing indexes prepared in 0004 and verified locally. (E) Retention measured and designed, nothing deleted. F1: found that the supplier's own 'group description' column maps 1:1 to product_class across 6,215 legacy rows - a real field, not an invention.",
     "M10: production feed activation. Architecture chosen: the worker runs ON the FTP VM and calls a protected application endpoint over HTTPS (option B), rejecting direct Supabase writes (option A) because that would put the RLS-bypassing service-role key on a box exposed on port 21. The worker is a dependency-free bash script - no Node, no npm tree on that VM - that reads the spool directory LOCALLY, so no FTP client and no FTP credentials are involved in ingestion at all. It checks file stability (vsftpd STOR is not atomic), claims by atomic mv, checksums, gzips and uploads, drives the batched commit to completion, and archives ONLY then. Server side: bearer-token auth with constant-time compare, checksum re-verified against the received bytes, category detected from the wcat column (never the filename - truck's name is a strict prefix of PCR's), then analyzeCatalogueImport/commitCatalogueImport - the SAME path the admin upload screen uses, so there is one catalogue pipeline. importMode is hard-wired to 'partial' while D14 is open. The importer now dispatches its reader on the bytes (zip magic = workbook, else delimited text) so real CSV and the XLSX samples reach the same M8 commercial mapping. Admin feed-status block on /admin/catalogue reports last success AND last attempt per feed, freshness, filename, short checksum and row counts. +50 tests, including the bash worker executed against a stub server.",
     "M9: Inter-Sprint FTP ingestion chain. commercial-policy.ts records the owner's confirmations with POLICY_OWNER provenance kept structurally distinct from supplier-documented facts; transport inclusion resolves per RELEASE (>= 60 PCR / 10 truck = transport_included, below = transport_separate, unknown quantity = fails closed). selling-policy.ts implements the minimum-5 customer offer rule centrally, as a lookup extensible by supplier/customer/channel, and NEVER alters supplier stock - a listing showing 3 keeps showing 3 internally and is filtered out of the customer projection in searchCatalogue rather than in the UI. csv-reader.ts DETECTS the delimiter against the verified column contract and fails closed on anything unproven, then hands header-keyed rows to the existing M8 adapter so there is still one commercial mapping. lifecycle.ts is pure decision logic: SHA-256 identity (not filename), duplicate/in-progress/abandoned-lock handling, and planCompletion treating a zero-row commit as a FAILURE. runner.ts sequences it against a FeedTransport interface. ftp-transport.ts implements that over basic-ftp, credentials from env only, read-only unless explicitly enabled. +80 tests.",
     "M8: Inter-Sprint price & stock feed ingestion. New adapter src/lib/catalogue/intersprint-feed-adapter.ts reads the supplier's REAL columns (sysnr, itemcode, nett-price, available, eancode, weight, EPREL) and writes the same NormalizedCatalogueRow as the existing pre-normalised 'isb' adapter, so there is one commercial mapping downstream and no parallel catalogue. sysnr is the listing identity (proven, not chosen). '>  20' is preserved as stock_minimum with stock_exact NULL. Excel grid padding (1,039,016 PCR rows carrying a stray '20' in the nett-price column) is dropped by adapter.isPaddingRow before validation and counted as summary.paddingRows. SupplierObservation gained stockMinimum and classifyObservation now accepts a banded minimum as known stock - without that, 7,991 of 9,559 rows would have been unusable while only the LOW-stock rows stayed usable. src/lib/suppliers/intersprint/feed/observation.ts builds lane observations with run-time-asserted classification, null currency, and commercialMode 'unknown' so nothing is marked up yet. +68 tests. Verified against both real sample workbooks: 0 rejected rows, every real row priced, both availability forms present.",
@@ -69,18 +73,22 @@
     "npm run build": "PASS.",
     "production verification": "READ-ONLY SQL only. No write of any kind was issued."
   },
-  "production_changes": "NONE BY THIS MISSION. Read-only verification only. The catalogue changes described above were made by the deployed worker's two real feed runs, not by this session.",
-  "database_changes": "NONE by this mission. No migration applied; supabase/pending-approval/0002 remains unapplied and is now marked STALE.",
-  "external_actions": "NONE. No FTP access, no supplier contact, no API call, no order.",
+  "production_changes": "NONE. M11A was entirely read-only against production. No rename, no delete, no migration applied.",
+  "database_changes": "NONE applied to any hosted project. 0003 (rename) and 0004 (indexes) are prepared and were verified against a DISPOSABLE LOCAL PostgreSQL 16, which was destroyed afterwards. 0002 remains unapplied and is marked STALE.",
+  "external_actions": "NONE.",
   "blockers": [
-    "D14 snapshot-vs-delta remains unresolved. Consequence F4: 1,841 legacy listings sit active with no current price.",
-    "PFU unresolved (D3) and the PFU/VAT base unresolved (D11), so no customer total is produced. Unchanged.",
-    "Plain FTP (security finding 2): credentials and payload cross the internet in clear text, and the feed is now real and daily. FTPS/SFTP remains the standing recommendation and has risen in priority.",
-    "Supplier row still named 'asdas'; the prepared rename is STALE (F5) and identity needs re-verification.",
-    "Deldo persistence remains gated."
+    "M11A: the proposed RESET manifest (Furnizor Demo supplier + its 7 seeded orders and FK children) needs a production backup and explicit owner confirmation before execution. NOT executed.",
+    "M11A: the Inter-Sprint rename (0003) needs a backup and approval. Verified locally but NOT applied.",
+    "M11A: the F1 group-description mapping needs owner sign-off, and the ALL-SEASON 4X4/SUV legacy inconsistency (469 rows, two seasons in one group) must be resolved first.",
+    "D14 snapshot-vs-delta remains unresolved. 1,841 legacy listings stay active with no current price; absence still deactivates nothing.",
+    "PFU unresolved (D3) and the PFU/VAT base unresolved (D11). No customer total is produced.",
+    "D2 supplier duplicates (ZUIN x4, FINTYRE x2, CARLINI x2) are merge decisions carrying orders - owner calls, not cleanup.",
+    "Plain FTP (security finding 2) with a live daily feed. FTPS/SFTP remains the standing recommendation.",
+    "c2e03bf (the M10 verification record) and this M11A work are on the branch but NOT yet merged to main.",
+    "Deldo persistence remains gated; untouched."
   ],
   "risks": [
-    "M10: the production worker is WRITTEN AND TESTED BUT NOT DEPLOYED. No real Inter-Sprint file has been processed end to end. Do not describe the pipeline as live until install.sh has been run, the token and supplier id are configured on both sides, and a real delivery has been observed reaching /admin/catalogue.",
+    "M10 SUPERSEDED 2026-09-22: the worker IS deployed and the pipeline IS live. Two real Inter-Sprint feeds were processed end to end into production and verified read-only: ef834c00-3326-4c47-916e-4f18561e03aa (PCR) and 77b811d4-5b0f-41ed-89ca-ec67b67fd060 (truck). The earlier 'not deployed, never run' wording was correct when written and is now false; it is replaced rather than deleted so the progression stays legible.",
     "M10 FILENAME TRAP: the truck feed 'vrd-001-21185.csv' is a STRICT PREFIX of the PCR feed 'vrd-001-21185-107.csv'. Any startsWith/includes match on filenames classifies PCR as truck and applies a minimum release of 10 instead of 60. The feeds are told apart by the wcat column, which only PCR carries, and a test pins that.",
     "M10: vsftpd STOR is NOT atomic - the supplier's file appears at its final name and grows. The worker requires STABLE_SECONDS (default 90) of no modification, re-checks the size after claiming and returns the file if it moved, and the server re-hashes the received bytes against the declared checksum. A truncated upload hashes perfectly well and looks complete, so this is three independent guards on purpose.",
     "M10: importMode is hard-wired to 'partial' in submitIntersprintFeed and is NOT a caller parameter. A 'complete' run is the only thing that may propose deactivating listings absent from a file, and D14 is unresolved. Do not make this configurable until a supplier statement settles snapshot semantics.",
@@ -310,7 +318,7 @@
     "Conflict behaviour on a feed-to-feed import. All 1,555 current conflicts are legacy-vs-feed; the expectation that they fall after M11A is reasoned, not measured.",
     "Deldo: unchanged and untouched. Jan has NOT replied."
   ],
-  "next_recommended_mission": "M11A — controlled production reconciliation/cleanup, as specified by ChatGPT and reviewed against these findings. NOT a delete-and-reimport: the two real runs above must be PRESERVED. Approach: backup, classify records as PRESERVE / RESET / VERIFY, remove only CONFIRMED dummy/test data, verify invariants. Feed F1 (3,633 unclassified products), F2 (conflict root cause is legacy 'Type' truncation, never trust that column to resolve them), F4 (1,841 stale legacy listings - flag, do NOT deactivate while D14 is open) and F5 (0002 is stale; re-verify supplier identity before any rename) into that specification. Do not start until ChatGPT freezes it.",
+  "next_recommended_mission": "Owner review of the three prepared, unexecuted operations: the RESET manifest, the 0003 rename and the 0004 indexes. Then M11B (Admin Catalogue Browse & Compare) per ChatGPT's specification, using the foundation findings above - particularly that Car/Van vs Truck is already deterministic for 100% of listings and needs no new classification work, and that unclassified products must stay visible rather than being filtered out. Do NOT start M11B until ChatGPT freezes it.",
   "head_at_completion": "see commits[0]; branch claude/confident-albattani-p43rkj",
   "owner_decisions_confirmed_m9": {
     "provenance": "POLICY_OWNER - GommaRush business decisions recorded 2026-09-22. NOT Inter-Sprint statements. Never cite these as supplier-documented.",
@@ -407,5 +415,49 @@
       "supplier_listing_prices grows by ~11,400 rows per changed feed. Intentional price history, but unbounded - plan retention before it matters.",
       "Unclassified products (F1) accumulate with every new article until a classification path exists."
     ]
+  },
+  "m11a_findings": {
+    "reset_proposed_not_executed": {
+      "records": "supplier 'Furnizor Demo (test)' 6edece30-cd25-4ae8-9ad0-160e13ad4ebe; its 7 orders numbered 83-89; their 7 order_items, ~26 inventory_units and order_status_history children.",
+      "proof": "Name states both Demo and (test). All 7 orders have customer_id NULL, status 'expected', identical 2026-08-18 creation, sequential numbering, zero documents and uniform shape. A real transport order has a customer.",
+      "status": "NOT EXECUTED. Deleting production business data needs a backup this session cannot take, and the manifest should be owner-confirmed first."
+    },
+    "explicitly_not_reset": [
+      "Supplier 'Name' 0b31299b: placeholder name BUT its order #222 is DELIVERED to a real customer. A rename/merge, never a deletion.",
+      "Supplier 'asdas' 4ce0b557: this IS Inter-Sprint. Rename only.",
+      "ZUIN x4, FINTYRE x2, CARLINI x2 duplicates: merge candidates (D2), each carrying orders.",
+      "'Rossi Gomme SRL' / 'Autogomme Rossi': common Italian demo-style names but both carry orders; cannot be proven dummy.",
+      "The 1,841 no-current-price legacy listings, the 1,555 conflicts and the 3,633 F1 products - all explicitly preserved per mission instruction."
+    ],
+    "intersprint_identity": {
+      "basis": "PROVENANCE, not counts. Exactly one supplier has an intersprint-feed/isb import run; exactly one holds ISB:-prefixed listing keys; all 13,206 of its listings are ISB:-keyed with ZERO exceptions; no supplier is already named Inter-Sprint.",
+      "target_name": "Inter-Sprint — the platform label. NO legal entity name is asserted; nothing in the repo establishes one and a supplier label does not need one.",
+      "verification": "0003 tested on disposable PostgreSQL 16: renames on the happy path, no-ops on re-run, rollback statement restores 'asdas', and refuses with a distinct error for each of: rival supplier with ISB keys, target holding a non-ISB key, name collision, no import run, no ISB listings, supplier row absent."
+    },
+    "m11b_foundation": {
+      "car_van_vs_truck": "DETERMINISTIC, 100% coverage of 13,206 listings: 9,679 pcr + 171 truck from last_import_run_id -> catalogue_import_runs.notes, and 3,356 legacy via product_class. Zero unclassifiable. No inference needed.",
+      "latest_observation": "Already served by supplier_listing_prices_listing_idx (supplier_listing_id, observed_at DESC). No change required.",
+      "comparison_grouping": "Group on catalogue_product_id only. NO fuzzy matching - the unique index on validated EAN already guarantees convergence. Where products do not converge, show separate rows.",
+      "indexes_missing": "product_class (unindexed, will be the primary facet) and season-alone (only the 4th column of the size index). Both prepared in 0004, verified locally, NOT applied.",
+      "stale_listings": "1,841 active listings with no current price must be FLAGGED and visible, never hidden and never deactivated while D14 is open."
+    },
+    "f1_strategy": {
+      "discovery": "The supplier's own 'group description' column - carried in the feed, preserved in catalogue_import_rows.raw_payload, and NOT currently mapped by the adapter - maps 1:1 to product_class across all 14 groups on 6,215 legacy rows that have both. Season maps 1:1 too, with one exception.",
+      "assessment": "This is NOT invention: it is the supplier's own merchandising group, and almost certainly how the legacy values were derived upstream.",
+      "cautions": [
+        "Empirical mapping proven on OUR data; no Inter-Sprint document states it. Record as derived evidence, not supplier fact.",
+        "'group description' is TRUNCATED to 20 characters ('BESTELWAGEN BANDEN M', 'ALL-SEASON LIGHT-TRU') - the same fixed-width truncation that makes 'Type' unreliable. Any lookup must key on the truncated form as delivered.",
+        "ALL-SEASON 4X4/SUV carries TWO seasons across 469 legacy rows (all_season and summer). A legacy data-quality defect to resolve BEFORE deriving anything.",
+        "Motorcycle and scooter groups correctly carry NULL season; that is right, not missing."
+      ],
+      "recommendation": "Map group/group description in the adapter as real supplier fields, then derive class and season through an EXPLICIT lookup table where an unrecognised group yields NULL. Needs owner sign-off; not executed in M11A."
+    },
+    "conflict_strategy": "Surface the 1,555 open conflicts as a review queue keyed on supplier_listing_key. NEVER resolve one using the truncated 'Type' column, and never by fuzzy matching. Expect the count to fall once imports compare feed-to-feed rather than legacy-vs-feed; re-measure after several automated runs before investing in bulk resolution.",
+    "retention": {
+      "measured": "catalogue_import_rows is 4,348 bytes/row and 87 MB - 62% of the whole 140 MB database. supplier_listing_prices is 217 bytes/row and 4.4 MB.",
+      "projection": "At ~11,378 rows per changed feed and 3 changed feeds a day: staging grows ~47 MB per import (~51 GB/year); price history grows ~2.4 MB per import (~2.6 GB/year).",
+      "conclusion": "The retention problem is STAGING, not price history - roughly 20x - and staging is the part whose value expires once a run is committed and triaged.",
+      "proposal": "Designed in docs/PRODUCTION_RECONCILIATION.md section 5. Drop normalized_payload on committed runs past N days and keep raw_payload only for conflict/rejected rows; thin price observations to one per listing per day past N days, always keeping the latest; retire conflicts on status transition, never on age. NOTHING executed."
+    }
   }
 }
