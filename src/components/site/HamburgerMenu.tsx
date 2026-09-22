@@ -35,6 +35,7 @@ export function HamburgerMenu() {
   const destinations: NavDestination[] = [
     { href: "/", label: copy.navHome },
     { href: "/richiedi-offerta", label: copy.navQuote },
+    { href: "/account/login", label: locale === "it" ? "Area clienti" : "Customer login" },
     { href: "/driver", label: copy.navDriver },
     { href: "/admin", label: copy.navAdmin },
   ];
