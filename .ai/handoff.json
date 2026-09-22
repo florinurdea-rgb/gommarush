@@ -1,0 +1,328 @@
+{
+  "project": "GommaRush",
+  "mission_id": "M10-INTERSPRINT-PRODUCTION-FEED-ACTIVATION",
+  "mission_title": "Inter-Sprint production feed ingestion: worker, endpoints, persistence, observability",
+  "status": "READY_FOR_REVIEW",
+  "phase": "Complete at code level and deployable. The chain from /incoming to the admin preview exists, reuses the single catalogue pipeline, and is tested including the bash worker itself. NOT YET DEPLOYED: no real file has been processed end to end.",
+  "last_updated": "2026-09-22",
+  "canonical_branch": "main",
+  "working_branch": "claude/confident-albattani-p43rkj",
+  "entry_points": {
+    "working_rules": "CLAUDE.md",
+    "authority_model": "docs/AI_WORKFLOW.md",
+    "architecture": "docs/architecture/00_README.md",
+    "deldo_lane": "docs/architecture/02_SUPPLIER_RULES.md",
+    "database_and_migrations": "docs/DATABASE_BASELINE.md",
+    "security": "docs/SECURITY_FINDINGS.md",
+    "schema_evidence": "docs/SCHEMA_RECONCILIATION_REPORT.md",
+    "deldo_activation": "docs/DELDO_ACTIVATION.md",
+    "verify_baseline": "scripts/verify-migration-baseline.sh",
+    "schema_baseline": "supabase/baseline/ (0001 structure, 0002 functions+triggers+checks)",
+    "post_baseline": "supabase/post-baseline/0001_deldo_classification.sql",
+    "pricing_engine": "src/lib/pricing/ (settings.ts, pfu.ts, calculate.ts, projection.ts)",
+    "catalogue_search": "src/lib/server/catalogue-search.ts",
+    "internal_preview": "app/admin/(secure)/catalogue/ricerca/page.tsx + app/api/admin/catalogue/search/route.ts",
+    "pricing_spec": "docs/architecture/03_PRICING_PFU_VAT.md",
+    "intersprint_feed_adapter": "src/lib/catalogue/intersprint-feed-adapter.ts",
+    "intersprint_observations": "src/lib/suppliers/intersprint/feed/observation.ts",
+    "intersprint_lane": "docs/suppliers/intersprint/README.md",
+    "intersprint_commercial_policy": "src/lib/suppliers/intersprint/commercial-policy.ts",
+    "selling_policy": "src/lib/commerce/selling-policy.ts",
+    "feed_lifecycle": "src/lib/suppliers/intersprint/feed/lifecycle.ts",
+    "feed_runner": "src/lib/suppliers/intersprint/feed/runner.ts",
+    "feed_csv_reader": "src/lib/suppliers/intersprint/feed/csv-reader.ts",
+    "feed_ftp_transport": "src/lib/suppliers/intersprint/feed/ftp-transport.ts",
+    "ftp_provisioning": "infra/ftp/provision-intersprint-ftp.sh",
+    "pending_approval_sql": "supabase/pending-approval/0002_intersprint_supplier_identity.sql",
+    "feed_worker_script": "infra/intersprint-worker/ingest-feed.sh",
+    "feed_worker_install": "infra/intersprint-worker/install.sh",
+    "feed_worker_docs": "infra/intersprint-worker/README.md",
+    "feed_ingestion_server": "src/lib/server/feed-ingestion.ts",
+    "feed_ingest_endpoints": "app/api/feed/intersprint/{ingest,commit}/route.ts",
+    "feed_worker_auth": "src/lib/auth/feed-worker-auth.ts",
+    "feed_status": "src/lib/server/feed-status.ts (shown on /admin/catalogue)"
+  },
+  "source_authority": {
+    "deldo": "API documentation.pdf and 26933TEST.csv, supplied by Jan Van Dyck (Deldo NV), subject 'RE: Connect platform and orders for - 026933 (Go Rush Trasporti srl)'. Both inspected directly in this session. GoRush customer number 026933.",
+    "note": "The PDF does NOT document the CSV columns ('we send you 1 file in CSV format so that you can examine file header and structure'). The sample file IS the column contract, and every mapping was read off it.",
+    "deldo_reverified": "Both primary artefacts were re-read independently on 2026-09-22 and every PRIMARY claim in docs/suppliers/deldo/README.md was re-derived from them: 26933TEST.csv (1,322,596 bytes, sha256 5e384ccf45d06ec3..., 6,729 data rows, 35 columns, ';' delimited, no quoting, POINT decimal separator on 6729/6729 Price values, pure ASCII, LF endings, 0 malformed rows) and API documentation.pdf (18 pages). The existing parser and GET_STOCK client were confirmed to match these artefacts.",
+    "intersprint": "vrd-pcr.csv.xlsx and vrd-truck.csv.xlsx, sent by Antonello Moio (Inter-Sprint) on 5 August 2026 as samples of the files their integration places on the GommaRush FTP folder. Both inspected directly on 2026-09-22. PCR: sheet 'vrd-pcr', 34 columns, 9,559 data rows padded out to Excel's full 1,048,576-row grid. TRUCK: sheet 'vrd-truck', 33 columns (no wcat), 134 data rows. On 18 September 2026 he added 'The integration has been completed; you can probably already check it now' - SECOND-HAND, no arriving file has been observed.",
+    "intersprint_catalogue_provenance_proof": "PROVEN 2026-09-22: the sorted sysnr set of vrd-pcr and the sorted supplier_article_id set of production's 9,559 listings share the same MD5 (4901cdbd6bb6b4a3be9ef1db0ba9314b), the same sum (4066526316), the same min (12851) and max (538231). production.source_row runs 2..9560, matching the file's data rows exactly, and supplier_item_code reproduces itemcode byte for byte including internal spacing. The current catalogue was therefore built from this feed family, keyed on sysnr.",
+    "intersprint_production_ftp": "OWNER-VERIFIED by direct inspection of the FTP VM (ubuntu-2gb-hel1-1) on 2026-09-22. Inter-Sprint is actively uploading: authenticated vsftpd uploads observed from source IP 193.172.180.162. Two feeds present in /srv/ftp/intersprint/incoming: vrd-001-21185-107.csv (PCR, ~3,060,504 B, ~11,208 lines) and vrd-001-21185.csv (truck, ~46,527 B, ~172 lines). Deliveries recur and OVERWRITE the same two filenames - observed 21-22 September around 06:27, 10:27, 12:2x, 14:27, PCR and truck refreshed independently, sizes varying. Files are genuinely semicolon-delimited CSV and the header matches the contract established from the August XLSX samples. Sizes and line counts are OBSERVATIONS, not a contract, and nothing in code depends on them. This is owner operational observation, NOT an Inter-Sprint contractual statement."
+  },
+  "completed": [
+    "M10: production feed activation. Architecture chosen: the worker runs ON the FTP VM and calls a protected application endpoint over HTTPS (option B), rejecting direct Supabase writes (option A) because that would put the RLS-bypassing service-role key on a box exposed on port 21. The worker is a dependency-free bash script - no Node, no npm tree on that VM - that reads the spool directory LOCALLY, so no FTP client and no FTP credentials are involved in ingestion at all. It checks file stability (vsftpd STOR is not atomic), claims by atomic mv, checksums, gzips and uploads, drives the batched commit to completion, and archives ONLY then. Server side: bearer-token auth with constant-time compare, checksum re-verified against the received bytes, category detected from the wcat column (never the filename - truck's name is a strict prefix of PCR's), then analyzeCatalogueImport/commitCatalogueImport - the SAME path the admin upload screen uses, so there is one catalogue pipeline. importMode is hard-wired to 'partial' while D14 is open. The importer now dispatches its reader on the bytes (zip magic = workbook, else delimited text) so real CSV and the XLSX samples reach the same M8 commercial mapping. Admin feed-status block on /admin/catalogue reports last success AND last attempt per feed, freshness, filename, short checksum and row counts. +50 tests, including the bash worker executed against a stub server.",
+    "M9: Inter-Sprint FTP ingestion chain. commercial-policy.ts records the owner's confirmations with POLICY_OWNER provenance kept structurally distinct from supplier-documented facts; transport inclusion resolves per RELEASE (>= 60 PCR / 10 truck = transport_included, below = transport_separate, unknown quantity = fails closed). selling-policy.ts implements the minimum-5 customer offer rule centrally, as a lookup extensible by supplier/customer/channel, and NEVER alters supplier stock - a listing showing 3 keeps showing 3 internally and is filtered out of the customer projection in searchCatalogue rather than in the UI. csv-reader.ts DETECTS the delimiter against the verified column contract and fails closed on anything unproven, then hands header-keyed rows to the existing M8 adapter so there is still one commercial mapping. lifecycle.ts is pure decision logic: SHA-256 identity (not filename), duplicate/in-progress/abandoned-lock handling, and planCompletion treating a zero-row commit as a FAILURE. runner.ts sequences it against a FeedTransport interface. ftp-transport.ts implements that over basic-ftp, credentials from env only, read-only unless explicitly enabled. +80 tests.",
+    "M8: Inter-Sprint price & stock feed ingestion. New adapter src/lib/catalogue/intersprint-feed-adapter.ts reads the supplier's REAL columns (sysnr, itemcode, nett-price, available, eancode, weight, EPREL) and writes the same NormalizedCatalogueRow as the existing pre-normalised 'isb' adapter, so there is one commercial mapping downstream and no parallel catalogue. sysnr is the listing identity (proven, not chosen). '>  20' is preserved as stock_minimum with stock_exact NULL. Excel grid padding (1,039,016 PCR rows carrying a stray '20' in the nett-price column) is dropped by adapter.isPaddingRow before validation and counted as summary.paddingRows. SupplierObservation gained stockMinimum and classifyObservation now accepts a banded minimum as known stock - without that, 7,991 of 9,559 rows would have been unusable while only the LOW-stock rows stayed usable. src/lib/suppliers/intersprint/feed/observation.ts builds lane observations with run-time-asserted classification, null currency, and commercialMode 'unknown' so nothing is marked up yet. +68 tests. Verified against both real sample workbooks: 0 rejected rows, every real row priced, both availability forms present.",
+    "M7: central GommaRush pricing layer in src/lib/pricing/, deliberately OUTSIDE any supplier adapter. settings.ts holds markup 20% (provenance POLICY_OWNER), optional minimum profit, VAT 22% (STATUTORY) and pfuVatBase='unresolved'; every figure carries a provenance marker and an UNRESOLVED one is refused, not defaulted. pfu.ts implements SUPPLIER_EXACT/RULE_CALCULATED/MANUAL_CONFIRMED/TO_CONFIRM with an EMPTY verified-tariff table and refuses to derive an amount from weight. calculate.ts computes cost -> markup -> net -> PFU -> taxable -> VAT -> total in integer cents, failing closed at three points. projection.ts makes the customer/internal split two DIFFERENT TYPES so a supplier cost has nowhere to sit in a customer payload. catalogue-search.ts searches the existing normalized catalogue (no parallel catalogue) by width/aspect/rim/season. Internal preview at /admin/catalogue/ricerca, admin-guarded by the (secure) layout AND re-checked in the route. 56 new tests.",
+    "M6: runtime data-classification guard at the Deldo import boundary (assertDataClassification / assertFeedCommercialMode in observation.ts); classification re-asserted and surfaced explicitly on DeldoListingPersistencePlan as dataClassification/commercialMode/observationSource; 24 new tests; Quality=season and Vehicle=vehicle-class locked by regression tests.",
+    "M5: reconciled the docs/suppliers provenance system with the existing Deldo implementation; corrected two factual errors; closed the lane-freshness test gap; recorded PRIMARY/SECOND-HAND/UNCONFIRMED provenance in docs/suppliers/deldo/README.md.",
+    "DOCUMENTATION ONLY. Recorded the approved commercial architecture decisions in docs/architecture/04_SALES_SOURCING_MODEL.md: supplier identity invisible to customers; customer buys only from GommaRush; standard up to ~7 days vs express ~24-48h manually sourced from the Italian supplier; the 15-20% express share recorded explicitly as a planning assumption and not a rule; supplier minimum quantities and consolidation supported internally; customer order acceptance and supplier purchase/release as separate events; many customer orders per supplier batch; delivery promises must account for consolidation and cut-off rather than raw supplier availability; normal/older-DOT/Demo kept distinguishable; older-DOT offerable as a clearly identified cheaper GommaRush option; supplied DOT year preserved; Deldo Demo meaning unverified and not to be inferred; exact supplier listing/article survives sourcing and ordering; V1 payments bank transfer, POS on delivery, cash; manual review of every customer order; customer-specific pricing supported architecturally; portal and WhatsApp on one catalogue/pricing/order engine.",
+    "Added Deldo activation question 8 (what does the Demo column mean), noting explicitly that no DOT-encoding question is needed because the feed already supplies the year."
+  ],
+  "in_progress": [],
+  "tests": {
+    "npm test": "876 passed / 6 skipped (58 files, 2 skipped files). Up from 826: +50 (17 production CSV contract and auth, 13 ingestion guards, 9 feed status, 11 worker script executed for real).",
+    "npm run typecheck": "PASS (tsc --noEmit, clean).",
+    "npm run lint": "0 errors, 7 warnings - all pre-existing UI warnings.",
+    "npm run build": "PASS.",
+    "worker script": "tests/intersprint-worker-script.test.ts RUNS the real bash script against a local stub endpoint: stability skip, zero-byte skip, gzip body, checksum of the uncompressed file, both feeds in one run, commit loop until finished, archive-only-after-finish with a unique name, failed files retained, duplicate short-circuit, and refusal to run unconfigured. Skipped off Linux.",
+    "not tested": "The worker has never run on the real VM against a real delivery. That is deployment, not code."
+  },
+  "production_changes": "NONE. No hosted database write, no schema change, no migration applied.",
+  "database_changes": "NONE applied. supabase/pending-approval/0002 (supplier rename) remains deliberately unapplied.",
+  "external_actions": "NONE. No FTP connection, no file read/moved/deleted on the VM, no Inter-Sprint contact, no API call, no order.",
+  "blockers": [
+    "M10 BLOCKER - NOT DEPLOYED (D17). The worker, endpoints, persistence and observability all exist and are tested, but nothing has been installed on the VM and no token has been issued. Until that is done and one real delivery has been watched through, the pipeline is not live.",
+    "M10 BLOCKER - SNAPSHOT VS DELTA (D14) still unresolved. Ingestion is hard-wired to 'partial' so nothing can be deactivated. This is safe but means the catalogue will accumulate listings that may no longer be offered.",
+    "M10 BLOCKER - CURRENCY (D15). Observations carry null. The pre-existing supplier_listing_prices.currency column is NOT NULL DEFAULT 'EUR'; that default predates M8 and must not be read as verification.",
+    "PFU: no verified tariff. Every listing resolves to TO_CONFIRM. D3.",
+    "PFU/VAT base: pfuVatBase is 'unresolved' pending the commercialista, which blocks the customer total. D11.",
+    "Plain FTP (security finding 2): password and payload cross the internet in clear text. FTPS/SFTP remains the standing recommendation, and now matters more because deliveries are real and daily.",
+    "supabase/pending-approval/0002 (rename 'asdas' to Inter-Sprint) still needs a backup, the approved legal name and explicit approval. INTERSPRINT_SUPPLIER_ID means the rename needs no redeploy.",
+    "Deldo persistence remains gated; no Deldo change in M10."
+  ],
+  "risks": [
+    "M10: the production worker is WRITTEN AND TESTED BUT NOT DEPLOYED. No real Inter-Sprint file has been processed end to end. Do not describe the pipeline as live until install.sh has been run, the token and supplier id are configured on both sides, and a real delivery has been observed reaching /admin/catalogue.",
+    "M10 FILENAME TRAP: the truck feed 'vrd-001-21185.csv' is a STRICT PREFIX of the PCR feed 'vrd-001-21185-107.csv'. Any startsWith/includes match on filenames classifies PCR as truck and applies a minimum release of 10 instead of 60. The feeds are told apart by the wcat column, which only PCR carries, and a test pins that.",
+    "M10: vsftpd STOR is NOT atomic - the supplier's file appears at its final name and grows. The worker requires STABLE_SECONDS (default 90) of no modification, re-checks the size after claiming and returns the file if it moved, and the server re-hashes the received bytes against the declared checksum. A truncated upload hashes perfectly well and looks complete, so this is three independent guards on purpose.",
+    "M10: importMode is hard-wired to 'partial' in submitIntersprintFeed and is NOT a caller parameter. A 'complete' run is the only thing that may propose deactivating listings absent from a file, and D14 is unresolved. Do not make this configurable until a supplier statement settles snapshot semantics.",
+    "M10: the feed worker token is a SEPARATE, single-purpose credential. The Supabase service-role key must never reach the FTP VM: it bypasses RLS on customers, orders and logistics, and that box is exposed on port 21.",
+    "M10: production writes the EU-label header as 'Fuel efficiency' where the August samples wrote 'Fuel effeciency'. Neither is mapped - the catalogue has no EU-label columns beyond eprel_id - so the difference is recorded, not depended on.",
+    "M10: feed staleness on the admin block uses a 24-hour GommaRush operational threshold, NOT a supplier promise. The observed 06:27/10:27/12:2x/14:27 cadence is an observation. Commercial freshness remains a separate question owned by the observation layer.",
+    "M10: the minimum-5 rule remains a CATALOGUE VISIBILITY policy and was deliberately not turned into an order-time rejection. assessSellability is called by searchCatalogue only; a future Protocol 103 live check that proves exactly 4 available can still allow an order for 4 without touching it.",
+    "M9: the FTP client is the one unverified component in the chain. It is deliberately read-only by default and no test depends on it - the lifecycle and runner are tested against an in-memory FeedTransport - so the untested surface is confined to the socket conversation itself.",
+    "M9: transport inclusion is a property of the RELEASE, not of a catalogue row. An observation built without a release quantity resolves to commercialMode 'unknown' and fails closed. The internal preview prices on the assumption that a consolidated order reaches the minimum, and the screen states that assumption rather than letting a per-tyre figure imply one tyre ships free.",
+    "M9: categoryForProductClass defaults an unrecognised product class to the PCR minimum of 60 - the HIGHER of the two - because being wrong toward 'we have not reached the minimum' costs a transport charge we expected, while the opposite promises free transport we were never entitled to.",
+    "M9: the minimum-5 rule filters the CUSTOMER projection inside searchCatalogue, not in the UI, so a future export, feed or public API cannot accidentally publish a suppressed listing. The internal projection still carries the real stock plus the suppression reason.",
+    "M9: a commit applying zero rows is treated as a FAILURE and the file goes to failed/. An Inter-Sprint delivery always carries rows, so zero means the wrong file was read or something broke; filing it under processed would hide that and suppress the retry.",
+    "M9: the completion record is written BEFORE the file is moved. A crash between the two leaves a correct database and a misplaced file rather than the reverse - a file in the wrong directory is a tidying problem, a file marked processed that never was is a double-charge.",
+    "M9: added the runtime dependency basic-ftp ^5.3.1 for the transport. Chosen over hand-rolling the protocol; it is dependency-free and typed. npm audit reports pre-existing advisories in the tree unrelated to this addition.",
+    "M8: the sample files are AUGUST 2026 SAMPLES, not current prices. They must be imported with classification 'test'. buildIntersprintObservation asserts the classification at run time and has no default, so an importer cannot omit it.",
+    "M8: the samples are saved to Excel's full 1,048,576-row grid and 1,039,016 PCR padding rows carry a stray '20' in the nett-price column - read naively, a million EUR 20 tyres with no identity. isPaddingRow drops them. Note that xlsx-reader's MAX_SHEET_ROWS is 200,000, so such a file reports truncated=true; the real data occupies the first 9,559 rows so nothing is lost, but the flag is expected rather than alarming.",
+    "M8: the real FTP delivery is probably a true .csv - the sample names are '*.csv.xlsx', i.e. a CSV opened in Excel. The CSV dialect (delimiter, quoting, encoding) is UNVERIFIED and must be read off a real file. The commercial mapping lives in the adapter and is container-independent, so a CSV reader wires to the same adapter; do NOT write a second commercial parser.",
+    "M8: the feed states NO season and NO vehicle class. group description carries Dutch merchandising groups and Snowgrip is a 3PMSF marking shared by winter and all-season tyres. Both are left null and flagged CLASS_OR_SEASON_UNRESOLVED. This is SAFE on re-import only because gorush_commit_catalogue_batch writes every product field as coalesce(nullif(incoming,''), existing) - tests/intersprint-feed-reimport.test.ts reads the migration itself to pin that. Without it, one price refresh would wipe the season off all 9,052 products.",
+    "M8: truck rims are written as tenths - 22.5\" arrives as '225'. Stored as supplied and flagged RIM_LOOKS_LIKE_TENTHS, never divided into the integer rim_inch column, where it would become 22: a different tyre.",
+    "M8: the feed's EU label data (fuel efficiency, wet grip, rollnoise, noise level, snow/ice grip, present on 8,981 rows) is NOT mapped because catalogue_products has no columns for it. Only eprel_id is stored. Adding those columns is a schema change and was out of scope.",
+    "M8 RESOLVES THE EVIDENCE FOR D1, not the fix. The supplier record named 'asdas' IS Inter-Sprint: the sysnr MD5 proof above is deterministic. Renaming it is a PRODUCTION DATA MUTATION and remains an owner decision. Safest reconciliation: UPDATE suppliers SET name where id = '4ce0b557-9575-4784-aa80-99e78af4da2f' only, after a backup, touching no listing or product row, since supplier_id is already correct on all 9,559 listings.",
+    "M7: the catalogue schema has NO EU-label columns beyond eprel_id (no fuel efficiency, wet grip or noise). 8,972 of 9,550 active products carry an eprel_id. The preview surfaces that id and nothing more; the richer label data is simply not in the system and must not be inferred from it.",
+    "M7: availability is projected as unknown/in_stock/on_request, never as a quantity. ISB ships thresholds ('>20') and the Deldo sample is banded 3..100, so neither is a count a customer promise could rest on. Today every row reads 'unknown' because no stock is stored at all.",
+    "M7: the preview is INTERNAL ONLY and deliberately has no public counterpart. The customer projection exists and is tested but nothing serves it yet. The first route that does must use toCustomerOffer, never toInternalOffer.",
+    "buildDeldoImport currently has NO non-test caller: there is no admin route, upload route or server action that reaches Deldo import. So there was no live bypass to close. The runtime guard was added because the FIRST such route - the next mission is feed activation - would otherwise pass unvalidated JSON straight through an erased TypeScript type.",
+    "guardKnownTestFile only recognises the one named file 26933TEST.csv. It is a deliberate backstop, not a heuristic, and must not be broadened into 'looks like test data' - such a guess would eventually be wrong in the expensive direction.",
+    "CORRECTED: a prior session working on the unrelated branch claude/sleepy-gauss-lezg26 concluded that no Deldo parser could be written because the primary files had never been inspected. That was wrong. The parser exists, is grounded in 26933TEST.csv, and is tested. That branch diverged from d6e2cda and never contained any of this Deldo work; it duplicated the schema baseline independently. Do not merge it over this branch.",
+    "Discount range was misstated as '-407.69 to +63.23' in both src/lib/suppliers/deldo/feed/parse.ts and docs/DELDO_ACTIVATION.md. The true range across 3,639 non-zero values is -407.69 to +78.33; 644 rows exceeded the stated upper bound. Both corrected. The conclusion drawn from it - never apply Discount - was and remains correct.",
+    "Stock in 26933TEST.csv has a hard floor of 3 and a hard ceiling of 100 (464 rows at exactly 100, none above, no zero-stock rows). That looks like deliberate banding rather than true counts, so it must not be presented as an exact quantity until Deldo confirms the semantics.",
+    {
+      "id": "R17",
+      "severity": "low",
+      "summary": "Production's function bodies were not created from the repository's migrations: 12 of 28 have their comments stripped and differ in formatting, though all 28 are semantically identical.",
+      "impact": "Evidence that functions too were applied outside version control. No behavioural difference exists today, but the same practice produced R15.",
+      "resolution": "The baseline carries the repository's commented versions. Requiring all schema change to go through migrations, enforced by the verify script in CI, is the fix."
+    },
+    {
+      "id": "R15",
+      "severity": "medium",
+      "summary": "RESOLVED IN SOURCE, NOT YET IN THE LEDGER. The 14 tables that no migration created are now in supabase/baseline/, proved to rebuild from empty. What remains is reconciling production's migration ledger, which needs a backup and approval (B9).",
+      "impact": "Until the ledger is reconciled, `supabase db push` against production is still unpredictable. The schema itself is no longer at risk of being lost.",
+      "resolution": "docs/SCHEMA_RECONCILIATION_REPORT.md section 10."
+    },
+    {
+      "id": "R16",
+      "severity": "medium",
+      "summary": "Production changes were historically applied outside the migration system. A captured baseline fixes the past but not the practice.",
+      "impact": "Without a rule and a check, the divergence recurs and the next baseline is needed in months.",
+      "resolution": "scripts/verify-migration-baseline.sh is now CI-suitable and asserts every object count. Wiring it into CI closes this."
+    },
+    {
+      "id": "R10",
+      "severity": "medium",
+      "summary": "Deldo documentation conflicts with itself on the GET_STOCK request parameter. The 'URL Parameters' section lists productId=[integer|string] OR ean=[string]; both worked examples use article=.",
+      "impact": "A wrong parameter name means every live lookup fails, or worse, silently returns nothing useful.",
+      "resolution": "article= is implemented because it is the only form demonstrated. Confirm with Deldo when requesting the token - it costs one line in the same email as B5."
+    },
+    {
+      "id": "R11",
+      "severity": "high",
+      "summary": "The Discount column's meaning is undocumented and values range from -407.69 to +78.33. A plain percentage discount cannot be negative.",
+      "impact": "If Discount must be applied to reach the real purchase price, every Deldo cost is currently wrong. If it must not, applying it later would corrupt every margin.",
+      "resolution": "Carried verbatim and never applied. purchasePrice is the Price column as supplied. Needs D7."
+    },
+    {
+      "id": "R12",
+      "severity": "high",
+      "summary": "Which of Deldo's two documented pricing modes GoRush receives is not stated anywhere - tyre price with transport separate, or transport included for a destination country.",
+      "impact": "The same number means different things under each. A markup applied to the wrong interpretation misprices every Deldo tyre.",
+      "resolution": "Every observation carries commercialMode 'unknown', which classifyObservation treats as not commercially usable. Needs D8."
+    },
+    {
+      "id": "R13",
+      "severity": "medium",
+      "summary": "Neither the feed nor the API returns a currency.",
+      "impact": "Deldo is Belgian and EUR is the obvious assumption, but an assumed currency on a purchase price is exactly the class of silent error this integration must not make.",
+      "resolution": "currency is left null. Needs D8 alongside the pricing mode."
+    },
+    {
+      "id": "R14",
+      "severity": "low",
+      "summary": "530 of 6,729 rows are flagged for review: 459 parenthesised or damaged load/speed values, 70 three-digit truck rims, 3 imperial widths.",
+      "impact": "Descriptive only - no commercial field is affected. These rows import with null dimensions rather than guesses.",
+      "resolution": "Acceptable. Revisit if search quality suffers."
+    },
+    {
+      "id": "R1",
+      "severity": "high",
+      "summary": "Carried from M1, unchanged: the Inter-Sprint Gateway Manual conflict. protocols.ts cites Gateway Manual v2.2 with paragraph refs; the sleepy-gauss capability notes assert no verified protocol documentation exists, and the manual is not in this repository.",
+      "impact": "The Inter-Sprint protocol registry may be inferred rather than documented.",
+      "resolution": "D6. Unaffected by this mission."
+    },
+    {
+      "id": "R2",
+      "severity": "high",
+      "summary": "Carried: document_analyses and document_extracted_lines do not exist in production but are queried by live routes (/api/admin/ddt-import/status, /api/cron/document-analysis). Confirmed again this mission - these 4 tables are the only repo-created tables absent from production.",
+      "resolution": "Confirm whether the DDT document-analysis feature is in use."
+    },
+    {
+      "id": "R4",
+      "severity": "medium",
+      "summary": "Carried from M1, unchanged: the production catalogue hangs off supplier 'asdas'; duplicate ZUIN / FINTYRE / CARLINI records.",
+      "resolution": "D1, D2."
+    }
+  ],
+  "owner_decisions_required": [
+    {
+      "id": "D17",
+      "question": "Approve deploying the ingestion worker to the FTP VM, and issue the FEED_WORKER_TOKEN.",
+      "why": "Everything is written and tested; nothing has been deployed. Needs: run infra/intersprint-worker/install.sh as root, generate a token with openssl rand -hex 32, set it in /etc/gommarush/intersprint-worker.env AND as FEED_WORKER_TOKEN in the application environment, and set INTERSPRINT_SUPPLIER_ID.",
+      "blocks": "The feed actually reaching the catalogue.",
+      "note": "No secret exists in this environment, so the token must be generated by whoever deploys."
+    },
+    {
+      "id": "D15",
+      "question": "In what currency does Inter-Sprint denominate nett-price?",
+      "why": "The owner confirmed what the number IS but not its currency, and no Inter-Sprint document in this repository states one. Observations carry null rather than an inferred EUR.",
+      "blocks": "Nothing today - the preview is single-currency - but it must be settled before any multi-currency or accounting use."
+    },
+    {
+      "id": "D16",
+      "question": "PARTIALLY RESOLVED. Server-side receipt is PROVEN: Inter-Sprint is uploading real CSV to /incoming several times a day. What remains is purely deployment - run install.sh on the VM, set FEED_WORKER_TOKEN on both sides and INTERSPRINT_SUPPLIER_ID in the application environment, then watch one real delivery through.",
+      "why": "The ingestion chain is complete and tested apart from the socket. Without credentials and egress it cannot read /incoming, so we still do not know whether Inter-Sprint has delivered anything.",
+      "blocks": "Live ingestion. No longer blocks knowing whether files arrive - they do.",
+      "note": "INTERSPRINT_FTP_ALLOW_WRITES must stay false until someone has watched it list, download and move one file.",
+      "status": "PARTIALLY RESOLVED"
+    },
+    {
+      "id": "D12",
+      "question": "RESOLVED BY OWNER 2026-09-22: nett-price is the net purchase price GommaRush pays, and transport is included once Inter-Sprint's minimum release is reached (PCR 60, truck 10). Recorded in commercial-policy.ts with POLICY_OWNER provenance. Not to be re-asked of Inter-Sprint.",
+      "why": "The number is on every row and is carried faithfully, but its commercial meaning is unstated. Until answered every observation carries commercialMode 'unknown' and fails closed, so no Inter-Sprint cost can be marked up or quoted. This is the single blocker between the finished pipeline and a real selling price.",
+      "blocks": "Nothing. Inter-Sprint prices are now commercially usable.",
+      "note": "One email. Can be combined with D13 and D14.",
+      "status": "RESOLVED"
+    },
+    {
+      "id": "D13",
+      "question": "RESOLVED. Endpoint, protocol, port, passive mode, /incoming path, dedicated account, real CSV format and recurring delivery are all verified. Superseded by D16 (deployment).",
+      "why": "Inter-Sprint say their integration is complete and files are being placed on our FTP folder, but nothing in this system fetches or looks for them, and we have never observed one arrive. The sample names ('*.csv.xlsx') suggest the real delivery is CSV, whose dialect is unverified.",
+      "blocks": "Any automatic price refresh. Manual upload of a supplied file already works.",
+      "status": "RESOLVED"
+    },
+    {
+      "id": "D14",
+      "question": "Ask Inter-Sprint whether each delivered file is the complete catalogue or only changes since the last one.",
+      "why": "It decides what a listing's ABSENCE from a file means. Treating a delta as a complete snapshot would deactivate most of the catalogue on the first import.",
+      "blocks": "Automatic deactivation of listings. Nothing else - absence is currently treated as saying nothing."
+    },
+    {
+      "id": "D10",
+      "question": "CORRECTED BY M8. The earlier framing - 'obtain a price-bearing Inter-Sprint file' - was WRONG. Price-bearing data already exists and always did: nett-price and available are present on all 9,559 rows of the vrd-pcr sample, and the catalogue's missing prices are an artefact of the pre-normalised workbook that was imported dropping those two columns. The real question is now D12/D13: confirm what nett-price means, and connect FTP delivery.",
+      "why": "M7 reported zero purchase prices in the database and inferred that no price data had been supplied. The inference was wrong. The data was in the supplier's own file the whole time.",
+      "blocks": "Nothing any more. Superseded by D12 and D13.",
+      "status": "RESOLVED - superseded"
+    },
+    {
+      "id": "D11",
+      "question": "Confirm with the commercialista whether PFU sits inside the VAT taxable base.",
+      "why": "pfuVatBase is 'unresolved', which is what stops a customer total being produced. Both answers are implemented and tested; only the decision is missing. It must be settled before the first price snapshot, because snapshots are immutable.",
+      "blocks": "Any customer-facing gross total."
+    },
+    {
+      "id": "D7",
+      "question": "What does the Deldo feed's Discount column mean, and is it already reflected in Price?",
+      "why": "Values run from -407.69 to +78.33, so it is not a plain percentage discount. Until answered, purchase cost cannot be considered final.",
+      "blocks": "Any use of a Deldo purchase price.",
+      "note": "One question to Jan@deldo.com. Can be combined with D8 and R10."
+    },
+    {
+      "id": "D8",
+      "question": "Which of the two Deldo pricing modes does GoRush receive - transport separate, or transport included for a destination country - and in what currency?",
+      "why": "The same number means different things under each mode, and no currency is supplied anywhere.",
+      "blocks": "Any markup or supplier comparison involving Deldo."
+    },
+    {
+      "id": "D9",
+      "question": "Approve provisioning an FTP account for Deldo on the existing GommaRush FTP endpoint, and sending Deldo the credentials.",
+      "why": "Deldo pushes the hourly feed to our server. This is an external action and a credential change, so it is not taken autonomously.",
+      "note": "The existing endpoint is PLAIN FTP (security finding 2). Ask Deldo whether they support FTPS or SFTP in the same email."
+    },
+    {
+      "id": "D6",
+      "question": "Carried from M1: does the Inter-Sprint Gateway Manual v2.2 exist and can it be supplied?",
+      "blocks": "Trusting the Inter-Sprint protocol registry."
+    },
+    {
+      "id": "D1",
+      "question": "Carried, EVIDENCE NOW CONCLUSIVE: supplier 'asdas' is Inter-Sprint (sysnr MD5 proof, M8). What remains is approval to rename the record in production - a data mutation - and to decide the correct legal name to use."
+    },
+    {
+      "id": "D2",
+      "question": "Carried from M1: deduplicating supplier records."
+    },
+    {
+      "id": "D3",
+      "question": "Carried from M1: PFU tariff source, values, effective dates, and whether PFU sits inside the VAT base."
+    },
+    {
+      "id": "D4",
+      "question": "Carried from M1, PARTIALLY DECIDED: markup is now set to 20% for the internal preview (2026-09-22) and held as configuration in DEFAULT_PRICING_SETTINGS. Still open: whether 20% is also the live selling markup, whether a minimum euro profit per tyre applies, and the policy for products with no verified weight. Note the Deldo feed has NO weight column at all."
+    },
+    {
+      "id": "D5",
+      "question": "Carried from M1: approve the migration reconciliation strategy. Now also blocks persisting Deldo observations (B7)."
+    }
+  ],
+  "review_decisions_required": [
+    "Approve the captured baseline (docs/SCHEMA_RECONCILIATION_REPORT.md sections 8-10) before the ledger is reconciled.",
+    "Decide on the two overlapping unique indexes on orders' document number (report section 9.1) - reproduced as-is, not tidied.",
+    "Decide whether print_jobs and client_offer_requests should finally be retired (report section 9.2).",
+    "Confirm whether the DDT document-analysis feature is in use (R2); it decides whether those tables join the baseline or are dropped."
+  ],
+  "commits": [
+    {
+      "sha": "773b6d5",
+      "summary": "Record approved commercial decisions and the Deldo Demo question"
+    }
+  ],
+  "not_verified": [
+    "That the ingestion worker runs on the real VM. It is written, installed by script and tested against a stub, but has never processed a real delivery.",
+    "Whether a delivery is a complete snapshot or a delta (D14). Recurring overwrites do not settle it. Absence of a row still means NOTHING and importMode is hard-wired to 'partial'.",
+    "The currency of nett-price (D15). Still null; no PRIMARY source states one.",
+    "Any PFU tariff value. Inter-Sprint confirmed PFU is NOT in their feed.",
+    "Whether 22% is the correct VAT rate for every line GommaRush sells.",
+    "That the observed delivery cadence (06:27/10:27/12:2x/14:27) will hold. It is an observation, so the worker polls every 10 minutes rather than matching those times.",
+    "Deldo: Discount meaning, pricing mode, currency, Stock semantics, Demo meaning, GET_STOCK contract, FTPS/SFTP support. Jan has NOT replied."
+  ],
+  "next_recommended_mission": "Deploy (D17), then INTER-SPRINT ORDER-TIME VERIFICATION: Protocol 103 live stock/price check -> price-change handling -> availability handling -> internal order review -> Protocol 104 with test=1 as a dry run. Real Protocol 104 ordering stays disabled. Note for that mission: the minimum-5 rule is CATALOGUE VISIBILITY only and must not become an order-time rejection - a live check proving exactly 4 available should still be able to fill an order for 4. Also still open: D14 snapshot semantics, D15 currency, D3/D11 PFU and the VAT base, and the supplier rename.",
+  "head_at_completion": "see commits[0]; branch claude/confident-albattani-p43rkj",
+  "owner_decisions_confirmed_m9": {
+    "provenance": "POLICY_OWNER - GommaRush business decisions recorded 2026-09-22. NOT Inter-Sprint statements. Never cite these as supplier-documented.",
+    "nett_price_is_net_purchase_cost": true,
+    "transport_included_at_minimum_release": {
+      "pcr": 60,
+      "truck": 10
+    },
+    "customer_minimum_offer_quantity": 5,
+    "minimum_offer_is_gommarush_selling_policy_not_supplier_semantic": true,
+    "supplier_stock_preserved_when_suppressed": true,
+    "banded_stock_never_resolved_to_exact": true
+  }
+}
