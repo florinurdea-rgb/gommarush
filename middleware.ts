@@ -32,6 +32,7 @@ import { isAdminEmailAllowed } from "@/lib/auth/admin-authorization";
  */
 const PUBLIC_ADMIN_PATHS = ["/admin/login", "/admin/bootstrap"];
 const PUBLIC_DRIVER_PATHS = ["/driver/login"];
+const PUBLIC_CUSTOMER_PATHS = ["/account/login"];
 
 function matchesPublicPath(pathname: string, publicPaths: string[]): boolean {
   return publicPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
@@ -74,6 +75,8 @@ export async function middleware(request: NextRequest) {
     if (!matchesPublicPath(pathname, PUBLIC_ADMIN_PATHS) && !isAdminEmailAllowed(user?.email)) {
       return NextResponse.redirect(new URL("/admin/login", request.url));
     }
+  } else if (pathname.startsWith("/account")) {
+    if (!matchesPublicPath(pathname, PUBLIC_CUSTOMER_PATHS) && !user) return NextResponse.redirect(new URL("/account/login", request.url));
   } else if (pathname.startsWith("/driver")) {
     if (!matchesPublicPath(pathname, PUBLIC_DRIVER_PATHS) && !user) {
       return NextResponse.redirect(new URL("/driver/login", request.url));
@@ -84,5 +87,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/driver/:path*"],
+  matcher: ["/admin/:path*", "/driver/:path*", "/account/:path*"],
 };
