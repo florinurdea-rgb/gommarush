@@ -1,3 +1,26 @@
+-- ============================================================================
+-- STALE AS OF 2026-09-22 — DO NOT RUN, AND DO NOT "FIX" THE NUMBER.
+-- ============================================================================
+--
+-- The guard below expects exactly 9,559 listings on this supplier. Since the
+-- first real Inter-Sprint feed imports (runs ef834c00… PCR and 77b811d4…
+-- truck) production holds 13,206. The guard therefore raises and refuses to
+-- run, which is the correct failure — but it must NOT be repaired by editing
+-- 9559 to 13206.
+--
+-- The count was never the point. It was a fingerprint tying this supplier row
+-- to the specific evidence that proved it is Inter-Sprint (the sysnr MD5
+-- match against the August feed). That evidence set has since changed, so a
+-- replacement rename operation needs identity RE-VERIFIED against current
+-- production first, and a fresh guard derived from that.
+--
+-- Superseded pending a reverification mission. Left in place as the record of
+-- what was proven and when.
+--
+-- ----------------------------------------------------------------------------
+-- ORIGINAL HEADER FOLLOWS
+-- ----------------------------------------------------------------------------
+--
 -- PENDING OWNER APPROVAL — NOT APPLIED TO ANY ENVIRONMENT.
 --
 -- Renames the supplier record currently called 'asdas' to its real identity.
