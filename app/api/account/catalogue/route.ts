@@ -21,6 +21,15 @@ export async function GET(request:NextRequest){
     offset:Math.max(n(p.get("offset"))??0,0),
   };
   const [result,facets]=await Promise.all([searchCatalogue(query),getCatalogueFacets()]);
+  // One visible offer per canonical product + condition. Supplier alternatives are sourcing internals.
+  const best = new Map<string, (typeof result.customer)[number]>();
+  for (const offer of result.customer) {
+    const key = `${offer.tyre.productId}:${offer.tyre.oldDot ? "older_dot" : "normal"}`;
+    const current = best.get(key);
+    const price = offer.tyreSaleNetCents ?? Number.MAX_SAFE_INTEGER;
+    const currentPrice = current?.tyreSaleNetCents ?? Number.MAX_SAFE_INTEGER;
+    if (!current || price < currentPrice) best.set(key, offer);
+  }
   // SECURITY BOUNDARY: only the customer projection leaves this route.
-  return NextResponse.json({ok:true,offers:result.customer,facets,schemaAvailable:result.schemaAvailable});
+  return NextResponse.json({ok:true,offers:[...best.values()],facets,schemaAvailable:result.schemaAvailable});
 }
