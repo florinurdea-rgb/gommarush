@@ -4,9 +4,9 @@ import { fail, ok, readJsonBody, runAdminRoute } from "@/lib/server/route-helper
 
 export const runtime="nodejs";
 
-export async function POST(request:NextRequest,{params}:{params:Promise<{id:string}>}){
+export async function POST(request:NextRequest,{params}:{params:{id:string}}){
  return runAdminRoute(async()=>{
-  const {id:customerId}=await params;
+  const {id:customerId}=params;
   const body=await readJsonBody(request);
   if(!body||typeof body!=="object")return fail(400,"VALIDATION_FAILED");
   const {email,password}=body as Record<string,unknown>;
