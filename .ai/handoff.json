@@ -4,7 +4,7 @@
   "status": "READY_FOR_REVIEW",
   "phase": "Phase 1 - supplier foundation, ingestion pipeline, unified search",
   "branch": "claude/sleepy-gauss-lezg26",
-  "commit": "f9372d87b740111a8e2337a4d031ba3404bebdd8",
+  "commit": "33612af90415e3c4784e7e17e34fe284916013a2",
   "tests": {
     "passed": 96,
     "failed": 0,
