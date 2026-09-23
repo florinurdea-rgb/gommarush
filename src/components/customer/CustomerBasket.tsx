@@ -119,7 +119,11 @@ export function CustomerBasket() {
     const next = stored
       .map((x) => (x.productId === line.productId && x.oldDot === line.oldDot ? { ...x, quantity: q } : x))
       .filter((x) => x.quantity > 0);
-    writeBasket(next);
+
+    if (!writeBasket(next)) {
+      setError(tr("Impossibile salvare il carrello: il browser blocca l'archiviazione locale."));
+      return;
+    }
     void load(next);
   }
 
@@ -196,7 +200,14 @@ export function CustomerBasket() {
                       type="number"
                       min="1"
                       max="100"
-                      value={line.quantity}
+                      /*
+                        Driven by the LOCAL basket, not by `line` from the
+                        server preview. Bound to the preview, the box ignored
+                        what was typed until the round trip returned and then
+                        snapped back to the old number — a controlled input
+                        that appears not to accept input.
+                      */
+                      value={s.quantity}
                       disabled={busy}
                       onChange={(e) =>
                         setQuantity(s, Math.max(0, Math.min(100, Number(e.target.value) || 0)))
@@ -204,7 +215,7 @@ export function CustomerBasket() {
                     />
                     <div className="w-28 text-right font-bold">
                       {money(
-                        line.unitTyreNetCents === null ? null : line.unitTyreNetCents * line.quantity
+                        line.unitTyreNetCents === null ? null : line.unitTyreNetCents * s.quantity
                       )}
                     </div>
                     <button

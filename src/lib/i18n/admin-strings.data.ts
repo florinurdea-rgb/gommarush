@@ -585,6 +585,11 @@ export const EN_STRINGS: Record<string, string> = {
   "Da confermare": "To confirm",
   "Torna agli ordini da confermare": "Back to orders to confirm",
   // --- customer portal (M12+): customer-facing, not operational ----------
+  "Aggiunto": "Added",
+  "articoli nel carrello": "items in the basket",
+  "Impossibile salvare il carrello: il browser blocca l'archiviazione locale.":
+    "Could not save the basket: your browser is blocking local storage.",
+
   "oppure": "or",
   "Richiedi un\u2019offerta": "Request an offer",
   "La cronologia ordini sarà disponibile dopo l\u2019attivazione del modulo vendite.":
