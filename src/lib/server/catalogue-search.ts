@@ -177,6 +177,17 @@ export interface CatalogueSearchResult {
   internal: InternalTyreOffer[];
   /** The same listings narrowed to what a customer may see. */
   customer: CustomerTyreOffer[];
+  /**
+   * The customer projection of one listing, by listing id.
+   *
+   * Needed because `customer` is the FILTERED list: an unsellable listing has
+   * no customer entry, so the two arrays do not share indices. A caller that
+   * has chosen an internal offer and needs its customer twin must match on
+   * listing identity — matching on equal price instead would pick an
+   * arbitrary one of two listings quoted the same, and the order's customer
+   * line could then describe a different listing from the one it sources.
+   */
+  customerByListingId: Map<string, CustomerTyreOffer>;
   /** True when the catalogue tables are not present in this environment. */
   schemaAvailable: boolean;
   settings: PricingSettings;
@@ -255,7 +266,14 @@ export async function searchCatalogue(
   const rows = await fetchListings(query);
 
   if (rows === null) {
-    return { internal: [], customer: [], schemaAvailable: false, settings, sellingPolicy };
+    return {
+      internal: [],
+      customer: [],
+      customerByListingId: new Map(),
+      schemaAvailable: false,
+      settings,
+      sellingPolicy,
+    };
   }
 
   const priced: PricedListing[] = [];
@@ -317,13 +335,20 @@ export async function searchCatalogue(
     return (a.tyre.sizeDisplay ?? "").localeCompare(b.tyre.sizeDisplay ?? "");
   });
 
+  // The customer sees only what GommaRush is willing to offer. Filtering here
+  // rather than in the UI means a future export, feed or API cannot
+  // accidentally publish a listing the policy excluded.
+  const sellable = priced.filter((row) => row.sellability.sellable);
+  const customer = sellable.map(toCustomerOffer);
+
+  const customerByListingId = new Map<string, CustomerTyreOffer>();
+  sellable.forEach((row, index) => customerByListingId.set(row.supplierListingId, customer[index]));
+
   return {
     // The operator sees everything, including what is suppressed and why.
     internal: priced.map(toInternalOffer),
-    // The customer sees only what GommaRush is willing to offer. Filtering
-    // here rather than in the UI means a future export, feed or API cannot
-    // accidentally publish a listing the policy excluded.
-    customer: priced.filter((row) => row.sellability.sellable).map(toCustomerOffer),
+    customer,
+    customerByListingId,
     schemaAvailable: true,
     settings,
     sellingPolicy,

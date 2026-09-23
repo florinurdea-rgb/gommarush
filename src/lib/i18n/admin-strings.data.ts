@@ -531,4 +531,46 @@ export const EN_STRINGS: Record<string, string> = {
   "articoli superano il limite di": "listings exceed the limit of",
   "per questo ordinamento. Restringi la ricerca, per esempio scegliendo una misura.":
     "for this sort. Narrow the search, for example by choosing a size.",
+  // --- customer portal accounts (M12) ----------------------------------
+  "Accesso area clienti": "Customer portal access",
+  "L'accesso al portale viene creato manualmente. Non esiste registrazione pubblica e nessun cliente viene riconosciuto dall'indirizzo email.":
+    "Portal access is created manually. There is no public registration, and no customer is identified from an email address.",
+  "Il modulo account clienti non \u00e8 ancora attivato nel database.":
+    "The customer accounts module is not activated in the database yet.",
+  "Nessun accesso configurato.": "No access configured.",
+  "Attivo": "Active",
+  "Disattivato": "Deactivated",
+  "Creato il": "Created on",
+  "Disattiva": "Deactivate",
+  "Riattiva": "Reactivate",
+  "Nuovo accesso": "New access",
+  "Password temporanea": "Temporary password",
+  "Genera": "Generate",
+  "Almeno 12 caratteri. Comunicala al cliente: non sar\u00e0 pi\u00f9 visibile qui.":
+    "At least 12 characters. Pass it to the customer: it will not be shown here again.",
+  "Accesso creato per": "Access created for",
+  "Crea accesso": "Create access",
+  "Creazione\u2026": "Creating\u2026",
+  "Creazione non riuscita.": "Could not create access.",
+  "Aggiornamento non riuscito.": "Could not update.",
+
+  // --- customer sales orders (M13/M14) ---------------------------------
+  "Ordini clienti": "Customer orders",
+  "Ordini da confermare": "Orders to confirm",
+  "Ordini cliente ricevuti da GommaRush. Nessun ordine viene inviato automaticamente ai fornitori.":
+    "Customer orders received by GommaRush. No order is sent to a supplier automatically.",
+  "Il modulo vendite non \u00e8 ancora attivato nel database.":
+    "The sales module is not activated in the database yet.",
+  "Nessun ordine da confermare.": "No orders to confirm.",
+  "Conferma e invia ordine": "Confirm and send order",
+  "Ordinazione fornitore non ancora attiva": "Supplier ordering is not active yet",
+  "Ordine cliente": "Customer order",
+  "Richiesta ricevuta \u00b7 revisione manuale obbligatoria":
+    "Request received \u00b7 manual review required",
+  "DOT precedente": "Older DOT",
+  "Totale": "Total",
+  "Servizio": "Service",
+  "Pagamento": "Payment",
+  "Da confermare": "To confirm",
+  "Torna agli ordini da confermare": "Back to orders to confirm",
 };

@@ -690,6 +690,68 @@ function worstState(offers: readonly SupplierOffer[], hasOpenConflict: boolean):
 }
 
 /**
+ * Groups a page of products with their offers.
+ *
+ * Extracted so the customer catalogue can reuse the SAME row construction —
+ * same pricing engine, same selling policy, same lane attribution — instead of
+ * growing a second one that would drift. Callers differ only in which rows
+ * they then keep and how they project them.
+ */
+async function buildCatalogueRows(
+  products: readonly ProductRow[],
+  query: CatalogueBrowseQuery,
+  settings: PricingSettings,
+  sellingPolicy: SellingPolicy,
+  now: Date
+): Promise<CatalogueRow[]> {
+  const productIds = products.map((row) => row.id);
+  const [listings, conflicted] = await Promise.all([
+    fetchListingsFor(productIds),
+    fetchConflictedProductIds(productIds),
+  ]);
+
+  const byProduct = new Map<string, ListingRow[]>();
+  for (const listing of listings) {
+    const bucket = byProduct.get(listing.catalogue_product_id);
+    if (bucket) bucket.push(listing);
+    else byProduct.set(listing.catalogue_product_id, [listing]);
+  }
+
+  return products.map((product) => {
+    const hasOpenConflict = conflicted.has(product.id);
+    let offers = (byProduct.get(product.id) ?? []).map((listing) =>
+      buildOffer(listing, product, hasOpenConflict, settings, sellingPolicy, now)
+    );
+
+    // DISPLAY ONLY. Membership, the total and the page boundaries were all
+    // decided by the run-id join in fetchProductPage; this narrows which
+    // offers appear UNDER an already-correct row. It is not a substitute for
+    // the join and must never become one — filtering here alone would page
+    // over the wrong set, which is precisely the defect this replaced.
+    if (query.lane) offers = offers.filter((offer) => offer.laneCode === query.lane);
+    if (query.vehicle === "truck" || query.vehicle === "car_van") {
+      offers = offers.filter((offer) => offer.vehicle === query.vehicle);
+    }
+
+    offers.sort((a, b) => {
+      if (a.purchasePriceCents === null) return 1;
+      if (b.purchasePriceCents === null) return -1;
+      return a.purchasePriceCents - b.purchasePriceCents;
+    });
+
+    return {
+      product: toProductView(product),
+      vehicle:
+        offers[0]?.vehicle ??
+        classifyVehicle({ feedCategory: null, productClass: product.product_class }),
+      offers,
+      hasOpenConflict,
+      state: worstState(offers, hasOpenConflict),
+    };
+  });
+}
+
+/**
  * Browses the catalogue, grouping supplier offers under canonical products.
  *
  * ONE ROW IS ONE catalogue_product_id — the identity the catalogue already
@@ -755,51 +817,7 @@ export async function browseCatalogue(
     };
   }
 
-  const productIds = page.rows.map((row) => row.id);
-  const [listings, conflicted] = await Promise.all([
-    fetchListingsFor(productIds),
-    fetchConflictedProductIds(productIds),
-  ]);
-
-  const byProduct = new Map<string, ListingRow[]>();
-  for (const listing of listings) {
-    const bucket = byProduct.get(listing.catalogue_product_id);
-    if (bucket) bucket.push(listing);
-    else byProduct.set(listing.catalogue_product_id, [listing]);
-  }
-
-  const rows: CatalogueRow[] = page.rows.map((product) => {
-    const hasOpenConflict = conflicted.has(product.id);
-    let offers = (byProduct.get(product.id) ?? []).map((listing) =>
-      buildOffer(listing, product, hasOpenConflict, settings, sellingPolicy, now)
-    );
-
-    // DISPLAY ONLY. Membership, the total and the page boundaries were all
-    // decided by the run-id join in fetchProductPage; this narrows which
-    // offers appear UNDER an already-correct row. It is not a substitute for
-    // the join and must never become one — filtering here alone would page
-    // over the wrong set, which is precisely the defect this replaced.
-    if (query.lane) offers = offers.filter((offer) => offer.laneCode === query.lane);
-    if (query.vehicle === "truck" || query.vehicle === "car_van") {
-      offers = offers.filter((offer) => offer.vehicle === query.vehicle);
-    }
-
-    offers.sort((a, b) => {
-      if (a.purchasePriceCents === null) return 1;
-      if (b.purchasePriceCents === null) return -1;
-      return a.purchasePriceCents - b.purchasePriceCents;
-    });
-
-    return {
-      product: toProductView(product),
-      vehicle:
-        offers[0]?.vehicle ??
-        classifyVehicle({ feedCategory: null, productClass: product.product_class }),
-      offers,
-      hasOpenConflict,
-      state: worstState(offers, hasOpenConflict),
-    };
-  });
+  const rows = await buildCatalogueRows(page.rows, query, settings, sellingPolicy, now);
 
   // A database-native order is already correct and is NOT re-sorted here;
   // re-sorting a page would reintroduce the local-order bug. Only the
@@ -831,6 +849,59 @@ export async function browseCatalogue(
     sort: effectiveSort,
     sortRefused,
   };
+}
+
+/** The whole filtered selection, or a refusal when it is too large to hold. */
+export type CatalogueSelection =
+  | { readonly kind: "selection"; readonly rows: readonly CatalogueRow[]; readonly matched: number }
+  | { readonly kind: "refused"; readonly refusal: SortRefusal }
+  | { readonly kind: "schema_missing" };
+
+/**
+ * Materialises every product matching a query, bounded.
+ *
+ * Needed wherever a predicate cannot be pushed into the product query because
+ * its key lives on the observation — an offer-derived sort, or the customer
+ * catalogue's sellability filter. Both must see the WHOLE filtered set before
+ * slicing, because paging first and filtering after produces pages of varying
+ * size and, worse, a "cheapest" that is only the cheapest on the page.
+ *
+ * Above the cap the request is REFUSED rather than truncated, which is the
+ * same honest failure the admin sort takes: "narrow your search" beats a page
+ * that silently describes part of the catalogue as all of it.
+ */
+export async function selectCatalogueRows(
+  query: CatalogueBrowseQuery = {},
+  settings: PricingSettings = DEFAULT_PRICING_SETTINGS,
+  sellingPolicy: SellingPolicy = DEFAULT_SELLING_POLICY,
+  now: Date = new Date()
+): Promise<CatalogueSelection> {
+  const runIndex = await loadRunIndex();
+
+  const term = query.search?.trim();
+  const effectiveQuery: CatalogueBrowseQuery = term
+    ? { ...query, searchProductIds: await resolveArticleProductIds(term) }
+    : query;
+
+  const probe = await fetchProductPage({ ...effectiveQuery, limit: 1, offset: 0 }, runIndex);
+  if (probe === null) return { kind: "schema_missing" };
+
+  if (probe.total > OFFER_SORT_MAX_PRODUCTS) {
+    return {
+      kind: "refused",
+      refusal: {
+        reason: "selection_too_large",
+        matched: probe.total,
+        maximum: OFFER_SORT_MAX_PRODUCTS,
+      },
+    };
+  }
+
+  const page = await fetchProductPage(effectiveQuery, runIndex, true);
+  if (page === null) return { kind: "schema_missing" };
+
+  const rows = await buildCatalogueRows(page.rows, query, settings, sellingPolicy, now);
+  return { kind: "selection", rows, matched: probe.total };
 }
 
 /**

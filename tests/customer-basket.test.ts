@@ -2,6 +2,25 @@ import {describe,expect,it} from "vitest";
 import {validateBasketLines,customerBasketPayload,type BasketResolvedLine} from "@/lib/server/customer-basket";
 import type { TyreSpecView } from "@/lib/pricing/projection";
 
+/**
+ * A HYPOTHETICAL resolved line.
+ *
+ * Read the "complete" variant carefully: it describes a state the live pricing
+ * engine CANNOT currently produce, because DEFAULT_PRICING_SETTINGS.pfuVatBase
+ * is "unresolved" and resolvePfu refuses to state an amount. It is built by
+ * hand on purpose, so the pure aggregation in customerBasketPayload can be
+ * tested for the day a tariff and a VAT treatment are approved.
+ *
+ * That makes it a test of arithmetic, not of policy, and it must not be read
+ * as evidence that a final total is reachable today. The property that the
+ * real engine still fails closed is asserted separately, against real
+ * settings, in tests/customer-portal-boundary.test.ts — if that ever stops
+ * holding, the fixture here has quietly become the live behaviour and both
+ * files need revisiting together.
+ *
+ * The 12444 below therefore also encodes an UNAPPROVED assumption — that PFU
+ * sits inside the VAT base. It is deliberate and local to this fixture.
+ */
 function line(resolution:BasketResolvedLine["internal"]["resolution"]):BasketResolvedLine{
  const complete=resolution==="complete";
  const tyre:TyreSpecView={productId:"11111111-1111-1111-1111-111111111111",brand:"TEST",modelPattern:"A",description:null,sizeDisplay:"205/55 R16",widthMm:205,aspectRatio:55,rimInch:16,loadIndex:"91",speedRating:"V",loadSpeedRaw:"91V",season:"summer",productClass:"passenger",xl:false,runFlat:false,oldDot:false,eprelId:null};

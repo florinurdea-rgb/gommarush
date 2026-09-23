@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getCustomerWithLocations } from "@/lib/server/customers";
 import { PageHeading } from "@/components/logistics/AdminShell";
 import { CustomerEditor } from "@/components/logistics/CustomerEditor";
+import { CustomerAccountsPanel } from "@/components/logistics/CustomerAccountsPanel";
 import { getTr } from "@/lib/i18n/tr-server";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +25,9 @@ export default async function CustomerDetailPage({
         back
       />
       <CustomerEditor customer={result.customer} locations={result.locations} />
+      <div className="mt-5">
+        <CustomerAccountsPanel customerId={result.customer.id} />
+      </div>
     </>
   );
 }

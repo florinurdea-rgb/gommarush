@@ -1,10 +1,10 @@
 {
   "project": "GommaRush",
-  "mission_id": "M12-M13-CUSTOMER-PORTAL-COMMERCE",
-  "mission_title": "Customer account, catalogue, basket and sales-order foundation",
-  "status": "IN_PROGRESS",
-  "phase": "Customer portal and basket/checkout architecture built on accepted M11B. No production mutation. Checkout deliberately fails closed until PFU/VAT policy is resolved.",
-  "last_updated": "2026-09-22",
+  "mission_id": "M12-M13-M14-CUSTOMER-PORTAL-REVIEW-FIX",
+  "mission_title": "Customer portal, basket and sales-order foundation (reviewed and repaired)",
+  "status": "READY_FOR_REVIEW",
+  "phase": "ChatGPT's M12/M13/M14 branch reviewed against the live repository, defects fixed, all four gates run and passing. No production mutation; 0003/0004/0005/0006 remain unapplied.",
+  "last_updated": "2026-09-23",
   "canonical_branch": "main",
   "working_branch": "chatgpt/m12-customer-portal",
   "entry_points": {
@@ -56,7 +56,10 @@
     "customer_basket": "src/lib/server/customer-basket.ts",
     "sales_orders": "src/lib/server/sales-orders.ts",
     "pending_customer_accounts": "supabase/pending-approval/0005_customer_accounts.sql",
-    "pending_sales_orders": "supabase/pending-approval/0006_sales_orders.sql"
+    "pending_sales_orders": "supabase/pending-approval/0006_sales_orders.sql",
+    "customer_catalogue_read": "src/lib/server/customer-catalogue.ts (customer projection over the accepted M11B engine)",
+    "delivery_address_rule": "src/lib/commerce/delivery-address.ts",
+    "customer_accounts_admin": "src/components/logistics/CustomerAccountsPanel.tsx + app/api/admin/customers/[id]/accounts/route.ts"
   },
   "source_authority": {
     "deldo": "API documentation.pdf and 26933TEST.csv, supplied by Jan Van Dyck (Deldo NV), subject 'RE: Connect platform and orders for - 026933 (Go Rush Trasporti srl)'. Both inspected directly in this session. GoRush customer number 026933.",
@@ -68,6 +71,7 @@
     "m10_production_verification": "READ-ONLY inspection of the production database on 2026-09-22, after two real Inter-Sprint feeds were processed by the deployed worker. Run ef834c00-3326-4c47-916e-4f18561e03aa (PCR, vrd-001-21185-107.csv, 3,060,504 B, checksum 04fa0b3c6a25) and run 77b811d4-5b0f-41ed-89ca-ec67b67fd060 (truck, vrd-001-21185.csv, 46,527 B, checksum 70a5d9196b13). Both status='committed', both supplier_id=4ce0b557-9575-4784-aa80-99e78af4da2f, both adapter='intersprint-feed', both import_mode='partial', both deactivated_listings=0, both rejected_rows=0."
   },
   "completed": [
+    "M12/M13/M14 REVIEW FIX. Build blocker: `next build` runs ESLint and three react/no-unescaped-entities errors (Italian apostrophes in JSX text) failed the Vercel compile - typecheck and tests were already clean, so the failure was never a type error and the speculative type fixes did not address it. CORRECTNESS: the customer catalogue paged SUPPLIER LISTINGS and collapsed them to products afterwards, so page size varied, there was no total (hence no pagination past the first 50 listings of 9,559), and the quoted price was only the cheapest offer ON THAT PAGE - a customer could be quoted MORE than GommaRush's own best price. Rebuilt on the accepted M11B engine via a new selectCatalogueRows(); the offerable selection is materialised whole (bounded at 1,000, refused above with a narrow-your-search message), then filtered on sellability, sorted and sliced. Sorting is Lowest price (the SELLING price, not supplier cost) and Brand A-Z; brand tiers appear only when an approved mapping exists; no 'Recommended' was invented. SAFETY: order creation was a header insert followed by an items insert with a compensating delete - not a transaction, so a crash between them left an order with a grand total and NO LINES in the operator's confirmation inbox. Replaced with a create_portal_sales_order RPC in 0006 (one transaction), verified against real PostgreSQL 16. Idempotency was a pre-check plus insert against a GLOBALLY unique key: rescoped to unique (customer_id, idempotency_key) and a 23505 now returns the racing request's order. Added a check constraint making a 'complete' order without totals unrepresentable. The order route returned raw error.message with a 500, publishing PostgreSQL constraint and column names to customers; replaced with a code allowlist plus server-side logging. The basket never checked quantity against evidenced stock - it now sources the cheapest listing that can actually evidence the requested quantity and refuses otherwise. Placeholder-address rejection was duplicated in two places that already disagreed; centralised in delivery-address.ts. TESTS: the M12 boundary test was tautological - it asserted that a hand-written CustomerTyreOffer literal lacked fields its own type does not declare, and would have passed unchanged while the route returned internal offers. Replaced with tests that run the real read against rows carrying a supplier name, article codes, costs and exact stock. +36 net tests (999 total). Completed the missing M12 admin customer-account UI: list with email read from the auth identity, create with a generated temporary password, reversible deactivate. No public registration, no invitation email, multiple logins per company preserved.",
     "M12/M13 in progress: explicit auth-user→customer mapping; protected customer portal; login/logout; account/company/location view; customer-safe catalogue projection with supplier alternatives collapsed to one visible GommaRush offer per product+condition; local basket with server-side price/stock revalidation; checkout UI; separate sales_orders/sales_order_items schema with immutable customer/delivery/pricing/tyre snapshots; idempotent order creation; customer order history; admin 'Ordini clienti' inbox; 'Conferma e invia ordine' deliberately disabled so no supplier action can occur.",
     "M11B review fix: lane/vehicle membership is now DATABASE-CORRECT. Runs are indexed to ids and the joined relation is filtered on last_import_run_id, so a supplier tab or a Car&Van/Truck choice changes product membership, the total and the page boundaries rather than only which offers are drawn. An empty lane matches a sentinel id so it returns nothing instead of everything. Supplier-article search now resolves to product ids in a bounded pre-query, making a claim the old code made and did not honour actually true. Facets share the same run constraint. +15 tests.",
     "M11B amendment: catalogue sorting and the brand-tier taxonomy. brand-tiers.ts is the central, reusable mechanism the customer catalogue will share - premium / mid_range / value, with provenance and approver on each assignment - and its mapping is DELIBERATELY EMPTY because no approved classification exists and none can be derived (Inter-Sprint's 'LUXE BANDEN' is a product segment spanning many brands, not a brand statement). An unclassified brand resolves to null, never to 'value' by omission, and the UI hides the tier filter with an explanation rather than showing three buckets that all return nothing. catalogue-sort.ts separates DATABASE-NATIVE ordering (brand A-Z) from OFFER-DERIVED ordering (lowest price, freshest, most stock), whose keys live on another table: those materialise the whole filtered set before slicing, bounded at 1,000 products, and are REFUSED with a visible message above that rather than sorting a page in isolation - which is the exact bug M11B removed. +32 tests.",
@@ -82,21 +86,20 @@
     "DOCUMENTATION ONLY. Recorded the approved commercial architecture decisions in docs/architecture/04_SALES_SOURCING_MODEL.md: supplier identity invisible to customers; customer buys only from GommaRush; standard up to ~7 days vs express ~24-48h manually sourced from the Italian supplier; the 15-20% express share recorded explicitly as a planning assumption and not a rule; supplier minimum quantities and consolidation supported internally; customer order acceptance and supplier purchase/release as separate events; many customer orders per supplier batch; delivery promises must account for consolidation and cut-off rather than raw supplier availability; normal/older-DOT/Demo kept distinguishable; older-DOT offerable as a clearly identified cheaper GommaRush option; supplied DOT year preserved; Deldo Demo meaning unverified and not to be inferred; exact supplier listing/article survives sourcing and ordering; V1 payments bank transfer, POS on delivery, cash; manual review of every customer order; customer-specific pricing supported architecturally; portal and WhatsApp on one catalogue/pricing/order engine.",
     "Added Deldo activation question 8 (what does the Demo column mean), noting explicitly that no DOT-encoding question is needed because the feed already supplies the year."
   ],
-  "in_progress": [
-    "Run/repair full quality gates for M12/M13 branch; production migrations 0005/0006 remain unapplied.",
-    "Final customer order submission is fail-closed while PFU and PFU VAT-base policy are unresolved."
-  ],
+  "in_progress": [],
   "tests": {
-    "npm test": "963 passed / 6 skipped (62 files). Up from 948: +15 membership regression tests.",
+    "npm test": "999 passed / 6 skipped (66 files). Up from 969.",
     "npm run typecheck": "PASS (tsc --noEmit, clean).",
-    "npm run lint": "0 errors, 7 warnings - all pre-existing UI warnings.",
-    "npm run build": "PASS.",
-    "M12/M13 branch": "New customer projection-boundary and basket contract tests added. Full gates NOT YET EXECUTED in this tool environment; do not claim pass until run."
+    "npm run lint": "0 errors, 7 warnings - all pre-existing UI warnings, none in M12/M13/M14 code.",
+    "npm run build": "PASS (Compiled successfully). This is the gate that was failing on Vercel.",
+    "0006 verified": "Applied to a disposable PostgreSQL 16. Six properties proven: creates order+items; replay returns the same order without duplicating; the same key under a different customer is allowed; an item FK failure leaves 0 orphan headers (ATOMICITY); an empty item list is refused; a 'complete' order without totals violates the check constraint."
   },
-  "production_changes": "NONE. No database mutation or supplier action. 0003/0004/0005/0006 remain unapplied.",
-  "database_changes": "Prepared only: 0005 customer_accounts and 0006 sales_orders/sales_order_items. NOT APPLIED.",
+  "production_changes": "NONE. No database mutation, no migration applied, no supplier action. 0003/0004/0005/0006 all remain unapplied.",
+  "database_changes": "Prepared only: 0005 customer_accounts, 0006 sales_orders/sales_order_items + create_portal_sales_order. NOT APPLIED to production or staging.",
   "external_actions": "NONE.",
   "blockers": [
+    "M13 checkout is fail-closed and WILL REFUSE EVERY ORDER until PFU (D3) and the PFU VAT-base policy (D11) are resolved. Intended behaviour, not a defect: the net selling price is shown, the final payable is withheld, and createPortalSalesOrder raises PRICING_NOT_FINAL before writing anything. The portal therefore cannot transact commercially yet.",
+    "0005 and 0006 must be applied before the portal functions at all. Until then every portal surface degrades to an explicit 'module not activated' message rather than an empty list.",
     "M13 checkout monetary gate: PFU tariff (D3) and PFU VAT-base policy (D11) are unresolved. Basket may show tyre net, but checkout cannot create an order with a falsely final total; submission returns PRICING_NOT_FINAL until verified policy exists.",
     "D18: no approved brand-tier mapping, so the tier filters match nothing. Mechanism is ready; only the commercial decision is missing.",
     "M11B: 0004 indexes unapplied - product_class and season-alone filters scan until they are.",
@@ -111,6 +114,7 @@
     "Deldo persistence remains gated; untouched."
   ],
   "risks": [
+    "Customer catalogue sorting and totals require materialising the filtered selection, bounded at 1,000 products (OFFER_SORT_MAX_PRODUCTS). An unfiltered browse of the whole catalogue is REFUSED with a message asking for a size, rather than silently truncated. This is correct but means a customer must pick at least one dimension before seeing ordered results. Removing the bound needs a current-offer view or materialised column, not a larger cap.",
     "M11B CORRECTED (review finding, 2026-09-22): lane and vehicle were creating an !inner embed on supplier_product_listings but constraining it ONLY with active=true. No adapter or feed-category predicate ever reached the join, so `count` described 'products with any active listing' whatever tab was selected and the page was a slice of that wrong set; offers were then filtered after pagination, which made the screen look plausible while totals and page boundaries were wrong. My earlier note calling this 'a density artefact, not a correctness one' was WRONG. Fixed by resolving import runs to ids first (loadRunIndex/allowedRunIds) and filtering the joined relation on last_import_run_id, which is a real column, so PostgREST turns it into a join predicate. The legacy fallback - uncategorised runs whose listings classify by product_class - is pushed down as a root-level or(product_class.in.(...),product_class.is.null). Facets take the same run-id constraint, so they cannot describe a different set than the results. 15 regression tests in tests/catalogue-browse-membership.test.ts, with a mock that MODELS membership and the class fallback so they would fail if the predicate were removed.",
     "M11B: one deviation remains in the vehicle filter, by design. A product whose legacy product_class contradicts a categorised run's stated vehicle is EXCLUDED from that vehicle's results rather than admitted on provenance. It cannot occur in production today - product_class is only ever set by the legacy car-family import, and no product_class value is 'truck' - and were it to occur it would be a genuine data anomaly worth withholding from a vehicle filter until reviewed. Expressing provenance-wins would need an OR across the root and the embedded relation, which PostgREST cannot do reliably; a current-offer view would remove the constraint entirely.",
     "M11B amendment: offer-derived sorts (price, freshness, stock) materialise the filtered set and are capped at 1,000 products. Beyond that the sort is refused and the default brand order is used, with sortRefused surfaced to the UI. This is deliberate: sorting an already-paginated page by a key from another table produces a locally sorted page in a globally unsorted sequence. The durable fix is a current-offer view or a denormalised current_price_cents on supplier_product_listings maintained by the importer, which would make these sorts database-native - a schema change, so it needs approval and is not attempted here.",
