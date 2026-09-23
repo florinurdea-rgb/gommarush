@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/Button";
 import { addBasketLine } from "@/lib/customer/basket";
 import { BRAND_TIER_LABELS } from "@/lib/catalogue/brand-tiers";
-import { catalogueViewState, shouldQueryCatalogue } from "@/lib/customer/catalogue-view";
+import { catalogueViewState } from "@/lib/customer/catalogue-view";
 import { useTr } from "@/lib/i18n/tr";
 
 /**
@@ -87,7 +87,6 @@ export function CustomerCatalogue() {
   const [error, setError] = useState<string | null>(null);
 
   const dimensions = { widthMm: width, aspectRatio: aspect, rimInch: rim };
-  const canQuery = shouldQueryCatalogue(dimensions);
 
   const filters = useMemo(() => {
     const p = new URLSearchParams();
@@ -106,16 +105,17 @@ export function CustomerCatalogue() {
   useEffect(() => setPage(0), [filters]);
 
   useEffect(() => {
-    // THE GATE. No size, no request — the catalogue is never queried for
-    // "everything". The route enforces the same rule independently.
-    if (!canQuery) {
-      setLoading(false);
-      setOffers([]);
-      setTotal(0);
-      setRefused(null);
-      return;
-    }
-
+    // ALWAYS FETCH — including before a size is chosen.
+    //
+    // The facet lists that FILL these dropdowns come back from this same
+    // endpoint. Skipping the request until all three dimensions were set was a
+    // deadlock: no request meant no widths, no widths meant nothing to select,
+    // and the size could never be completed.
+    //
+    // The gate that matters is server-side and still in force: with an
+    // incomplete size the route returns facets and `awaitingDimensions: true`
+    // WITHOUT touching the catalogue read, so this costs a cheap facet query
+    // and never the whole-catalogue scan the sort would have to refuse.
     const controller = new AbortController();
     // Debounced so typing a brand does not fire a request per keystroke. The
     // loading state is set immediately, before the debounce, so the UI reacts
@@ -129,10 +129,12 @@ export function CustomerCatalogue() {
         const r = await fetch(`/api/account/catalogue?${qs}`, { signal: controller.signal });
         const j = await r.json();
         if (!r.ok) throw new Error();
-        setOffers(j.offers ?? []);
+        // Facets always apply; results only once the server actually ran the
+        // catalogue read. `awaitingDimensions` says which of the two this was.
         setFacets(j.facets ?? EMPTY_FACETS);
-        setTotal(j.total ?? 0);
-        setRefused(j.refused ?? null);
+        setOffers(j.awaitingDimensions ? [] : (j.offers ?? []));
+        setTotal(j.awaitingDimensions ? 0 : (j.total ?? 0));
+        setRefused(j.awaitingDimensions ? null : (j.refused ?? null));
         setTiersConfigured(j.tiersConfigured === true);
         if (typeof j.fulfilment?.maxDays === "number") setDeliveryDays(j.fulfilment.maxDays);
         setLoading(false);
@@ -149,7 +151,7 @@ export function CustomerCatalogue() {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [filters, page, canQuery]);
+  }, [filters, page]);
 
   const view = catalogueViewState({
     ...dimensions,

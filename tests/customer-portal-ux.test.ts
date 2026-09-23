@@ -41,9 +41,26 @@ describe("the catalogue asks for a size before it asks the database", () => {
     expect(hasCompleteDimensions({ widthMm: 205, aspectRatio: Number.NaN, rimInch: 16 })).toBe(false);
   });
 
-  it("gates the request on the same rule the view uses", () => {
+  /**
+   * This gates the CATALOGUE READ, not the request. The request always goes
+   * out — it is what fetches the facets that fill the selectors.
+   */
+  it("gates the catalogue read on the same rule the view uses", () => {
     expect(shouldQueryCatalogue({ widthMm: "205", aspectRatio: "55", rimInch: "" })).toBe(false);
     expect(shouldQueryCatalogue({ widthMm: "205", aspectRatio: "55", rimInch: "16" })).toBe(true);
+  });
+
+  /**
+   * REGRESSION: the component must not gate its FETCH on this, or the facets
+   * that fill the selectors never arrive and the size can never be completed.
+   */
+  it("is not used to suppress the fetch in the component", () => {
+    const source = require("node:fs").readFileSync(
+      "src/components/customer/CustomerCatalogue.tsx",
+      "utf8"
+    ) as string;
+    expect(source).not.toContain("shouldQueryCatalogue");
+    expect(source, "the effect must always reach fetch()").toContain("await fetch(");
   });
 });
 
@@ -54,7 +71,7 @@ describe("the catalogue asks for a size before it asks the database", () => {
 describe("the catalogue never looks frozen or stale", () => {
   const size = { widthMm: "205", aspectRatio: "55", rimInch: "16" };
 
-  it("asks for a size before it shows a spinner", () => {
+  it("asks for a size before it shows a results spinner", () => {
     expect(
       catalogueViewState({
         widthMm: "205",
@@ -67,6 +84,26 @@ describe("the catalogue never looks frozen or stale", () => {
     ).toBe("awaiting_dimensions");
   });
 
+  /**
+   * REGRESSION. The size selectors are filled from the same request that
+   * fetches results, so when that request fails there are no widths to choose.
+   * Ranking `awaiting_dimensions` above `error` showed "choose a size" beside
+   * three empty dropdowns and reported the failure nowhere — the customer was
+   * told to do something the page had made impossible.
+   */
+  it("reports a failure even when no size has been chosen", () => {
+    expect(
+      catalogueViewState({
+        widthMm: "",
+        aspectRatio: "",
+        rimInch: "",
+        loading: false,
+        error: true,
+        refused: false,
+      })
+    ).toBe("error");
+  });
+
   it("shows placeholders while a request is in flight", () => {
     expect(catalogueViewState({ ...size, loading: true, error: false, refused: false })).toBe("loading");
   });
@@ -75,12 +112,14 @@ describe("the catalogue never looks frozen or stale", () => {
    * The stale-results bug this rules out: changing a filter puts the view back
    * into `loading`, so the PREVIOUS selection's list cannot remain on screen
    * underneath the new filter, where it would read as an answer.
+   *
+   * `error` is not varied here because it cannot be true while a request is in
+   * flight — the component clears it when the fetch starts — so asserting that
+   * combination would be pinning down a state the app cannot reach.
    */
-  it("never shows results while loading, even when results are held", () => {
-    for (const error of [false, true]) {
-      for (const refused of [false, true]) {
-        expect(catalogueViewState({ ...size, loading: true, error, refused })).toBe("loading");
-      }
+  it("never shows results or a stale refusal while loading", () => {
+    for (const refused of [false, true]) {
+      expect(catalogueViewState({ ...size, loading: true, error: false, refused })).toBe("loading");
     }
   });
 
