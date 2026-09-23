@@ -1,8 +1,32 @@
 # Customer portal — production activation
 
-Owner checklist for switching on the customer journey in production and placing
-a real test order. **Nothing here has been executed.** Steps 1 and 2 are owner
-decisions and are not performed by an agent.
+## STATUS as of 2026-09-23
+
+| Step | State |
+| --- | --- |
+| Code deployed to production | **DONE.** `main` is at the merge of PR #5 (+ PR #6). Vercel Production deployment succeeded. |
+| `0005_customer_accounts.sql` | **NOT APPLIED.** |
+| `0006_sales_orders.sql` | **NOT APPLIED.** |
+| Production data | **UNCHANGED.** Verified identical before and after the deploy. |
+
+**Why the migrations are not applied:** the production Supabase connector is
+attached in **read-only** mode. It exposes no `apply_migration` tool and its
+`execute_sql` runs inside a read-only transaction, which refuses DDL:
+
+```
+ERROR: 25006: cannot execute CREATE TABLE in a read-only transaction
+```
+
+This is a deliberate guardrail and was not worked around. Section 2 below has
+the exact SQL to run, and two ways to run it.
+
+**What production looks like right now:** the portal is deployed but inert.
+Every surface that needs the new tables shows an explicit "module not
+activated" message rather than an error, and existing admin, logistics and
+catalogue functionality is untouched. Nobody can sign in, because no customer
+account can exist until `customer_accounts` does.
+
+---
 
 Prepared 2026-09-23 against production as it stands at that date.
 
@@ -10,22 +34,19 @@ Prepared 2026-09-23 against production as it stands at that date.
 
 ## 0. Where things actually are
 
-The single most important fact, verified rather than assumed:
+**The code is on production.** `main` carried no customer portal until
+2026-09-23; PR #5 (and then PR #6) merged it, and Vercel's Production
+deployment succeeded. Vercel's production branch is `main` — confirmed by
+inspecting the deployment history, where the only `Production` environment
+deployments track `main`.
 
-**Production runs `main` (1aa7064), which contains no customer portal at all.**
-`app/account/**`, `app/admin/(secure)/sales-orders/**`, `customer_accounts` and
-`sales_orders` exist only on `chatgpt/m12-customer-portal`. Production has 73
-commits fewer than the branch.
+**The database is not.** The two migrations could not be applied from this
+environment (see the status block above), so the portal is deployed and inert.
 
-Two consequences:
-
-1. The portal is currently reachable **only** through the Vercel preview. Code
-   work alone cannot change that — the branch has to reach the production
-   deployment.
-2. Applying 0005 and 0006 to production **today changes nothing observable**,
-   because no deployed code references any of the objects they create. That
-   makes the migration the safe half of the activation, and the deploy the half
-   that actually changes behaviour.
+Applying 0005 and 0006 is therefore the last step, and it is still a safe one:
+before the deploy no code referenced these objects at all, and after it the
+only code that does is the portal itself, which currently degrades to an
+explicit "module not activated" message.
 
 ---
 
@@ -92,25 +113,33 @@ proven:
 
 Run in this order. Steps 1 and 2 are the owner's.
 
-### Step 1 — apply the migrations (owner approval required)
+### Step 1 — apply the migrations — THE ONLY REMAINING BLOCKER
 
-Against the production database, in one session:
+Either:
 
-```sql
--- supabase/pending-approval/0005_customer_accounts.sql
--- supabase/pending-approval/0006_sales_orders.sql
-```
+**(a) Run them yourself.** Supabase dashboard → SQL Editor → paste and run the
+contents of, in order:
 
-Apply 0005 first (0006 does not depend on it, but the portal needs both).
+1. `supabase/pending-approval/0005_customer_accounts.sql`
+2. `supabase/pending-approval/0006_sales_orders.sql`
 
-Safe to run **before** the deploy: nothing in the currently-deployed code
-touches these objects.
+Both are idempotent, so a re-run is a no-op.
 
-### Step 2 — ship the code to production
+**(b) Give the connector write access**, then ask for them to be applied:
+claude.ai → Settings → Connectors → the production Supabase connector → allow
+its migration/DDL tool. An organization admin may have capped it.
 
-Merge `chatgpt/m12-customer-portal` (PR #5) so the production deployment
-carries the portal. Until this happens, `/account/login` is a 404 in production
-however the database looks.
+Order does not matter for safety — 0006 does not depend on 0005 — but the
+portal needs both. The code is already deployed, so the portal starts working
+the moment these run. No further deploy is needed.
+
+### Step 2 — ship the code to production — ALREADY DONE
+
+PR #5 merged `chatgpt/m12-customer-portal` into `main` on 2026-09-23, and PR #6
+added the one follow-up fix. Vercel's Production deployment succeeded for both.
+
+Nothing further is needed here: the portal starts working as soon as Step 1
+runs, with no redeploy.
 
 ### Step 3 — create the Supabase Auth user and bind it
 
@@ -195,7 +224,30 @@ order by requested_at desc;
   stops being produced — with no code change, because `resolvePfu` prefers a
   verified tariff and only falls through to the estimate.
 
-## 5. Rolling back
+## 5. Verifying the migrations landed
+
+After running them:
+
+```sql
+select
+  (select count(*) from information_schema.tables
+     where table_schema='public'
+       and table_name in ('customer_accounts','sales_orders','sales_order_items')) as tables_created,  -- expect 3
+  (select count(*) from information_schema.routines
+     where routine_schema='public' and routine_name='create_portal_sales_order') as rpc_created,       -- expect 1
+  (select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace
+     where n.nspname='public'
+       and c.relname in ('customer_accounts','sales_orders','sales_order_items')
+       and c.relrowsecurity) as rls_enabled,                                                            -- expect 3
+  (select count(*) from pg_policies where schemaname='public'
+     and tablename in ('customer_accounts','sales_orders','sales_order_items')) as policies;            -- expect 0, deliberately
+```
+
+`policies = 0` with `rls_enabled = 3` is correct and intentional: RLS with no
+policy denies `anon` and `authenticated` outright, and the portal reads and
+writes server-side through the service role after resolving the session.
+
+## 6. Rolling back
 
 The migrations are additive, so rollback is dropping what they created. Only do
 this if no real order exists yet:
