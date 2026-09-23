@@ -104,8 +104,21 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
     }
   }, [router, tr]);
 
+  /*
+    The idempotency key is generated ONCE per visit to this screen, in its own
+    effect with no dependencies.
+
+    It used to sit in the verify effect, whose callback identity changes with
+    the locale. Switching language — or anything else that re-created `verify`
+    — minted a NEW key, and a retry after a failed submit would then be treated
+    as a different order rather than the same one. The key's whole job is to be
+    the same across retries of one order.
+  */
   useEffect(() => {
     setIdempotencyKey(crypto.randomUUID());
+  }, []);
+
+  useEffect(() => {
     void verify();
   }, [verify]);
 
