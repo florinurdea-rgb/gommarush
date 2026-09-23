@@ -532,6 +532,12 @@ export const EN_STRINGS: Record<string, string> = {
   "per questo ordinamento. Restringi la ricerca, per esempio scegliendo una misura.":
     "for this sort. Narrow the search, for example by choosing a size.",
   // --- customer portal accounts (M12) ----------------------------------
+  "Copia ora la password temporanea: non sarà più visibile dopo aver chiuso questo messaggio.":
+    "Copy the temporary password now — it will not be shown again once you dismiss this message.",
+  "Copia": "Copy",
+  "Copiata": "Copied",
+  "Ho copiato la password": "I have copied the password",
+
   "Accesso area clienti": "Customer portal access",
   "L'accesso al portale viene creato manualmente. Non esiste registrazione pubblica e nessun cliente viene riconosciuto dall'indirizzo email.":
     "Portal access is created manually. There is no public registration, and no customer is identified from an email address.",
