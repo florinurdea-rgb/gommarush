@@ -127,6 +127,25 @@ describe("the catalogue is not queried before a complete size", () => {
     expect(body.facets.rims).toEqual([16, 17]);
   });
 
+  /**
+   * REGRESSION — the deadlock this route must never be party to.
+   *
+   * The selectors are filled from this endpoint's `facets`. A client that
+   * waits for a complete size before calling it can never obtain a width, so
+   * the size can never be completed and the catalogue is unusable. With
+   * NOTHING chosen the route must still hand back a populated width list.
+   */
+  it("serves the width list when nothing at all has been chosen", async () => {
+    const { body } = await call("");
+
+    expect(getCatalogueFacets, "facets must be read even with no filters").toHaveBeenCalledTimes(1);
+    expect(body.awaitingDimensions).toBe(true);
+    expect(body.facets.widths, "the first selector must have options to offer").toEqual([195, 205]);
+    expect(body.facets.widths.length).toBeGreaterThan(0);
+    // ...and it is cheap: the catalogue read is still not run.
+    expect(searchCustomerCatalogue).not.toHaveBeenCalled();
+  });
+
   it("narrows the facets by what has been chosen so far", async () => {
     await call("?width=205&aspect=55");
 

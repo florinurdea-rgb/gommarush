@@ -56,25 +56,37 @@ export function hasCompleteDimensions(input: {
  *
  * PRECEDENCE, and why it is this way round:
  *
- *  1. `loading` outranks everything except a missing size. A request in flight
- *     must never show the previous selection's results, an error from a
- *     superseded request, or an empty panel.
+ *  1. `error` outranks everything, INCLUDING a missing size. This is the
+ *     ordering a real failure corrected: the size selectors are filled from
+ *     the same request that fetches results, so when that request fails there
+ *     are no widths to choose. Ranking `awaiting_dimensions` first told the
+ *     customer to "choose a size" next to three empty dropdowns, with the
+ *     actual failure shown nowhere. A request that failed must say so.
  *  2. `awaiting_dimensions` outranks `loading`, because with no size there is
- *     nothing to load and a spinner would be a lie.
- *  3. `error` outranks `refused`, because a failed request tells us nothing
- *     about the size of the selection.
+ *     nothing to load and a results spinner would be a lie — the selectors
+ *     populate on their own as the facets arrive.
+ *  3. `loading` outranks the rest. A request in flight must never show the
+ *     previous selection's results or an empty panel. It cannot collide with
+ *     `error`, because the error is cleared when a fetch starts.
  *  4. `results` is last: it is what is left once nothing is pending or wrong,
  *     so an empty list here genuinely means "no tyres match".
  */
 export function catalogueViewState(input: CatalogueViewInput): CatalogueViewState {
+  if (input.error) return "error";
   if (!hasCompleteDimensions(input)) return "awaiting_dimensions";
   if (input.loading) return "loading";
-  if (input.error) return "error";
   if (input.refused) return "refused";
   return "results";
 }
 
-/** Whether a fetch should be issued for this selection. */
+/**
+ * Whether the server should run the CATALOGUE READ for this selection.
+ *
+ * NOT whether to make a request. The request is always made — it is what
+ * fetches the facets that fill the size selectors — and this decides only
+ * whether the expensive product query runs behind it. The route applies the
+ * same rule independently, which is the half that actually protects the query.
+ */
 export function shouldQueryCatalogue(input: {
   widthMm: string | number | null;
   aspectRatio: string | number | null;
