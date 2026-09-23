@@ -3,6 +3,22 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/Button";
 import { addBasketLine } from "@/lib/customer/basket";
 import { BRAND_TIER_LABELS } from "@/lib/catalogue/brand-tiers";
+import { catalogueViewState, shouldQueryCatalogue } from "@/lib/customer/catalogue-view";
+
+/**
+ * The customer tyre search.
+ *
+ * DELIBERATE, NOT EAGER. Nothing is fetched until width, aspect ratio and rim
+ * are all chosen. A tyre shop buys a size; a catalogue that dumps thousands of
+ * unrelated tyres on arrival is slower to use, not faster, and it is also the
+ * one query shape the global sort has to refuse. The route enforces the same
+ * rule, so this is the pleasant half of the gate rather than the whole of it.
+ *
+ * NEVER FROZEN. Every fetch — a changed dimension, season, brand, order or page
+ * — swaps the results for skeleton cards of the same shape, and the controls
+ * stay usable throughout. A stale list sitting under a new filter is worse than
+ * a placeholder, because it looks like an answer.
+ */
 
 type Offer = {
   tyre: {
@@ -12,6 +28,7 @@ type Offer = {
     sizeDisplay: string | null;
     loadIndex: string | null;
     speedRating: string | null;
+    loadSpeedRaw: string | null;
     season: string | null;
     xl: boolean | null;
     runFlat: boolean | null;
@@ -29,10 +46,22 @@ type Facets = { widths: number[]; aspectRatios: number[]; rims: number[]; brands
 type Refusal = { reason: string; matched: number; maximum: number };
 
 const PAGE_SIZE = 24;
+const EMPTY_FACETS: Facets = { widths: [], aspectRatios: [], rims: [], brands: [] };
+
 const money = (c: number | null) =>
   c === null ? "—" : new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(c / 100);
 
-const EMPTY_FACETS: Facets = { widths: [], aspectRatios: [], rims: [], brands: [] };
+const SEASON_LABELS: Record<string, string> = {
+  summer: "Estive",
+  winter: "Invernali",
+  all_season: "4 stagioni",
+};
+
+const AVAILABILITY_LABELS: Record<Offer["availability"], string> = {
+  in_stock: "Disponibile",
+  on_request: "Su richiesta",
+  unknown: "Da verificare",
+};
 
 export function CustomerCatalogue() {
   const [offers, setOffers] = useState<Offer[]>([]);
@@ -41,6 +70,7 @@ export function CustomerCatalogue() {
   const [page, setPage] = useState(0);
   const [refused, setRefused] = useState<Refusal | null>(null);
   const [tiersConfigured, setTiersConfigured] = useState(false);
+  const [deliveryDays, setDeliveryDays] = useState(7);
 
   const [width, setWidth] = useState("");
   const [aspect, setAspect] = useState("");
@@ -50,8 +80,11 @@ export function CustomerCatalogue() {
   const [tier, setTier] = useState("");
   const [sort, setSort] = useState("price_asc");
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const dimensions = { widthMm: width, aspectRatio: aspect, rimInch: rim };
+  const canQuery = shouldQueryCatalogue(dimensions);
 
   const filters = useMemo(() => {
     const p = new URLSearchParams();
@@ -70,10 +103,24 @@ export function CustomerCatalogue() {
   useEffect(() => setPage(0), [filters]);
 
   useEffect(() => {
+    // THE GATE. No size, no request — the catalogue is never queried for
+    // "everything". The route enforces the same rule independently.
+    if (!canQuery) {
+      setLoading(false);
+      setOffers([]);
+      setTotal(0);
+      setRefused(null);
+      return;
+    }
+
     const controller = new AbortController();
+    // Debounced so typing a brand does not fire a request per keystroke. The
+    // loading state is set immediately, before the debounce, so the UI reacts
+    // to the keystroke even though the request has not left yet.
+    setLoading(true);
+    setError(null);
+
     const timer = setTimeout(async () => {
-      setLoading(true);
-      setError(null);
       try {
         const qs = `${filters}&limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`;
         const r = await fetch(`/api/account/catalogue?${qs}`, { signal: controller.signal });
@@ -84,176 +131,303 @@ export function CustomerCatalogue() {
         setTotal(j.total ?? 0);
         setRefused(j.refused ?? null);
         setTiersConfigured(j.tiersConfigured === true);
+        if (typeof j.fulfilment?.maxDays === "number") setDeliveryDays(j.fulfilment.maxDays);
+        setLoading(false);
       } catch (e) {
-        if ((e as Error).name !== "AbortError") setError("Catalogo non disponibile. Riprova.");
-      } finally {
+        // An aborted request is superseded, not failed: leave the spinner up
+        // for the request that replaced it rather than flashing an error.
+        if ((e as Error).name === "AbortError") return;
+        setError("Catalogo non disponibile. Riprova.");
         setLoading(false);
       }
-    }, 200);
+    }, 250);
+
     return () => {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [filters, page]);
+  }, [filters, page, canQuery]);
+
+  const view = catalogueViewState({
+    ...dimensions,
+    loading,
+    error: error !== null,
+    refused: refused !== null,
+  });
 
   const lastPage = Math.max(Math.ceil(total / PAGE_SIZE) - 1, 0);
   const add = useCallback((o: Offer) => addBasketLine(o.tyre.productId, o.tyre.oldDot), []);
+
+  function reset() {
+    setWidth("");
+    setAspect("");
+    setRim("");
+    setSeason("");
+    setBrand("");
+    setTier("");
+  }
 
   return (
     <div>
       <h1 className="text-2xl font-extrabold text-ink">Catalogo pneumatici</h1>
       <p className="mt-1 text-sm text-ink-soft">
-        Cerca per misura e stagione. Il prezzo mostrato è il miglior prezzo GommaRush per ogni pneumatico.
+        Scegli la misura per vedere i pneumatici disponibili e il prezzo GommaRush.
       </p>
 
-      <div className="mt-6 grid gap-3 rounded-2xl bg-white p-4 shadow-card sm:grid-cols-2 lg:grid-cols-3">
-        <Select label="Larghezza" value={width} set={setWidth} values={facets.widths} />
-        <Select label="Spalla" value={aspect} set={setAspect} values={facets.aspectRatios} />
-        <Select label="Cerchio" value={rim} set={setRim} values={facets.rims} />
-        <label className="text-sm font-semibold text-ink">
-          Stagione
-          <select
-            value={season}
-            onChange={(e) => setSeason(e.target.value)}
-            className="mt-1 h-11 w-full rounded-xl border border-ink/15 px-3 font-normal"
-          >
-            <option value="">Tutte le stagioni</option>
-            <option value="summer">Estive</option>
-            <option value="winter">Invernali</option>
-            <option value="all_season">4 stagioni</option>
-          </select>
-        </label>
-        <label className="text-sm font-semibold text-ink">
-          Marca
-          <input
-            value={brand}
-            onChange={(e) => setBrand(e.target.value)}
-            placeholder="Es. Michelin"
-            list="customer-catalogue-brands"
-            className="mt-1 h-11 w-full rounded-xl border border-ink/15 px-3 font-normal"
-          />
-          <datalist id="customer-catalogue-brands">
-            {facets.brands.map((b) => (
-              <option key={b} value={b} />
-            ))}
-          </datalist>
-        </label>
-        <label className="text-sm font-semibold text-ink">
-          Ordina per
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value)}
-            className="mt-1 h-11 w-full rounded-xl border border-ink/15 px-3 font-normal"
-          >
-            <option value="price_asc">Prezzo più basso</option>
-            <option value="brand_asc">Marca A–Z</option>
-          </select>
-        </label>
+      <div className="mt-6 rounded-2xl bg-white p-4 shadow-card">
+        <fieldset>
+          <legend className="text-xs font-bold uppercase tracking-wide text-ink-soft">
+            Misura <span className="font-semibold text-state-danger">obbligatoria</span>
+          </legend>
+          <div className="mt-2 grid gap-3 sm:grid-cols-3">
+            <Select label="Larghezza" value={width} set={setWidth} values={facets.widths} placeholder="Scegli" />
+            <Select label="Spalla" value={aspect} set={setAspect} values={facets.aspectRatios} placeholder="Scegli" />
+            <Select label="Cerchio" value={rim} set={setRim} values={facets.rims} placeholder="Scegli" />
+          </div>
+        </fieldset>
 
-        {/*
-          Premium / Fascia media / Economiche appear only once an APPROVED brand
-          classification exists. Showing three filters that all return nothing
-          would look like an empty catalogue instead of an unset business rule.
-        */}
-        {tiersConfigured && (
-          <label className="text-sm font-semibold text-ink">
-            Fascia
-            <select
-              value={tier}
-              onChange={(e) => setTier(e.target.value)}
-              className="mt-1 h-11 w-full rounded-xl border border-ink/15 px-3 font-normal"
-            >
-              <option value="">Tutte le fasce</option>
-              {BRAND_TIER_LABELS.map((x) => (
-                <option key={x.tier} value={x.tier}>
-                  {x.label}
-                </option>
-              ))}
-            </select>
-          </label>
+        <fieldset className="mt-4 border-t border-ink/10 pt-4">
+          <legend className="sr-only">Filtri aggiuntivi</legend>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <label className="text-sm font-semibold text-ink">
+              Stagione
+              <select
+                value={season}
+                onChange={(e) => setSeason(e.target.value)}
+                className="mt-1 h-11 w-full rounded-xl border border-ink/15 px-3 font-normal"
+              >
+                <option value="">Tutte le stagioni</option>
+                <option value="summer">Estive</option>
+                <option value="winter">Invernali</option>
+                <option value="all_season">4 stagioni</option>
+              </select>
+            </label>
+
+            <label className="text-sm font-semibold text-ink">
+              Marca
+              <input
+                value={brand}
+                onChange={(e) => setBrand(e.target.value)}
+                placeholder="Tutte le marche"
+                list="customer-catalogue-brands"
+                className="mt-1 h-11 w-full rounded-xl border border-ink/15 px-3 font-normal"
+              />
+              <datalist id="customer-catalogue-brands">
+                {facets.brands.map((b) => (
+                  <option key={b} value={b} />
+                ))}
+              </datalist>
+            </label>
+
+            <label className="text-sm font-semibold text-ink">
+              Ordina per
+              <select
+                value={sort}
+                onChange={(e) => setSort(e.target.value)}
+                className="mt-1 h-11 w-full rounded-xl border border-ink/15 px-3 font-normal"
+              >
+                <option value="price_asc">Prezzo più basso</option>
+                <option value="brand_asc">Marca A–Z</option>
+              </select>
+            </label>
+
+            {/*
+              Premium / Fascia media / Economiche appear only once an APPROVED
+              brand classification exists. Three filters that all return nothing
+              would read as an empty catalogue instead of an unset business rule.
+            */}
+            {tiersConfigured && (
+              <label className="text-sm font-semibold text-ink">
+                Fascia
+                <select
+                  value={tier}
+                  onChange={(e) => setTier(e.target.value)}
+                  className="mt-1 h-11 w-full rounded-xl border border-ink/15 px-3 font-normal"
+                >
+                  <option value="">Tutte le fasce</option>
+                  {BRAND_TIER_LABELS.map((x) => (
+                    <option key={x.tier} value={x.tier}>
+                      {x.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
+        </fieldset>
+
+        {(width || aspect || rim || season || brand || tier) && (
+          <button
+            type="button"
+            onClick={reset}
+            className="mt-4 text-sm font-semibold text-ink-soft underline hover:text-ink"
+          >
+            Azzera i filtri
+          </button>
         )}
       </div>
 
-      {refused ? (
-        <p className="mt-6 rounded-xl bg-white p-4 text-sm text-ink-soft shadow-card">
-          La selezione è troppo ampia per essere ordinata correttamente ({refused.matched} pneumatici).
-          Scegli almeno una misura per restringere la ricerca.
-        </p>
-      ) : error ? (
-        <p className="mt-6 rounded-xl bg-state-danger-soft p-4 text-state-danger">{error}</p>
-      ) : loading ? (
-        <p className="mt-6 text-sm text-ink-soft">Ricerca…</p>
-      ) : (
-        <>
-          <p className="mt-6 text-sm text-ink-soft" aria-live="polite">
-            {total === 0 ? "Nessun risultato" : `${total} pneumatici disponibili`}
+      <div className="mt-6" aria-live="polite" aria-busy={loading}>
+        {view === "awaiting_dimensions" ? (
+          <PromptForSize />
+        ) : view === "loading" ? (
+          <ResultsSkeleton />
+        ) : view === "error" ? (
+          <p className="rounded-xl bg-state-danger-soft p-4 text-state-danger">{error}</p>
+        ) : view === "refused" ? (
+          <p className="rounded-2xl bg-white p-5 text-sm text-ink-soft shadow-card">
+            La selezione è troppo ampia per essere ordinata correttamente ({refused?.matched}{" "}
+            pneumatici). Aggiungi un filtro per restringere la ricerca.
           </p>
-          <div className="mt-3 space-y-3">
-            {offers.length === 0 ? (
-              <div className="rounded-2xl bg-white p-8 text-center text-ink-soft">
-                Nessun pneumatico disponibile con questi filtri.
-              </div>
-            ) : (
-              offers.map((o) => (
-                <article
+        ) : (
+          <>
+            <p className="text-sm text-ink-soft">
+              {total === 0
+                ? "Nessun pneumatico disponibile con questi filtri."
+                : `${total} pneumatici disponibili`}
+            </p>
+
+            <div className="mt-3 space-y-3">
+              {offers.map((o) => (
+                <OfferCard
                   key={`${o.tyre.productId}-${o.tyre.oldDot ? "old" : "new"}`}
-                  className="rounded-2xl bg-white p-5 shadow-card"
+                  offer={o}
+                  deliveryDays={deliveryDays}
+                  onAdd={add}
+                />
+              ))}
+            </div>
+
+            {total > PAGE_SIZE && (
+              <nav className="mt-6 flex items-center justify-between gap-4" aria-label="Paginazione">
+                <Button size="md" variant="secondary" disabled={page === 0} onClick={() => setPage((x) => Math.max(x - 1, 0))}>
+                  Precedente
+                </Button>
+                <span className="text-sm text-ink-soft">
+                  Pagina {page + 1} di {lastPage + 1}
+                </span>
+                <Button
+                  size="md"
+                  variant="secondary"
+                  disabled={page >= lastPage}
+                  onClick={() => setPage((x) => Math.min(x + 1, lastPage))}
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <div className="font-extrabold text-ink">
-                        {o.tyre.brand ?? "Marca non indicata"} {o.tyre.modelPattern ?? ""}
-                      </div>
-                      <div className="mt-1 text-sm text-ink-soft">
-                        {o.tyre.sizeDisplay ?? "Misura non indicata"} {o.tyre.loadIndex ?? ""}
-                        {o.tyre.speedRating ?? ""}
-                        {o.tyre.xl ? " XL" : ""}
-                        {o.tyre.runFlat ? " Run-flat" : ""}
-                      </div>
-                      {o.tyre.oldDot && <div className="mt-2 text-xs font-semibold">DOT precedente</div>}
-                    </div>
-                    <div className="text-right">
-                      <div className="text-lg font-extrabold text-ink">
-                        {money(o.tyreSaleNetCents)}{" "}
-                        <span className="text-xs font-medium text-ink-soft">netto</span>
-                      </div>
-                      <div className="mt-1 text-xs text-ink-soft">
-                        {o.pfuStatus === "TO_CONFIRM" ? "PFU da confermare" : "PFU incluso"}
-                      </div>
-                      <Button
-                        className="mt-3"
-                        size="md"
-                        disabled={!o.priceAvailable}
-                        onClick={() => add(o)}
-                      >
-                        Aggiungi
-                      </Button>
-                    </div>
-                  </div>
-                </article>
-              ))
+                  Successiva
+                </Button>
+              </nav>
             )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function OfferCard({
+  offer,
+  deliveryDays,
+  onAdd,
+}: {
+  offer: Offer;
+  deliveryDays: number;
+  onAdd: (o: Offer) => void;
+}) {
+  const t = offer.tyre;
+  const loadSpeed = t.loadSpeedRaw ?? [t.loadIndex, t.speedRating].filter(Boolean).join("");
+
+  return (
+    <article className="rounded-2xl bg-white p-5 shadow-card">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="font-extrabold text-ink">
+            {t.brand ?? "Marca non indicata"} {t.modelPattern ?? ""}
+          </div>
+          <div className="mt-1 text-sm text-ink-soft">
+            {t.sizeDisplay ?? "Misura non indicata"}
+            {loadSpeed ? ` · ${loadSpeed}` : ""}
           </div>
 
-          {total > PAGE_SIZE && (
-            <nav className="mt-6 flex items-center justify-between gap-4" aria-label="Paginazione">
-              <Button size="md" disabled={page === 0} onClick={() => setPage((x) => Math.max(x - 1, 0))}>
-                Precedente
-              </Button>
-              <span className="text-sm text-ink-soft">
-                Pagina {page + 1} di {lastPage + 1}
-              </span>
-              <Button
-                size="md"
-                disabled={page >= lastPage}
-                onClick={() => setPage((x) => Math.min(x + 1, lastPage))}
-              >
-                Successiva
-              </Button>
-            </nav>
-          )}
-        </>
-      )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {t.season && SEASON_LABELS[t.season] && <Tag>{SEASON_LABELS[t.season]}</Tag>}
+            {t.xl && <Tag>XL</Tag>}
+            {t.runFlat && <Tag>Run-flat</Tag>}
+            {t.oldDot && <Tag>DOT precedente</Tag>}
+            <Tag>{AVAILABILITY_LABELS[offer.availability]}</Tag>
+          </div>
+        </div>
+
+        <div className="text-right">
+          <div className="text-lg font-extrabold text-ink">
+            {money(offer.tyreSaleNetCents)}{" "}
+            <span className="text-xs font-medium text-ink-soft">netto</span>
+          </div>
+          {/*
+            PFU is stated as outstanding rather than omitted. An unqualified
+            price next to an "Aggiungi" button reads as the price payable.
+          */}
+          <div className="mt-1 text-xs text-ink-soft">
+            {offer.pfuStatus === "TO_CONFIRM" ? "+ PFU e IVA da confermare" : "+ PFU e IVA"}
+          </div>
+          <div className="mt-1 text-xs font-semibold text-state-success">
+            Consegna entro {deliveryDays} giorni
+          </div>
+          <Button className="mt-3" size="md" disabled={!offer.priceAvailable} onClick={() => onAdd(offer)}>
+            Aggiungi
+          </Button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function Tag({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center rounded-full bg-surface-soft px-2.5 py-1 text-xs font-semibold text-ink-soft">
+      {children}
+    </span>
+  );
+}
+
+/** Shown before a size is chosen — an instruction, not an empty result. */
+function PromptForSize() {
+  return (
+    <div className="rounded-2xl border border-dashed border-ink/20 bg-white/60 p-8 text-center">
+      <p className="font-semibold text-ink">Scegli larghezza, spalla e cerchio</p>
+      <p className="mx-auto mt-2 max-w-sm text-sm text-ink-soft">
+        Il catalogo mostra i risultati dopo che hai indicato la misura completa, per esempio
+        205 / 55 / R16.
+      </p>
+    </div>
+  );
+}
+
+/** Placeholders of the same shape as the cards they replace. */
+function ResultsSkeleton() {
+  return (
+    <div>
+      <div className="h-5 w-40 animate-pulse rounded bg-ink/10" />
+      <div className="mt-3 space-y-3">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="rounded-2xl bg-white p-5 shadow-card">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="h-5 w-48 animate-pulse rounded bg-ink/10" />
+                <div className="h-4 w-32 animate-pulse rounded bg-ink/10" />
+                <div className="flex gap-2 pt-1">
+                  <div className="h-6 w-16 animate-pulse rounded-full bg-ink/10" />
+                  <div className="h-6 w-20 animate-pulse rounded-full bg-ink/10" />
+                </div>
+              </div>
+              <div className="w-36 space-y-2">
+                <div className="ml-auto h-6 w-24 animate-pulse rounded bg-ink/10" />
+                <div className="ml-auto h-3 w-28 animate-pulse rounded bg-ink/10" />
+                <div className="ml-auto h-11 w-28 animate-pulse rounded-xl bg-ink/10" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <span className="sr-only">Ricerca in corso…</span>
     </div>
   );
 }
@@ -263,11 +437,13 @@ function Select({
   value,
   set,
   values,
+  placeholder,
 }: {
   label: string;
   value: string;
   set: (v: string) => void;
   values: number[];
+  placeholder: string;
 }) {
   return (
     <label className="text-sm font-semibold text-ink">
@@ -277,7 +453,7 @@ function Select({
         onChange={(e) => set(e.target.value)}
         className="mt-1 h-11 w-full rounded-xl border border-ink/15 px-3 font-normal"
       >
-        <option value="">Tutte</option>
+        <option value="">{placeholder}</option>
         {values.map((v) => (
           <option key={v} value={v}>
             {v}

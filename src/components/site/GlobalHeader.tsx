@@ -5,7 +5,7 @@ import { Logo } from "@/components/Logo";
 import { HamburgerMenu } from "@/components/site/HamburgerMenu";
 import { useLocale } from "@/components/site/LocaleProvider";
 import { BUTTON_STYLES } from "@/components/site/Section";
-import { ROUTES, REGISTER_HREF } from "@/lib/site-routes";
+import { ROUTES, REGISTER_HREF, CUSTOMER_ROUTES } from "@/lib/site-routes";
 
 /**
  * The public header: logo, marketing navigation, the primary CTA, and the
@@ -89,17 +89,31 @@ export function GlobalHeader({ showBack = false }: { showBack?: boolean }) {
 
         <div className="flex flex-none items-center gap-2 sm:gap-3">
           {/*
-            Visible at every breakpoint, including the narrowest phone. The
-            header is sticky, so hiding this below `sm` meant that once a
-            mobile visitor scrolled past the hero there was no way to register
-            until the footer -- on the one surface where the brief asks for an
-            obvious Register CTA. It shrinks rather than disappearing.
+            "Registrati" is SECONDARY and desktop-only. Registration is not
+            open, so it leads to an interim page explaining that; giving it the
+            primary slot on a phone would put the one thing a visitor cannot do
+            ahead of the one thing they can. The account screen itself offers it
+            again, which is where someone who wants it will look.
           */}
           <Link
             href={REGISTER_HREF}
-            className={`${BUTTON_STYLES.primary} !min-h-[40px] !px-3 !text-[13.5px] sm:!px-4 sm:!text-[14.5px]`}
+            className={`${BUTTON_STYLES.secondary} hidden !min-h-[40px] !px-4 !text-[14.5px] lg:inline-flex`}
           >
             {copy.ctaRegister}
+          </Link>
+
+          {/*
+            The PRIMARY public call to action, visible at every breakpoint
+            including the narrowest phone. The header is sticky, so this is the
+            customer's route into the portal from anywhere on the marketing
+            site rather than only from the hamburger. It shrinks rather than
+            disappearing.
+          */}
+          <Link
+            href={CUSTOMER_ROUTES.account}
+            className={`${BUTTON_STYLES.primary} !min-h-[40px] !px-3 !text-[13.5px] sm:!px-4 sm:!text-[14.5px]`}
+          >
+            {copy.navClientArea}
           </Link>
           <HamburgerMenu />
         </div>

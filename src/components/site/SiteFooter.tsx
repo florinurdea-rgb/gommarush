@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { useLocale } from "@/components/site/LocaleProvider";
-import { ROUTES, OPERATIONAL_ROUTES, REGISTER_HREF } from "@/lib/site-routes";
+import { ROUTES, OPERATIONAL_ROUTES, REGISTER_HREF, CUSTOMER_ROUTES } from "@/lib/site-routes";
 
 /**
  * The site footer.
@@ -35,6 +35,9 @@ export function SiteFooter() {
   ];
 
   const accessLinks = [
+    // The working customer entry leads, ahead of the registration funnel that
+    // is not open yet.
+    { href: CUSTOMER_ROUTES.account, label: copy.navClientArea },
     { href: REGISTER_HREF, label: copy.ctaRegister },
     { href: ROUTES.quote, label: copy.navQuote },
     // Existing operational routes. Never renamed here.

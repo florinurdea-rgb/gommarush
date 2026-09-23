@@ -1,15 +1,257 @@
 "use client";
-import {useEffect,useState} from "react";import {useRouter} from "next/navigation";import {Button} from "@/components/Button";import {readBasket,writeBasket} from "@/lib/customer/basket";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/Button";
+import { readBasket, writeBasket } from "@/lib/customer/basket";
+import { formatSalesOrderNumber } from "@/lib/commerce/order-number";
+
+/**
+ * Checkout.
+ *
+ * The customer chooses a GommaRush SERVICE — where it goes, how fast, how they
+ * pay. They never choose a supplier, and no screen here mentions one.
+ *
+ * The submit button stays disabled until the server has confirmed the basket is
+ * monetarily complete. While the PFU tariff is unresolved that never happens,
+ * and this screen says so plainly instead of offering a button that fails. The
+ * gate is enforced again in createPortalSalesOrder, which refuses with
+ * PRICING_NOT_FINAL regardless of what the browser believes.
+ */
+
+type Location = {
+  id: string;
+  location_name: string | null;
+  address_line1: string;
+  city: string;
+  postal_code: string | null;
+  is_primary: boolean;
+};
+
+/** V1 payment methods, owner-confirmed. POS on delivery is not among them. */
+const PAYMENT_OPTIONS = [
+  { value: "bank_transfer", label: "Bonifico bancario", hint: "Coordinate inviate con la conferma" },
+  { value: "cash_on_delivery", label: "Contanti alla consegna", hint: "Pagamento al momento della consegna" },
+] as const;
+
+const FULFILMENT_OPTIONS = [
+  { value: "standard", label: "Standard · consegna entro 7 giorni" },
+  { value: "express", label: "Express · 24–48h, su verifica" },
+] as const;
+
 // Codes the API is willing to return. Anything else is deliberately generic:
 // the server logs the detail and does not send it to the customer.
-const ORDER_ERRORS:Record<string,string>={
- PRICING_NOT_FINAL:"Il totale finale non è ancora confermato.",
- BASKET_ITEM_UNAVAILABLE:"Uno o più articoli non sono più disponibili. Aggiorna il carrello.",
- BASKET_QUANTITY_UNAVAILABLE:"La quantità richiesta non è più disponibile. Riduci la quantità.",
- DELIVERY_ADDRESS_INVALID:"L'indirizzo di consegna selezionato non è valido.",
+const ORDER_ERRORS: Record<string, string> = {
+  PRICING_NOT_FINAL: "Il totale finale non è ancora confermato, quindi l'ordine non può essere inviato.",
+  BASKET_ITEM_UNAVAILABLE: "Uno o più articoli non sono più disponibili. Aggiorna il carrello.",
+  BASKET_QUANTITY_UNAVAILABLE: "La quantità richiesta non è più disponibile. Riduci la quantità.",
+  DELIVERY_ADDRESS_INVALID: "L'indirizzo di consegna selezionato non è valido.",
+  CUSTOMER_NOT_FOUND: "Account non abilitato. Contatta GommaRush.",
 };
-type Location={id:string;location_name:string|null;address_line1:string;city:string;postal_code:string|null;is_primary:boolean};
-export function CustomerCheckout({locations}:{locations:Location[]}){const router=useRouter();const [locationId,setLocationId]=useState(locations.find(x=>x.is_primary)?.id??locations[0]?.id??"");const [paymentMethod,setPayment]=useState("bank_transfer");const [idempotencyKey,setIdempotencyKey]=useState("");const [fulfilmentClass,setFulfilment]=useState("standard");const [note,setNote]=useState("");const [ready,setReady]=useState(false);const [busy,setBusy]=useState(false);const [error,setError]=useState<string|null>(null);
-useEffect(()=>{setIdempotencyKey(crypto.randomUUID());const lines=readBasket();if(!lines.length){router.replace("/account/basket");return}fetch("/api/account/basket/preview",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({lines})}).then(async r=>{const j=await r.json();setReady(r.ok&&j.basket?.monetaryStatus==="complete");if(r.ok&&j.basket?.monetaryStatus!=="complete")setError("Il totale finale è in attesa della conferma PFU/IVA.")}).catch(()=>setError("Impossibile verificare il carrello."));},[router]);
-async function submit(){setBusy(true);setError(null);try{const r=await fetch("/api/account/orders",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({lines:readBasket(),locationId,paymentMethod,fulfilmentClass,note,idempotencyKey})});const j=await r.json();if(!r.ok)throw new Error(j.code);writeBasket([]);router.replace("/account/orders");router.refresh();}catch(e){setError(ORDER_ERRORS[e instanceof Error?e.message:""]??"Ordine non inviato. Riprova.");}finally{setBusy(false)}}
-return <div><h1 className="text-2xl font-extrabold text-ink">Conferma ordine</h1><div className="mt-6 grid gap-5 lg:grid-cols-2"><section className="rounded-2xl bg-white p-5 shadow-card"><h2 className="font-bold">Consegna</h2>{locations.length===0?<p className="mt-3 text-sm text-state-danger">Nessun indirizzo di consegna valido configurato.</p>:<select className="mt-3 h-11 w-full rounded-xl border border-ink/15 px-3" value={locationId} onChange={e=>setLocationId(e.target.value)}>{locations.map(x=><option key={x.id} value={x.id}>{x.location_name||x.city} — {x.address_line1}, {x.city}</option>)}</select>}<h2 className="mt-6 font-bold">Servizio</h2><select className="mt-3 h-11 w-full rounded-xl border border-ink/15 px-3" value={fulfilmentClass} onChange={e=>setFulfilment(e.target.value)}><option value="standard">Standard · fino a ~7 giorni</option><option value="express">Express · ~24–48h</option></select></section><section className="rounded-2xl bg-white p-5 shadow-card"><h2 className="font-bold">Pagamento</h2><select className="mt-3 h-11 w-full rounded-xl border border-ink/15 px-3" value={paymentMethod} onChange={e=>setPayment(e.target.value)}><option value="bank_transfer">Bonifico bancario</option><option value="pos_on_delivery">POS alla consegna</option><option value="cash">Contanti</option></select><label className="mt-5 block text-sm font-semibold">Note<textarea className="mt-2 min-h-24 w-full rounded-xl border border-ink/15 p-3 font-normal" value={note} onChange={e=>setNote(e.target.value)}/></label></section></div>{error&&<p className="mt-5 rounded-xl bg-state-danger-soft p-4 text-sm text-state-danger">{error}</p>}<div className="mt-6 flex justify-end"><Button size="lg" disabled={!ready||!locationId||!idempotencyKey||busy} onClick={submit}>{busy?"Invio…":"Invia ordine a GommaRush"}</Button></div><p className="mt-2 text-right text-xs text-ink-soft">L&apos;ordine viene inviato a GommaRush per conferma manuale. Non viene inoltrato automaticamente a un fornitore.</p></div>}
+
+export function CustomerCheckout({ locations }: { locations: Location[] }) {
+  const router = useRouter();
+  const [locationId, setLocationId] = useState(
+    locations.find((x) => x.is_primary)?.id ?? locations[0]?.id ?? ""
+  );
+  const [paymentMethod, setPayment] = useState<string>(PAYMENT_OPTIONS[0].value);
+  const [fulfilmentClass, setFulfilment] = useState<string>(FULFILMENT_OPTIONS[0].value);
+  const [note, setNote] = useState("");
+
+  // Generated once per mount and reused by every retry of this same order, so a
+  // second click cannot create a second order.
+  const [idempotencyKey, setIdempotencyKey] = useState("");
+  const [checking, setChecking] = useState(true);
+  const [ready, setReady] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [blockedReason, setBlockedReason] = useState<string | null>(null);
+
+  const verify = useCallback(async () => {
+    setChecking(true);
+    const lines = readBasket();
+    if (!lines.length) {
+      router.replace("/account/basket");
+      return;
+    }
+    try {
+      const r = await fetch("/api/account/basket/preview", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ lines }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        setBlockedReason(ORDER_ERRORS[j.code] ?? "Impossibile verificare il carrello.");
+        setReady(false);
+        return;
+      }
+      const complete = j.basket?.monetaryStatus === "complete";
+      setReady(complete);
+      setBlockedReason(
+        complete
+          ? null
+          : "Il totale finale è in attesa della conferma della tariffa PFU. L'ordine non può ancora essere inviato."
+      );
+    } catch {
+      setBlockedReason("Impossibile verificare il carrello.");
+      setReady(false);
+    } finally {
+      setChecking(false);
+    }
+  }, [router]);
+
+  useEffect(() => {
+    setIdempotencyKey(crypto.randomUUID());
+    void verify();
+  }, [verify]);
+
+  async function submit() {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await fetch("/api/account/orders", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          lines: readBasket(),
+          locationId,
+          paymentMethod,
+          fulfilmentClass,
+          note,
+          idempotencyKey,
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.code);
+
+      writeBasket([]);
+      // The allocated order number travels to the confirmation, so the customer
+      // sees the same GR-…  reference the operator sees, immediately.
+      const reference = formatSalesOrderNumber(j.order?.order_number);
+      router.replace(reference ? `/account/orders?created=${encodeURIComponent(reference)}` : "/account/orders");
+      router.refresh();
+    } catch (e) {
+      setError(ORDER_ERRORS[e instanceof Error ? e.message : ""] ?? "Ordine non inviato. Riprova.");
+      setBusy(false);
+    }
+  }
+
+  const canSubmit = ready && !!locationId && !!idempotencyKey && !busy && !checking;
+
+  return (
+    <div>
+      <h1 className="text-2xl font-extrabold text-ink">Conferma ordine</h1>
+
+      <div className="mt-6 grid gap-5 lg:grid-cols-2">
+        <section className="rounded-2xl bg-white p-5 shadow-card">
+          <h2 className="font-bold text-ink">Consegna</h2>
+          {locations.length === 0 ? (
+            <p className="mt-3 text-sm text-state-danger">
+              Nessun indirizzo di consegna valido configurato. Contatta GommaRush per aggiungerne uno.
+            </p>
+          ) : (
+            <>
+              <label className="sr-only" htmlFor="checkout-location">
+                Indirizzo di consegna
+              </label>
+              <select
+                id="checkout-location"
+                className="mt-3 h-11 w-full rounded-xl border border-ink/15 px-3"
+                value={locationId}
+                onChange={(e) => setLocationId(e.target.value)}
+              >
+                {locations.map((x) => (
+                  <option key={x.id} value={x.id}>
+                    {x.location_name || x.city} — {x.address_line1}, {x.city}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
+
+          <h2 className="mt-6 font-bold text-ink">Servizio</h2>
+          <label className="sr-only" htmlFor="checkout-fulfilment">
+            Servizio di consegna
+          </label>
+          <select
+            id="checkout-fulfilment"
+            className="mt-3 h-11 w-full rounded-xl border border-ink/15 px-3"
+            value={fulfilmentClass}
+            onChange={(e) => setFulfilment(e.target.value)}
+          >
+            {FULFILMENT_OPTIONS.map((x) => (
+              <option key={x.value} value={x.value}>
+                {x.label}
+              </option>
+            ))}
+          </select>
+        </section>
+
+        <section className="rounded-2xl bg-white p-5 shadow-card">
+          <h2 className="font-bold text-ink">Pagamento</h2>
+          <fieldset className="mt-3 space-y-2">
+            <legend className="sr-only">Metodo di pagamento</legend>
+            {PAYMENT_OPTIONS.map((x) => (
+              <label
+                key={x.value}
+                className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 ${
+                  paymentMethod === x.value ? "border-accent bg-accent-light/30" : "border-ink/15"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="payment-method"
+                  className="mt-1"
+                  value={x.value}
+                  checked={paymentMethod === x.value}
+                  onChange={() => setPayment(x.value)}
+                />
+                <span>
+                  <span className="block text-sm font-semibold text-ink">{x.label}</span>
+                  <span className="block text-xs text-ink-soft">{x.hint}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+
+          <label className="mt-5 block text-sm font-semibold text-ink">
+            Note
+            <textarea
+              className="mt-2 min-h-24 w-full rounded-xl border border-ink/15 p-3 font-normal"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+            />
+          </label>
+        </section>
+      </div>
+
+      {checking && (
+        <p className="mt-5 rounded-xl bg-white p-4 text-sm text-ink-soft shadow-card" aria-live="polite">
+          Verifica di prezzi e disponibilità in corso…
+        </p>
+      )}
+
+      {!checking && blockedReason && (
+        <p className="mt-5 rounded-xl border border-state-warning/40 bg-state-warning-soft p-4 text-sm text-ink">
+          {blockedReason}
+        </p>
+      )}
+
+      {error && (
+        <p role="alert" className="mt-5 rounded-xl bg-state-danger-soft p-4 text-sm text-state-danger">
+          {error}
+        </p>
+      )}
+
+      <div className="mt-6 flex justify-end">
+        <Button size="lg" disabled={!canSubmit} onClick={submit}>
+          {busy ? "Invio…" : "Invia ordine a GommaRush"}
+        </Button>
+      </div>
+      <p className="mt-2 text-right text-xs text-ink-soft">
+        L&apos;ordine viene inviato a GommaRush per conferma manuale. Non viene inoltrato
+        automaticamente a un fornitore.
+      </p>
+    </div>
+  );
+}

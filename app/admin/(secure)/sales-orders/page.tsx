@@ -3,6 +3,7 @@ import { PageHeading } from "@/components/logistics/AdminShell";
 import { Button } from "@/components/Button";
 import { listRequestedSalesOrders } from "@/lib/server/sales-orders";
 import { getTr } from "@/lib/i18n/tr-server";
+import { formatSalesOrderNumber } from "@/lib/commerce/order-number";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +60,8 @@ export default async function SalesOrdersPage() {
                     href={`/admin/sales-orders/${order.id}`}
                     className="font-bold hover:underline"
                   >
-                    #{order.order_number} · {snapshot.legal_name || snapshot.name || tr("Cliente")}
+                    {formatSalesOrderNumber(order.order_number)} ·{" "}
+                    {snapshot.legal_name || snapshot.name || tr("Cliente")}
                   </Link>
                   <div className="mt-1 text-sm text-ink-soft">
                     {new Date(order.requested_at).toLocaleString("it-IT")} ·{" "}

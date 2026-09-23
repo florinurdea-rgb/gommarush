@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useLocale } from "@/components/site/LocaleProvider";
 import { LOCALES, LOCALE_LABELS, type Locale } from "@/lib/i18n/locale";
+import { CUSTOMER_ROUTES } from "@/lib/site-routes";
 
 /**
  * The single navigation control for every viewport — there is deliberately
@@ -35,7 +36,7 @@ export function HamburgerMenu() {
   const destinations: NavDestination[] = [
     { href: "/", label: copy.navHome },
     { href: "/richiedi-offerta", label: copy.navQuote },
-    { href: "/account/login", label: locale === "it" ? "Area clienti" : "Customer login" },
+    { href: CUSTOMER_ROUTES.account, label: copy.navClientArea },
     { href: "/driver", label: copy.navDriver },
     { href: "/admin", label: copy.navAdmin },
   ];

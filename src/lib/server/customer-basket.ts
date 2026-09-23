@@ -1,5 +1,7 @@
 import "server-only";
 import { searchCatalogue } from "@/lib/server/catalogue-search";
+import { DEFAULT_FULFILMENT_CLASS, fulfilmentPromise } from "@/lib/commerce/fulfilment";
+import { DEFAULT_PRICING_SETTINGS, type PricingSettings } from "@/lib/pricing/settings";
 import type { CustomerTyreOffer, InternalTyreOffer } from "@/lib/pricing/projection";
 
 /**
@@ -129,7 +131,10 @@ export async function resolveBasket(lines: BasketLineInput[]): Promise<BasketRes
  * sum would read as a price, and a price a customer sees is a price they
  * expect to pay.
  */
-export function customerBasketPayload(lines: BasketResolvedLine[]) {
+export function customerBasketPayload(
+  lines: BasketResolvedLine[],
+  settings: PricingSettings = DEFAULT_PRICING_SETTINGS
+) {
   const tyreNetTotalCents = lines.reduce(
     (sum, l) => sum + (l.customer.tyreSaleNetCents ?? 0) * l.input.quantity,
     0
@@ -167,5 +172,24 @@ export function customerBasketPayload(lines: BasketResolvedLine[]) {
       ? lines.reduce((s, l) => s + (l.customer.customerTotalCents ?? 0) * l.input.quantity, 0)
       : null,
     monetaryStatus,
+
+    /**
+     * The tax position, stated so the basket can explain what is still
+     * missing rather than just showing a blank.
+     *
+     * `vatRatePercent` is the Italian ordinary rate — public law, and not the
+     * same thing as the engine's internal `vatRatePercentApplied` resolution
+     * field, which stays out of every customer payload. `pfuInVatBase` is the
+     * owner's D11 decision, which is now settled; the tariff (D3) is not,
+     * which is why `grandTotalCents` above is still null.
+     */
+    vatRatePercent: settings.vatRatePercent,
+    pfuInVatBase: settings.pfuVatBase === "inside_vat_base",
+
+    /** GommaRush's delivery commitment, by service class, never by supplier. */
+    fulfilment: {
+      class: fulfilmentPromise(DEFAULT_FULFILMENT_CLASS).class,
+      maxDays: fulfilmentPromise(DEFAULT_FULFILMENT_CLASS).maxDays,
+    },
   };
 }

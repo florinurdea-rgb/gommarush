@@ -3,6 +3,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/server-admin";
 import type { CustomerSession } from "@/lib/auth/customer-session";
 import { customerBasketPayload, resolveBasket, type BasketLineInput } from "@/lib/server/customer-basket";
 import { isDeliverableLocation } from "@/lib/commerce/delivery-address";
+import type { FulfilmentClass } from "@/lib/commerce/fulfilment";
 import { DEFAULT_PRICING_SETTINGS } from "@/lib/pricing/settings";
 
 /**
@@ -18,10 +19,23 @@ import { DEFAULT_PRICING_SETTINGS } from "@/lib/pricing/settings";
  * waits for a human.
  */
 
-export const PAYMENT_METHODS = ["bank_transfer", "pos_on_delivery", "cash"] as const;
+/**
+ * What a customer may pay with in V1 — OWNER-CONFIRMED, 2026-09-23.
+ *
+ * Bank transfer and cash on delivery. POS on delivery was removed: it was
+ * present in the first draft of this module but is not an approved V1 method,
+ * and an unapproved payment option on a checkout screen is a commitment to
+ * accept a settlement channel nobody has arranged.
+ *
+ * The database check constraint in 0006 carries the same two values, so a
+ * method this list does not offer cannot be written even by a direct insert.
+ */
+export const PAYMENT_METHODS = ["bank_transfer", "cash_on_delivery"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
-export const FULFILMENT_CLASSES = ["standard", "express"] as const;
-export type FulfilmentClass = (typeof FULFILMENT_CLASSES)[number];
+
+// Re-exported so the order route keeps one import for both vocabularies.
+export { FULFILMENT_CLASSES } from "@/lib/commerce/fulfilment";
+export type { FulfilmentClass } from "@/lib/commerce/fulfilment";
 
 /** Postgres unique violation. */
 const UNIQUE_VIOLATION = "23505";

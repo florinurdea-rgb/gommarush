@@ -4,6 +4,7 @@ import { PageHeading } from "@/components/logistics/AdminShell";
 import { Button } from "@/components/Button";
 import { getSalesOrderDetail } from "@/lib/server/sales-orders";
 import { getTr } from "@/lib/i18n/tr-server";
+import { formatSalesOrderNumber } from "@/lib/commerce/order-number";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +55,7 @@ export default async function SalesOrderDetail({ params }: { params: Promise<{ i
   return (
     <>
       <PageHeading
-        title={`${tr("Ordine cliente")} #${order.order_number}`}
+        title={`${tr("Ordine cliente")} ${formatSalesOrderNumber(order.order_number)}`}
         description={tr("Richiesta ricevuta · revisione manuale obbligatoria")}
         action={
           <Button disabled title={tr("Ordinazione fornitore non ancora attiva")}>

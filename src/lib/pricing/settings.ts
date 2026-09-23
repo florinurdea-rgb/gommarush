@@ -76,11 +76,20 @@ export interface PricingSettings {
  * invention, and marked STATUTORY to say so. It still only applies to a
  * standard-rated supply; anything else is a commercialista's call.
  *
- * `pfuVatBase: "unresolved"` is the load-bearing one. The architecture
- * document's worked example assumes PFU is inside the VAT base, but that
- * assumption is explicitly flagged there as an open OWNER_DECISION, and the
- * accountant has not answered. Until they do, this engine will not produce a
- * customer total. Leaving it `unresolved` is what makes that refusal happen.
+ * `pfuVatBase: "inside_vat_base"` — D11, RESOLVED BY THE OWNER on 2026-09-23.
+ * PFU belongs in the VAT taxable base, taxed at the Italian ordinary 22%. The
+ * chain is therefore: tyre net + PFU = taxable base, taxable base x 22% = VAT,
+ * and their sum is the customer total. This was previously "unresolved" and is
+ * now a recorded business decision, not an inference from the architecture
+ * document's worked example.
+ *
+ * RESOLVING IT DOES NOT MAKE A TOTAL AVAILABLE. D3 — the PFU tariff itself,
+ * its categories and its effective dates — is still open, and
+ * VERIFIED_PFU_TARIFFS in pfu.ts is still deliberately empty. The engine now
+ * stops one step earlier and more honestly: at `pfu_unresolved` (no tariff)
+ * rather than `vat_policy_unresolved` (no accounting position). A customer
+ * total still cannot be produced, and inventing a tariff to reach one remains
+ * forbidden.
  */
 export const DEFAULT_PRICING_SETTINGS: PricingSettings = {
   markupPercent: 20,
@@ -92,7 +101,7 @@ export const DEFAULT_PRICING_SETTINGS: PricingSettings = {
   vatRatePercent: 22,
   vatRateProvenance: "STATUTORY",
 
-  pfuVatBase: "unresolved",
+  pfuVatBase: "inside_vat_base",
 
   rounding: "half_up_per_unit",
 };

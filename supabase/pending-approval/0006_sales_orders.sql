@@ -20,7 +20,10 @@ create table if not exists public.sales_orders (
   source text not null default 'portal' check (source in ('portal','admin','whatsapp','email','phone','quote')),
   status text not null default 'requested' check (status in ('requested','confirmed','rejected','cancelled')),
   fulfilment_class text not null default 'standard' check (fulfilment_class in ('standard','express')),
-  payment_method text not null check (payment_method in ('bank_transfer','pos_on_delivery','cash')),
+  -- V1 payment methods, owner-confirmed 2026-09-23. POS on delivery is
+  -- deliberately absent: it is not an approved settlement channel, and the
+  -- constraint is what stops it being written by a path that bypasses the app.
+  payment_method text not null check (payment_method in ('bank_transfer','cash_on_delivery')),
   currency text not null default 'EUR',
   monetary_status text not null default 'pending_pfu' check (monetary_status in ('complete','pending_pfu','pending_tax_policy')),
   tyre_net_total_cents bigint,

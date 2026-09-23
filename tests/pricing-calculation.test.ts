@@ -203,18 +203,56 @@ describe("TO_CONFIRM stays unresolved and never becomes zero", () => {
 });
 
 describe("VAT comes only from explicit configuration", () => {
-  it("produces no VAT while the PFU/VAT base policy is unresolved", () => {
-    expect(DEFAULT_PRICING_SETTINGS.pfuVatBase).toBe("unresolved");
+  /**
+   * D11 was RESOLVED by the owner on 2026-09-23: PFU sits inside the VAT base.
+   * The shipped settings therefore no longer block on the accounting position,
+   * and this asserts the new state rather than the old one — a test still
+   * expecting "unresolved" would be describing a decision that has been taken.
+   */
+  it("carries the owner-resolved PFU VAT position and taxes PFU with it", () => {
+    expect(DEFAULT_PRICING_SETTINGS.pfuVatBase).toBe("inside_vat_base");
 
     const result = calculateTyrePrice(
       { supplierCostCents: 10_000, pfu: PFU_250 },
       DEFAULT_PRICING_SETTINGS
     );
 
+    // tyre net 120.00 + PFU 2.50 = 122.50 taxable, x 22% = 26.95.
+    expect(result.resolution).toBe("complete");
+    expect(result.taxableSubtotalCents).toBe(12_250);
+    expect(result.vatAmountCents).toBe(2_695);
+    expect(result.customerTotalCents).toBe(14_945);
+  });
+
+  /**
+   * The refusal that still matters. D3 — the tariff itself — is open, so a real
+   * catalogue tyre resolves its PFU to TO_CONFIRM and no total is produced.
+   * Resolving the VAT position moved the refusal one step EARLIER; it did not
+   * remove it.
+   */
+  it("still produces no total for a real tyre, because no PFU tariff exists", () => {
+    const result = calculateTyrePrice(
+      { supplierCostCents: 10_000, pfu: resolvePfu({ weightKg: 8.5 }) },
+      DEFAULT_PRICING_SETTINGS
+    );
+
+    expect(result.resolution).toBe("pfu_unresolved");
+    expect(result.pfuAmountCents).toBeNull();
+    expect(result.taxableSubtotalCents).toBeNull();
+    expect(result.customerTotalCents).toBeNull();
+    // The net selling price is knowable and stays available.
+    expect(result.tyreSaleNetCents).toBe(12_000);
+  });
+
+  it("still refuses VAT when a settings object leaves the position unresolved", () => {
+    const result = calculateTyrePrice(
+      { supplierCostCents: 10_000, pfu: PFU_250 },
+      { ...RESOLVED_SETTINGS, pfuVatBase: "unresolved" }
+    );
+
     expect(result.resolution).toBe("vat_policy_unresolved");
     expect(result.vatAmountCents).toBeNull();
     expect(result.customerTotalCents).toBeNull();
-    // Everything up to the taxable subtotal is still resolved.
     expect(result.taxableSubtotalCents).toBe(12_250);
   });
 

@@ -38,10 +38,13 @@ customer_total   = taxable_subtotal + vat_amount
 Rounding uses deterministic currency rules. Net, tax and gross values are always
 preserved separately.
 
-> **OWNER_DECISION — is PFU inside the VAT base?** The model above assumes yes.
-> This is a tax position for the commercialista, not an engineering choice, and
-> it changes every customer total. Must be settled before the first price
-> snapshot is written, because snapshots are immutable.
+> **RESOLVED 2026-09-23 — PFU is inside the VAT base.** The owner confirmed the
+> tax position: tyre net + PFU is the taxable base, and the Italian ordinary
+> rate of 22% applies to that base. `pfuVatBase` is now `inside_vat_base`, so
+> the model above is the implemented behaviour rather than an assumption.
+>
+> This settles the accounting position ONLY. The tariff itself — D3 — is still
+> open, so no customer total is produced for a real catalogue tyre. See below.
 
 > **OWNER_DECISION — rounding scope:** per unit or per line. Same reason.
 
@@ -123,11 +126,16 @@ Italian ordinary rate, recorded as configuration rather than inferred at a call
 site. A rate whose provenance is `UNRESOLVED` produces no VAT at all rather
 than a zero-rated total.
 
-The engine will not produce a customer total today, because `pfuVatBase` is
-`unresolved`: whether PFU sits inside the taxable base is the open accounting
-question above, and both answers give different totals. Net selling price,
-markup and gross profit are still reported, which is what B2B competitiveness
-is judged on.
+**IMPLEMENTED.** `pfuVatBase` is `inside_vat_base` (owner decision D11,
+2026-09-23), so the VAT step is configured and will run.
+
+The engine still produces no customer total for a real catalogue tyre, and the
+reason has moved one step earlier: `VERIFIED_PFU_TARIFFS` is empty, so
+`resolvePfu` returns `TO_CONFIRM` and the calculation stops at
+`pfu_unresolved`. That is D3, and it is now the single remaining blocker on a
+payable amount. Net selling price, markup and gross profit are still reported,
+which is what B2B competitiveness is judged on; customer-facing surfaces show
+the net price and say PFU and VAT are to be confirmed.
 
 ## Price snapshots
 
