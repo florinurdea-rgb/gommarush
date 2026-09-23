@@ -127,15 +127,31 @@ site. A rate whose provenance is `UNRESOLVED` produces no VAT at all rather
 than a zero-rated total.
 
 **IMPLEMENTED.** `pfuVatBase` is `inside_vat_base` (owner decision D11,
-2026-09-23), so the VAT step is configured and will run.
+2026-09-23), so the VAT step is configured and runs.
 
-The engine still produces no customer total for a real catalogue tyre, and the
-reason has moved one step earlier: `VERIFIED_PFU_TARIFFS` is empty, so
-`resolvePfu` returns `TO_CONFIRM` and the calculation stops at
-`pfu_unresolved`. That is D3, and it is now the single remaining blocker on a
-payable amount. Net selling price, markup and gross profit are still reported,
-which is what B2B competitiveness is judged on; customer-facing surfaces show
-the net price and say PFU and VAT are to be confirmed.
+`VERIFIED_PFU_TARIFFS` is still empty — D3 is open — so a real catalogue tyre
+has no verified PFU. Since 2026-09-23 the owner has authorised a **temporary
+estimate** so that PFU does not block V1 ordering, and the engine therefore
+does produce a customer total.
+
+That total is provisional, and the system says so at every layer:
+
+* `PfuStatus` gained `ESTIMATED`, a value distinct from `RULE_CALCULATED`.
+  `isResolvedPfuStatus` accepts it (there is an amount); `isVerifiedPfuStatus`
+  does not (there is no evidence).
+* `resolvePfu` prefers a supplier-stated figure, then a verified tariff, then
+  the estimate. Loading real tariffs retires the estimate with no code change.
+* A caller that cannot accept an estimate passes `allowEstimate: false` and
+  gets the original `TO_CONFIRM` refusal.
+* Every customer surface carries the disclosure "PFU stimato — l'importo
+  definitivo può variare."
+* Every order records `pfu_status` and `pfu_estimate_version` as columns, so
+  orders priced on the estimate can be found and re-quoted later. They are
+  never silently reinterpreted.
+
+The amounts live in `src/lib/pricing/pfu-estimate.ts` and are **owner
+placeholders, not tariffs** — no PFU figure exists anywhere in GommaRush's
+data. See that file's header before changing anything in it.
 
 ## Price snapshots
 

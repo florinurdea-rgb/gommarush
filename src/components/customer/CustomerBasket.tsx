@@ -3,17 +3,22 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/Button";
 import { readBasket, writeBasket, type StoredBasketLine } from "@/lib/customer/basket";
+import { useTr } from "@/lib/i18n/tr";
 
 /**
  * The customer basket.
  *
- * THE ONE THING THIS SCREEN MUST GET RIGHT: a customer must never mistake the
- * tyre value for the amount they will be invoiced. While the PFU tariff is
- * unresolved the two are different, and the difference is not a rounding
- * detail — it is a levy plus the VAT on it. So the summary is split into two
- * visually distinct blocks: what is KNOWN, and what the FINAL TOTAL will be
- * once PFU is confirmed. The final block shows no number at all rather than a
- * number with a caveat next to it.
+ * THE ONE THING THIS SCREEN MUST GET RIGHT: a customer must never mistake a
+ * provisional figure for the amount they will be invoiced.
+ *
+ * Since the owner's 2026-09-23 decision the PFU is a TEMPORARY ESTIMATE, so a
+ * total does exist — and it can move. The summary is therefore split into the
+ * settled tyre value, the levies on top of it, and a total block that is
+ * labelled "Totale stimato" and carries the estimate disclosure inline, at the
+ * exact place the number is read rather than in a footnote.
+ *
+ * If the PFU ever becomes unresolvable again, the total block shows no number
+ * at all rather than a number with a caveat beside it.
  *
  * The browser is not authoritative for anything. It stores product id,
  * condition and quantity; every price, availability, tax position and total on
@@ -49,6 +54,8 @@ type Preview = {
   monetaryStatus: string;
   vatRatePercent: number;
   pfuInVatBase: boolean;
+  pfuEstimated: boolean;
+  pfuEstimateVersion: string | null;
   fulfilment: { class: string; maxDays: number };
 };
 
@@ -70,6 +77,7 @@ const LOAD_ERRORS: Record<string, string> = {
 };
 
 export function CustomerBasket() {
+  const tr = useTr();
   const [stored, setStored] = useState<StoredBasketLine[]>([]);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [busy, setBusy] = useState(true);
@@ -95,13 +103,13 @@ export function CustomerBasket() {
       setPreview(j.basket);
     } catch (e) {
       setError(
-        LOAD_ERRORS[e instanceof Error ? e.message : ""] ??
-          "Impossibile aggiornare il carrello. Riprova."
+        (LOAD_ERRORS[e instanceof Error ? e.message : ""] ?? "") ||
+          tr("Impossibile aggiornare il carrello. Riprova.")
       );
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [tr]);
 
   useEffect(() => {
     void load(readBasket());
@@ -118,7 +126,7 @@ export function CustomerBasket() {
   if (busy && !preview) {
     return (
       <div>
-        <h1 className="text-2xl font-extrabold text-ink">Carrello</h1>
+        <h1 className="text-2xl font-extrabold text-ink">{tr("Carrello")}</h1>
         <BasketSkeleton />
       </div>
     );
@@ -127,11 +135,11 @@ export function CustomerBasket() {
   if (!stored.length) {
     return (
       <div>
-        <h1 className="text-2xl font-extrabold text-ink">Carrello</h1>
+        <h1 className="text-2xl font-extrabold text-ink">{tr("Carrello")}</h1>
         <div className="mt-6 rounded-2xl bg-white p-8 text-center shadow-card">
-          <p className="text-ink-soft">Il carrello è vuoto.</p>
+          <p className="text-ink-soft">{tr("Il carrello è vuoto.")}</p>
           <Link className="mt-4 inline-block font-semibold text-accent underline" href="/account/catalogue">
-            Vai al catalogo
+            {tr("Vai al catalogo")}
           </Link>
         </div>
       </div>
@@ -142,7 +150,7 @@ export function CustomerBasket() {
 
   return (
     <div aria-busy={busy}>
-      <h1 className="text-2xl font-extrabold text-ink">Carrello</h1>
+      <h1 className="text-2xl font-extrabold text-ink">{tr("Carrello")}</h1>
 
       {error && (
         <p role="alert" className="mt-4 rounded-xl bg-state-danger-soft p-4 text-state-danger">
@@ -171,16 +179,16 @@ export function CustomerBasket() {
                       {line.tyre.season && SEASON_LABELS[line.tyre.season]
                         ? ` · ${SEASON_LABELS[line.tyre.season]}`
                         : ""}
-                      {line.oldDot ? " · DOT precedente" : ""}
+                      {line.oldDot ? ` · ${tr("DOT precedente")}` : ""}
                     </div>
                     <div className="mt-2 text-sm text-ink-soft">
-                      {money(line.unitTyreNetCents)} <span className="text-xs">netto / pz</span>
+                      {money(line.unitTyreNetCents)} <span className="text-xs">{tr("netto / pz")}</span>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-3">
                     <label className="sr-only" htmlFor={`qty-${line.productId}-${line.oldDot}`}>
-                      Quantità
+                      {tr("Quantità")}
                     </label>
                     <input
                       id={`qty-${line.productId}-${line.oldDot}`}
@@ -204,7 +212,7 @@ export function CustomerBasket() {
                       disabled={busy}
                       onClick={() => setQuantity(s, 0)}
                     >
-                      Rimuovi
+                      {tr("Rimuovi")}
                     </button>
                   </div>
                 </div>
@@ -215,61 +223,90 @@ export function CustomerBasket() {
 
         {preview && (
           <section className="rounded-2xl bg-white p-5 shadow-card lg:sticky lg:top-6">
-            {/* ---- KNOWN ------------------------------------------------ */}
+            {/* ---- THE TYRE VALUE, which is settled --------------------- */}
             <h2 className="text-xs font-bold uppercase tracking-wide text-ink-soft">
-              Valore pneumatici
+              {tr("Valore pneumatici")}
             </h2>
             <div className="mt-3 flex justify-between text-sm">
-              <span>Imponibile pneumatici</span>
+              <span>{tr("Imponibile pneumatici")}</span>
               <strong>{money(preview.tyreNetTotalCents)}</strong>
             </div>
             <p className="mt-2 text-xs text-ink-soft">
-              Consegna entro {preview.fulfilment.maxDays} giorni · inclusa nel prezzo
+              {tr("Consegna entro")} {preview.fulfilment.maxDays} {tr("giorni")} ·{" "}
+              {tr("inclusa nel prezzo")}
             </p>
 
-            {/* ---- OUTSTANDING ------------------------------------------ */}
+            {/* ---- LEVIES AND TAX -------------------------------------- */}
             <div className="mt-5 border-t border-ink/10 pt-4">
               <h2 className="text-xs font-bold uppercase tracking-wide text-ink-soft">
-                Da aggiungere
+                {tr("Imposte e contributi")}
               </h2>
               <div className="mt-3 flex justify-between text-sm">
-                <span>PFU</span>
+                <span>
+                  {preview.pfuEstimated ? tr("PFU stimato") : tr("PFU")}
+                  {preview.pfuEstimated && <span aria-hidden="true"> *</span>}
+                </span>
                 <strong className={preview.pfuTotalCents === null ? "text-state-warning" : ""}>
                   {money(preview.pfuTotalCents)}
                 </strong>
               </div>
               <div className="mt-2 flex justify-between text-sm">
-                <span>IVA {preview.vatRatePercent}%</span>
+                <span>
+                  {tr("IVA")} {preview.vatRatePercent}%
+                </span>
                 <strong className={preview.vatTotalCents === null ? "text-state-warning" : ""}>
                   {money(preview.vatTotalCents)}
                 </strong>
               </div>
               {preview.pfuInVatBase && (
                 <p className="mt-2 text-xs text-ink-soft">
-                  L&apos;IVA al {preview.vatRatePercent}% si applica a pneumatici + PFU.
+                  {tr("L'IVA si applica a pneumatici + PFU.")}
                 </p>
               )}
             </div>
 
-            {/* ---- FINAL ------------------------------------------------ */}
+            {/* ---- THE TOTAL ------------------------------------------- */}
             <div
               className={`mt-5 rounded-xl border-2 p-4 ${
-                complete ? "border-accent/30 bg-accent-light/40" : "border-state-warning/40 bg-state-warning-soft"
+                !complete
+                  ? "border-state-warning/40 bg-state-warning-soft"
+                  : preview.pfuEstimated
+                    ? "border-state-warning/40 bg-state-warning-soft"
+                    : "border-accent/30 bg-accent-light/40"
               }`}
             >
               <div className="flex items-baseline justify-between gap-3">
-                <span className="text-sm font-bold text-ink">Totale da pagare</span>
+                <span className="text-sm font-bold text-ink">
+                  {preview.pfuEstimated ? tr("Totale stimato") : tr("Totale da pagare")}
+                </span>
                 {complete ? (
                   <strong className="text-lg">{money(preview.grandTotalCents)}</strong>
                 ) : (
-                  <strong className="text-sm text-state-warning">Non ancora disponibile</strong>
+                  <strong className="text-sm text-state-warning">
+                    {tr("Non ancora disponibile")}
+                  </strong>
                 )}
               </div>
+
+              {/*
+                THE DISCLOSURE. A total built on an estimated levy is labelled
+                as estimated at the exact place the customer reads the number,
+                not in a footnote further down the page.
+              */}
+              {complete && preview.pfuEstimated && (
+                <p className="mt-2 text-xs leading-relaxed text-ink">
+                  * {tr("PFU stimato — l'importo definitivo può variare.")}{" "}
+                  {tr(
+                    "Il PFU indicato è una stima. L'importo definitivo può variare e sarà confermato da GommaRush."
+                  )}
+                </p>
+              )}
+
               {!complete && (
                 <p className="mt-2 text-xs leading-relaxed text-ink">
-                  Il totale finale non può essere calcolato perché la tariffa PFU non è ancora
-                  confermata. L&apos;importo indicato sopra è il <strong>valore dei pneumatici</strong>,
-                  non la cifra che sarà fatturata.
+                  {tr(
+                    "Il totale finale non è ancora disponibile. L'importo indicato sopra è il valore dei pneumatici, non la cifra che sarà fatturata."
+                  )}
                 </p>
               )}
             </div>
@@ -281,13 +318,8 @@ export function CustomerBasket() {
                 window.location.href = "/account/checkout";
               }}
             >
-              Procedi all&apos;ordine
+              {tr("Procedi all'ordine")}
             </Button>
-            {!complete && (
-              <p className="mt-2 text-center text-xs text-ink-soft">
-                L&apos;ordine si potrà inviare quando il PFU sarà confermato.
-              </p>
-            )}
           </section>
         )}
       </div>

@@ -14,6 +14,7 @@ import {
 import { PAYMENT_METHODS } from "@/lib/server/sales-orders";
 import { customerBasketPayload, type BasketResolvedLine } from "@/lib/server/customer-basket";
 import { DEFAULT_PRICING_SETTINGS } from "@/lib/pricing/settings";
+import { PFU_ESTIMATE_VERSION } from "@/lib/pricing/pfu-estimate";
 import { calculateTyrePrice } from "@/lib/pricing/calculate";
 import { resolvePfu } from "@/lib/pricing/pfu";
 import { toCustomerOffer, toInternalOffer, type PricedListing } from "@/lib/pricing/projection";
@@ -238,17 +239,21 @@ function realLine(quantity: number): BasketResolvedLine {
   };
 }
 
-describe("an unresolved PFU cannot become a final total", () => {
-  it("reports the tyre value and withholds the payable amount", () => {
+describe("an estimated PFU produces a total that says it is estimated", () => {
+  it("totals the line from the estimate and discloses the estimate", () => {
     const basket = customerBasketPayload([realLine(4)]);
 
-    // Known: 100.00 cost + 20% = 120.00 net, x4.
+    // 100.00 cost + 20% = 120.00 net, x4 = 480.00.
     expect(basket.tyreNetTotalCents).toBe(48_000);
-    // Not known, and not guessed:
-    expect(basket.monetaryStatus).toBe("pending_pfu");
-    expect(basket.pfuTotalCents).toBeNull();
-    expect(basket.vatTotalCents).toBeNull();
-    expect(basket.grandTotalCents).toBeNull();
+    // 3.00 estimated PFU x4 = 12.00; VAT 22% of (480 + 12) = 108.24.
+    expect(basket.monetaryStatus).toBe("complete");
+    expect(basket.pfuTotalCents).toBe(1_200);
+    expect(basket.vatTotalCents).toBe(10_824);
+    expect(basket.grandTotalCents).toBe(60_024);
+
+    // And it never claims the figure is settled.
+    expect(basket.pfuEstimated).toBe(true);
+    expect(basket.pfuEstimateVersion).toBe(PFU_ESTIMATE_VERSION);
   });
 
   it("states the tax position it DOES know, so the gap is explainable", () => {

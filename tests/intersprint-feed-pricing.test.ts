@@ -280,22 +280,35 @@ describe("a real price flows into the central pricing engine", () => {
     expect(breakdown.tyreSaleNetCents).toBe(11_904);
   });
 
-  it("leaves PFU unresolved and therefore produces no customer total", () => {
+  it("uses the temporary PFU estimate and therefore produces a total", () => {
     const breakdown = calculateTyrePrice(
       { supplierCostCents: 9_920, pfu: resolvePfu({ weightKg: 8.238 }) },
       DEFAULT_PRICING_SETTINGS
     );
 
-    expect(breakdown.resolution).toBe("pfu_unresolved");
-    expect(breakdown.pfuStatus).toBe("TO_CONFIRM");
-    expect(breakdown.pfuAmountCents).toBeNull();
-    expect(breakdown.customerTotalCents).toBeNull();
+    expect(breakdown.resolution).toBe("complete");
+    expect(breakdown.pfuStatus).toBe("ESTIMATED");
+    // 8.238 kg falls in the <=11 kg band: 3.00 EUR.
+    expect(breakdown.pfuAmountCents).toBe(300);
+    expect(breakdown.customerTotalCents).not.toBeNull();
   });
 
-  /** A tyre weight is in the feed. It still cannot become a PFU amount. */
-  it("does not let the feed's weight become a PFU value", () => {
+  /**
+   * The feed's weight now SELECTS AN ESTIMATE BAND, which is not the same as
+   * becoming a tariff. The status is what stops the two being confused, and
+   * no verified tariff exists to produce a RULE_CALCULATED amount.
+   */
+  it("uses the feed weight only to pick an estimate band, never as a tariff", () => {
     expect(normalized().weightKg).toBeCloseTo(8.238, 3);
-    expect(resolvePfu({ weightKg: 8.238 }).amountCents).toBeNull();
+
+    const pfu = resolvePfu({ weightKg: 8.238 });
+    expect(pfu.status).toBe("ESTIMATED");
+    expect(pfu.tariff).toBeNull();
+    expect(pfu.estimate?.basis).toBe("weight_band");
+
+    // And an accounting-grade caller still gets the honest answer.
+    expect(resolvePfu({ weightKg: 8.238, allowEstimate: false }).status).toBe("TO_CONFIRM");
+    expect(resolvePfu({ weightKg: 8.238, allowEstimate: false }).amountCents).toBeNull();
   });
 
   it("cannot price a row whose price the adapter refused", () => {
@@ -361,8 +374,9 @@ describe("the catalogue preview projections", () => {
     expect(internal.markupPercentApplied).toBe(20);
     expect(internal.tyreSaleNetCents).toBe(11_904);
     expect(internal.grossProfitCents).toBe(1_984);
-    expect(internal.pfuStatus).toBe("TO_CONFIRM");
-    expect(internal.customerTotalCents).toBeNull();
+    expect(internal.pfuStatus).toBe("ESTIMATED");
+    expect(internal.pfuEstimated).toBe(true);
+    expect(internal.customerTotalCents).not.toBeNull();
     expect(internal.supplierName).toBe("Inter-Sprint Banden BV");
   });
 

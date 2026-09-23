@@ -304,6 +304,10 @@ describe("customer catalogue confidentiality", () => {
         "availability",
         "customerTotalCents",
         "pfuAmountCents",
+        // The two estimate-disclosure fields are customer-SAFE and required:
+        // the owner's decision is that an estimated PFU must be visible.
+        "pfuEstimated",
+        "pfuEstimateVersion",
         "pfuStatus",
         "priceAvailable",
         "tyre",
@@ -315,18 +319,28 @@ describe("customer catalogue confidentiality", () => {
 });
 
 describe("customer catalogue fails closed on money", () => {
-  it("never produces a final total while PFU is unresolved", async () => {
+  /**
+   * The owner's 2026-09-23 decision: PFU must not block ordering, so a
+   * temporary estimate is used and a total IS produced. Every offer must
+   * still declare that its PFU is an estimate, because that is what the
+   * customer disclosure and the order snapshot hang off.
+   */
+  it("produces a total and marks every PFU as estimated, never as verified", async () => {
     const { searchCustomerCatalogue } = await import("@/lib/server/customer-catalogue");
+    const { isVerifiedPfuStatus } = await import("@/lib/pricing/pfu");
     mockAll();
 
     const result = await searchCustomerCatalogue({ limit: 100 }, undefined, undefined, NOW);
+    expect(result.offers.length).toBeGreaterThan(0);
+
     for (const offer of result.offers) {
-      expect(offer.pfuStatus).toBe("TO_CONFIRM");
-      expect(offer.pfuAmountCents).toBeNull();
-      expect(offer.vatAmountCents).toBeNull();
-      expect(offer.customerTotalCents).toBeNull();
-      // The net selling price IS available; only the final payable is withheld.
+      expect(offer.pfuStatus).toBe("ESTIMATED");
+      expect(isVerifiedPfuStatus(offer.pfuStatus)).toBe(false);
+      expect(offer.pfuAmountCents).not.toBeNull();
+      expect(offer.vatAmountCents).not.toBeNull();
+      expect(offer.customerTotalCents).not.toBeNull();
       expect(offer.tyreSaleNetCents).not.toBeNull();
+      expect(offer.pfuEstimated).toBe(true);
     }
   });
 });

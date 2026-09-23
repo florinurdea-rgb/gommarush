@@ -159,17 +159,41 @@ describe("TO_CONFIRM stays unresolved and never becomes zero", () => {
     expect(VERIFIED_PFU_TARIFFS).toHaveLength(0);
   });
 
-  it("resolves every Inter-Sprint listing to TO_CONFIRM today", () => {
+  /**
+   * Since the owner's 2026-09-23 decision an Inter-Sprint listing resolves to
+   * the temporary ESTIMATE, not to TO_CONFIRM. What must never happen is the
+   * estimate being mistaken for a tariff, so that is what is asserted.
+   */
+  it("resolves an Inter-Sprint listing to an ESTIMATE, never to a tariff", () => {
     const pfu = resolvePfu({ weightKg: 8.5, productClass: "passenger_car" });
-    expect(pfu.status).toBe("TO_CONFIRM");
-    expect(pfu.amountCents).toBeNull();
+    expect(pfu.status).toBe("ESTIMATED");
+    expect(pfu.amountCents).toBe(300);
+    expect(pfu.tariff, "no verified tariff exists to back it").toBeNull();
+    expect(pfu.estimate?.basis).toBe("weight_band");
   });
 
-  /** A weight is not a tariff. This is the invention the module exists to stop. */
-  it("refuses to turn a weight into an amount", () => {
+  /**
+   * A weight still is not a tariff. It now selects an estimate BAND, which is
+   * a different claim, carried by a different status — and a caller that
+   * cannot accept an estimate still gets nothing.
+   */
+  it("turns a weight into a banded estimate, and into nothing at all for a verified-only caller", () => {
     for (const weightKg of [6, 8.5, 11.2, 25]) {
-      expect(resolvePfu({ weightKg }).amountCents).toBeNull();
+      const estimated = resolvePfu({ weightKg });
+      expect(estimated.status).toBe("ESTIMATED");
+      expect(estimated.amountCents).not.toBeNull();
+      expect(estimated.tariff).toBeNull();
+
+      expect(resolvePfu({ weightKg, allowEstimate: false }).amountCents).toBeNull();
     }
+  });
+
+  /** The bands are coarse on purpose; they must not imply precision. */
+  it("bands by weight rather than scaling continuously with it", () => {
+    expect(resolvePfu({ weightKg: 6 }).amountCents).toBe(resolvePfu({ weightKg: 8.5 }).amountCents);
+    expect(resolvePfu({ weightKg: 11.2 }).amountCents).toBeGreaterThan(
+      resolvePfu({ weightKg: 8.5 }).amountCents as number
+    );
   });
 
   it("blocks the subtotal and total rather than treating PFU as zero", () => {
@@ -230,17 +254,30 @@ describe("VAT comes only from explicit configuration", () => {
    * Resolving the VAT position moved the refusal one step EARLIER; it did not
    * remove it.
    */
-  it("still produces no total for a real tyre, because no PFU tariff exists", () => {
+  it("produces a total for a real tyre from the estimate, flagged as estimated", () => {
     const result = calculateTyrePrice(
       { supplierCostCents: 10_000, pfu: resolvePfu({ weightKg: 8.5 }) },
       DEFAULT_PRICING_SETTINGS
     );
 
+    expect(result.resolution).toBe("complete");
+    expect(result.pfuEstimated).toBe(true);
+    expect(result.pfuAmountCents).toBe(300);
+    expect(result.taxableSubtotalCents).toBe(12_300);
+    expect(result.customerTotalCents).toBe(15_006);
+    expect(result.tyreSaleNetCents).toBe(12_000);
+  });
+
+  /** Withholding the total is still reachable, for callers that need it. */
+  it("still produces no total when an estimate is not permitted", () => {
+    const result = calculateTyrePrice(
+      { supplierCostCents: 10_000, pfu: resolvePfu({ weightKg: 8.5, allowEstimate: false }) },
+      DEFAULT_PRICING_SETTINGS
+    );
+
     expect(result.resolution).toBe("pfu_unresolved");
-    expect(result.pfuAmountCents).toBeNull();
-    expect(result.taxableSubtotalCents).toBeNull();
+    expect(result.pfuEstimated).toBe(false);
     expect(result.customerTotalCents).toBeNull();
-    // The net selling price is knowable and stays available.
     expect(result.tyreSaleNetCents).toBe(12_000);
   });
 

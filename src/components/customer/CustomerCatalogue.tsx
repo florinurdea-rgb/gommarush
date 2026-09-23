@@ -4,6 +4,7 @@ import { Button } from "@/components/Button";
 import { addBasketLine } from "@/lib/customer/basket";
 import { BRAND_TIER_LABELS } from "@/lib/catalogue/brand-tiers";
 import { catalogueViewState, shouldQueryCatalogue } from "@/lib/customer/catalogue-view";
+import { useTr } from "@/lib/i18n/tr";
 
 /**
  * The customer tyre search.
@@ -37,6 +38,7 @@ type Offer = {
   availability: "unknown" | "in_stock" | "on_request";
   tyreSaleNetCents: number | null;
   pfuStatus: string;
+  pfuEstimated: boolean;
   pfuAmountCents: number | null;
   vatAmountCents: number | null;
   customerTotalCents: number | null;
@@ -64,6 +66,7 @@ const AVAILABILITY_LABELS: Record<Offer["availability"], string> = {
 };
 
 export function CustomerCatalogue() {
+  const tr = useTr();
   const [offers, setOffers] = useState<Offer[]>([]);
   const [facets, setFacets] = useState<Facets>(EMPTY_FACETS);
   const [total, setTotal] = useState(0);
@@ -137,7 +140,7 @@ export function CustomerCatalogue() {
         // An aborted request is superseded, not failed: leave the spinner up
         // for the request that replaced it rather than flashing an error.
         if ((e as Error).name === "AbortError") return;
-        setError("Catalogo non disponibile. Riprova.");
+        setError(tr("Catalogo non disponibile. Riprova."));
         setLoading(false);
       }
     }, 250);
@@ -169,46 +172,47 @@ export function CustomerCatalogue() {
 
   return (
     <div>
-      <h1 className="text-2xl font-extrabold text-ink">Catalogo pneumatici</h1>
+      <h1 className="text-2xl font-extrabold text-ink">{tr("Catalogo pneumatici")}</h1>
       <p className="mt-1 text-sm text-ink-soft">
-        Scegli la misura per vedere i pneumatici disponibili e il prezzo GommaRush.
+        {tr("Scegli la misura per vedere i pneumatici disponibili e il prezzo GommaRush.")}
       </p>
 
       <div className="mt-6 rounded-2xl bg-white p-4 shadow-card">
         <fieldset>
           <legend className="text-xs font-bold uppercase tracking-wide text-ink-soft">
-            Misura <span className="font-semibold text-state-danger">obbligatoria</span>
+            {tr("Misura")}{" "}
+            <span className="font-semibold text-state-danger">{tr("obbligatoria")}</span>
           </legend>
           <div className="mt-2 grid gap-3 sm:grid-cols-3">
-            <Select label="Larghezza" value={width} set={setWidth} values={facets.widths} placeholder="Scegli" />
-            <Select label="Spalla" value={aspect} set={setAspect} values={facets.aspectRatios} placeholder="Scegli" />
-            <Select label="Cerchio" value={rim} set={setRim} values={facets.rims} placeholder="Scegli" />
+            <Select label={tr("Larghezza")} value={width} set={setWidth} values={facets.widths} placeholder={tr("Scegli")} />
+            <Select label={tr("Spalla")} value={aspect} set={setAspect} values={facets.aspectRatios} placeholder={tr("Scegli")} />
+            <Select label={tr("Cerchio")} value={rim} set={setRim} values={facets.rims} placeholder={tr("Scegli")} />
           </div>
         </fieldset>
 
         <fieldset className="mt-4 border-t border-ink/10 pt-4">
-          <legend className="sr-only">Filtri aggiuntivi</legend>
+          <legend className="sr-only">{tr("Filtri aggiuntivi")}</legend>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <label className="text-sm font-semibold text-ink">
-              Stagione
+              {tr("Stagione")}
               <select
                 value={season}
                 onChange={(e) => setSeason(e.target.value)}
                 className="mt-1 h-11 w-full rounded-xl border border-ink/15 px-3 font-normal"
               >
-                <option value="">Tutte le stagioni</option>
-                <option value="summer">Estive</option>
-                <option value="winter">Invernali</option>
-                <option value="all_season">4 stagioni</option>
+                <option value="">{tr("Tutte le stagioni")}</option>
+                <option value="summer">{tr("Estive")}</option>
+                <option value="winter">{tr("Invernali")}</option>
+                <option value="all_season">{tr("4 stagioni")}</option>
               </select>
             </label>
 
             <label className="text-sm font-semibold text-ink">
-              Marca
+              {tr("Marca")}
               <input
                 value={brand}
                 onChange={(e) => setBrand(e.target.value)}
-                placeholder="Tutte le marche"
+                placeholder={tr("Tutte le marche")}
                 list="customer-catalogue-brands"
                 className="mt-1 h-11 w-full rounded-xl border border-ink/15 px-3 font-normal"
               />
@@ -220,14 +224,14 @@ export function CustomerCatalogue() {
             </label>
 
             <label className="text-sm font-semibold text-ink">
-              Ordina per
+              {tr("Ordina per")}
               <select
                 value={sort}
                 onChange={(e) => setSort(e.target.value)}
                 className="mt-1 h-11 w-full rounded-xl border border-ink/15 px-3 font-normal"
               >
-                <option value="price_asc">Prezzo più basso</option>
-                <option value="brand_asc">Marca A–Z</option>
+                <option value="price_asc">{tr("Prezzo più basso")}</option>
+                <option value="brand_asc">{tr("Marca A–Z")}</option>
               </select>
             </label>
 
@@ -238,13 +242,13 @@ export function CustomerCatalogue() {
             */}
             {tiersConfigured && (
               <label className="text-sm font-semibold text-ink">
-                Fascia
+                {tr("Fascia")}
                 <select
                   value={tier}
                   onChange={(e) => setTier(e.target.value)}
                   className="mt-1 h-11 w-full rounded-xl border border-ink/15 px-3 font-normal"
                 >
-                  <option value="">Tutte le fasce</option>
+                  <option value="">{tr("Tutte le fasce")}</option>
                   {BRAND_TIER_LABELS.map((x) => (
                     <option key={x.tier} value={x.tier}>
                       {x.label}
@@ -262,29 +266,27 @@ export function CustomerCatalogue() {
             onClick={reset}
             className="mt-4 text-sm font-semibold text-ink-soft underline hover:text-ink"
           >
-            Azzera i filtri
+            {tr("Azzera i filtri")}
           </button>
         )}
       </div>
 
       <div className="mt-6" aria-live="polite" aria-busy={loading}>
         {view === "awaiting_dimensions" ? (
-          <PromptForSize />
+          <PromptForSize tr={tr} />
         ) : view === "loading" ? (
-          <ResultsSkeleton />
+          <ResultsSkeleton tr={tr} />
         ) : view === "error" ? (
           <p className="rounded-xl bg-state-danger-soft p-4 text-state-danger">{error}</p>
         ) : view === "refused" ? (
           <p className="rounded-2xl bg-white p-5 text-sm text-ink-soft shadow-card">
-            La selezione è troppo ampia per essere ordinata correttamente ({refused?.matched}{" "}
-            pneumatici). Aggiungi un filtro per restringere la ricerca.
+            {tr("La selezione è troppo ampia per essere ordinata correttamente.")}{" "}
+            {refused?.matched} {tr("pneumatici")}. {tr("Aggiungi un filtro per restringere la ricerca.")}
           </p>
         ) : (
           <>
             <p className="text-sm text-ink-soft">
-              {total === 0
-                ? "Nessun pneumatico disponibile con questi filtri."
-                : `${total} pneumatici disponibili`}
+              {total === 0 ? tr("Nessun risultato") : `${total} ${tr("pneumatici disponibili")}`}
             </p>
 
             <div className="mt-3 space-y-3">
@@ -294,17 +296,18 @@ export function CustomerCatalogue() {
                   offer={o}
                   deliveryDays={deliveryDays}
                   onAdd={add}
+                  tr={tr}
                 />
               ))}
             </div>
 
             {total > PAGE_SIZE && (
-              <nav className="mt-6 flex items-center justify-between gap-4" aria-label="Paginazione">
+              <nav className="mt-6 flex items-center justify-between gap-4" aria-label={tr("Paginazione")}>
                 <Button size="md" variant="secondary" disabled={page === 0} onClick={() => setPage((x) => Math.max(x - 1, 0))}>
-                  Precedente
+                  {tr("Precedente")}
                 </Button>
                 <span className="text-sm text-ink-soft">
-                  Pagina {page + 1} di {lastPage + 1}
+                  {tr("Pagina")} {page + 1} {tr("di")} {lastPage + 1}
                 </span>
                 <Button
                   size="md"
@@ -312,7 +315,7 @@ export function CustomerCatalogue() {
                   disabled={page >= lastPage}
                   onClick={() => setPage((x) => Math.min(x + 1, lastPage))}
                 >
-                  Successiva
+                  {tr("Successiva")}
                 </Button>
               </nav>
             )}
@@ -323,14 +326,18 @@ export function CustomerCatalogue() {
   );
 }
 
+type Tr = (text: string) => string;
+
 function OfferCard({
   offer,
   deliveryDays,
   onAdd,
+  tr,
 }: {
   offer: Offer;
   deliveryDays: number;
   onAdd: (o: Offer) => void;
+  tr: Tr;
 }) {
   const t = offer.tyre;
   const loadSpeed = t.loadSpeedRaw ?? [t.loadIndex, t.speedRating].filter(Boolean).join("");
@@ -340,39 +347,50 @@ function OfferCard({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="font-extrabold text-ink">
-            {t.brand ?? "Marca non indicata"} {t.modelPattern ?? ""}
+            {t.brand ?? tr("Marca non indicata")} {t.modelPattern ?? ""}
           </div>
           <div className="mt-1 text-sm text-ink-soft">
-            {t.sizeDisplay ?? "Misura non indicata"}
+            {t.sizeDisplay ?? tr("Misura non indicata")}
             {loadSpeed ? ` · ${loadSpeed}` : ""}
           </div>
 
           <div className="mt-3 flex flex-wrap gap-2">
-            {t.season && SEASON_LABELS[t.season] && <Tag>{SEASON_LABELS[t.season]}</Tag>}
+            {t.season && SEASON_LABELS[t.season] && <Tag>{tr(SEASON_LABELS[t.season])}</Tag>}
             {t.xl && <Tag>XL</Tag>}
             {t.runFlat && <Tag>Run-flat</Tag>}
-            {t.oldDot && <Tag>DOT precedente</Tag>}
-            <Tag>{AVAILABILITY_LABELS[offer.availability]}</Tag>
+            {t.oldDot && <Tag>{tr("DOT precedente")}</Tag>}
+            <Tag>{tr(AVAILABILITY_LABELS[offer.availability])}</Tag>
           </div>
         </div>
 
         <div className="text-right">
           <div className="text-lg font-extrabold text-ink">
             {money(offer.tyreSaleNetCents)}{" "}
-            <span className="text-xs font-medium text-ink-soft">netto</span>
+            <span className="text-xs font-medium text-ink-soft">{tr("netto")}</span>
           </div>
           {/*
-            PFU is stated as outstanding rather than omitted. An unqualified
-            price next to an "Aggiungi" button reads as the price payable.
+            The PFU disclosure. An unqualified price next to an "Add" button
+            reads as the price payable, so the card says what is still on top
+            of it and — when the PFU is the temporary estimate — that the
+            estimate can move.
           */}
           <div className="mt-1 text-xs text-ink-soft">
-            {offer.pfuStatus === "TO_CONFIRM" ? "+ PFU e IVA da confermare" : "+ PFU e IVA"}
+            {offer.pfuEstimated
+              ? `+ ${tr("PFU stimato")} + ${tr("IVA")} 22%`
+              : offer.pfuStatus === "TO_CONFIRM"
+                ? `+ ${tr("PFU")} ${tr("e")} ${tr("IVA")} ${tr("da confermare")}`
+                : `+ ${tr("PFU")} + ${tr("IVA")} 22%`}
           </div>
+          {offer.pfuEstimated && (
+            <div className="mt-1 max-w-[16rem] text-[11px] leading-snug text-state-warning">
+              {tr("PFU stimato — l'importo definitivo può variare.")}
+            </div>
+          )}
           <div className="mt-1 text-xs font-semibold text-state-success">
-            Consegna entro {deliveryDays} giorni
+            {tr("Consegna entro")} {deliveryDays} {tr("giorni")}
           </div>
           <Button className="mt-3" size="md" disabled={!offer.priceAvailable} onClick={() => onAdd(offer)}>
-            Aggiungi
+            {tr("Aggiungi")}
           </Button>
         </div>
       </div>
@@ -389,20 +407,21 @@ function Tag({ children }: { children: React.ReactNode }) {
 }
 
 /** Shown before a size is chosen — an instruction, not an empty result. */
-function PromptForSize() {
+function PromptForSize({ tr }: { tr: Tr }) {
   return (
     <div className="rounded-2xl border border-dashed border-ink/20 bg-white/60 p-8 text-center">
-      <p className="font-semibold text-ink">Scegli larghezza, spalla e cerchio</p>
+      <p className="font-semibold text-ink">{tr("Scegli larghezza, spalla e cerchio")}</p>
       <p className="mx-auto mt-2 max-w-sm text-sm text-ink-soft">
-        Il catalogo mostra i risultati dopo che hai indicato la misura completa, per esempio
-        205 / 55 / R16.
+        {tr(
+          "Il catalogo mostra i risultati dopo che hai indicato la misura completa, per esempio 205 / 55 / R16."
+        )}
       </p>
     </div>
   );
 }
 
 /** Placeholders of the same shape as the cards they replace. */
-function ResultsSkeleton() {
+function ResultsSkeleton({ tr }: { tr: Tr }) {
   return (
     <div>
       <div className="h-5 w-40 animate-pulse rounded bg-ink/10" />
@@ -427,7 +446,7 @@ function ResultsSkeleton() {
           </div>
         ))}
       </div>
-      <span className="sr-only">Ricerca in corso…</span>
+      <span className="sr-only">{tr("Ricerca in corso…")}</span>
     </div>
   );
 }

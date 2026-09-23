@@ -64,6 +64,14 @@ export interface PriceBreakdown {
 
   pfuStatus: PfuResolution["status"];
   pfuAmountCents: Cents | null;
+  /**
+   * True when `pfuAmountCents` came from the temporary estimate rather than a
+   * verified source. Carried on the breakdown, not derived at each call site,
+   * so every surface and every snapshot agrees.
+   */
+  pfuEstimated: boolean;
+  /** The estimation rule's version id. Null unless the PFU was estimated. */
+  pfuEstimateVersion: string | null;
 
   /** tyreSaleNet + PFU. Null while PFU is unresolved. */
   taxableSubtotalCents: Cents | null;
@@ -96,6 +104,8 @@ function blocked(
     tyreSaleNetCents: null,
     pfuStatus: pfu.status,
     pfuAmountCents: null,
+    pfuEstimated: pfu.status === "ESTIMATED",
+    pfuEstimateVersion: pfu.estimate?.version ?? null,
     taxableSubtotalCents: null,
     vatRatePercentApplied: null,
     vatAmountCents: null,
@@ -205,6 +215,12 @@ export function calculateTyrePrice(
     ...resolvedSoFar,
     pfuStatus: pfu.status,
     pfuAmountCents,
+    // "complete" describes the CALCULATION, not the confidence. A total built
+    // on an estimated PFU is arithmetically complete and commercially
+    // provisional, and these two fields are what carry that distinction to
+    // every screen and every order snapshot.
+    pfuEstimated: pfu.status === "ESTIMATED",
+    pfuEstimateVersion: pfu.estimate?.version ?? null,
     taxableSubtotalCents,
     vatRatePercentApplied: settings.vatRatePercent,
     vatAmountCents,

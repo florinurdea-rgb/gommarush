@@ -219,14 +219,65 @@ describe("basket resolution against live supplier data", () => {
   });
 });
 
-describe("order creation refuses to invent money", () => {
-  it("fails closed with PRICING_NOT_FINAL while PFU is unresolved", async () => {
+describe("order creation records how its money was arrived at", () => {
+  /**
+   * Since the owner's 2026-09-23 decision an order CAN be created, because PFU
+   * resolves to a temporary estimate. What must be true is that the order
+   * records that fact permanently, so these orders can be found and re-quoted
+   * when a verified tariff arrives.
+   */
+  it("creates the order and snapshots the PFU provenance as columns", async () => {
     const { createPortalSalesOrder } = await import("@/lib/server/sales-orders");
+    const { PFU_ESTIMATE_VERSION } = await import("@/lib/pricing/pfu-estimate");
     mockAll();
 
-    await expect(createPortalSalesOrder(orderInput())).rejects.toThrow("PRICING_NOT_FINAL");
-    // Nothing was written. The gate is before the insert, not after it.
-    expect(rpc).not.toHaveBeenCalled();
+    const order = await createPortalSalesOrder(orderInput());
+    expect(order.order_number).toBe(1000);
+
+    const [name, args] = rpc.mock.calls[0] as [string, Record<string, unknown>];
+    expect(name).toBe("create_portal_sales_order");
+    expect(args.p_pfu_status).toBe("ESTIMATED");
+    expect(args.p_pfu_estimate_version).toBe(PFU_ESTIMATE_VERSION);
+    expect(args.p_vat_rate_percent).toBe(22);
+    expect(args.p_delivery_promise_max_days).toBe(7);
+  });
+
+  it("snapshots the PFU provenance on every line as well as the header", async () => {
+    const { createPortalSalesOrder } = await import("@/lib/server/sales-orders");
+    const { PFU_ESTIMATE_VERSION } = await import("@/lib/pricing/pfu-estimate");
+    mockAll();
+
+    await createPortalSalesOrder(orderInput());
+    const [, args] = rpc.mock.calls[0] as [string, Record<string, unknown>];
+    const items = args.p_items as Record<string, unknown>[];
+
+    expect(items).toHaveLength(1);
+    expect(items[0].pfu_status).toBe("ESTIMATED");
+    expect(items[0].pfu_estimate_version).toBe(PFU_ESTIMATE_VERSION);
+    expect(items[0].vat_rate_percent).toBe(22);
+    // 3.00 estimated PFU, 120.00 net, 22% of 123.00 = 27.06.
+    expect(items[0].unit_pfu_cents).toBe(300);
+    expect(items[0].unit_tyre_net_cents).toBe(12_000);
+    expect(items[0].unit_vat_cents).toBe(2_706);
+    expect(items[0].unit_total_cents).toBe(15_006);
+  });
+
+  /** The fail-closed path has not been deleted, only moved behind a flag. */
+  it("still refuses with PRICING_NOT_FINAL when no PFU amount can be had", async () => {
+    const { createPortalSalesOrder } = await import("@/lib/server/sales-orders");
+    const settings = await import("@/lib/pricing/settings");
+    mockAll();
+
+    const spy = vi
+      .spyOn(settings, "DEFAULT_PRICING_SETTINGS", "get")
+      .mockReturnValue({ ...settings.DEFAULT_PRICING_SETTINGS, pfuVatBase: "unresolved" });
+
+    try {
+      await expect(createPortalSalesOrder(orderInput())).rejects.toThrow("PRICING_NOT_FINAL");
+      expect(rpc).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 
@@ -235,7 +286,7 @@ describe("order creation is scoped to the session's customer", () => {
     const { createPortalSalesOrder } = await import("@/lib/server/sales-orders");
     mockAll();
 
-    await expect(createPortalSalesOrder(orderInput())).rejects.toThrow();
+    await createPortalSalesOrder(orderInput());
 
     const locationQuery = captured.find((c) => c.table === "customer_locations");
     expect(locationQuery).toBeDefined();
@@ -271,7 +322,7 @@ describe("order creation is scoped to the session's customer", () => {
     const { createPortalSalesOrder } = await import("@/lib/server/sales-orders");
     mockAll();
 
-    await expect(createPortalSalesOrder(orderInput())).rejects.toThrow();
+    await createPortalSalesOrder(orderInput());
 
     for (const query of captured.filter((c) => c.table === "sales_orders")) {
       const columns = query.filters.map(([column]) => column);

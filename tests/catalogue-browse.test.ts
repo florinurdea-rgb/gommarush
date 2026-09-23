@@ -371,14 +371,20 @@ describe("commercial data on an offer", () => {
   });
 
   /** PFU is unresolved, so no customer-payable total may be produced. */
-  it("prices the net but withholds the customer total", async () => {
+  /**
+   * Since the owner's 2026-09-23 decision, PFU resolves to a TEMPORARY
+   * ESTIMATE rather than blocking, so a total IS produced. The property that
+   * still matters is that the total is marked as resting on an estimate.
+   */
+  it("prices the net and produces a total marked as resting on an estimate", async () => {
     const { browseCatalogue } = await import("@/lib/server/catalogue-browse");
     mockReads({ products: [product()], listings: [listing()] });
 
     const offer = (await browseCatalogue({}, undefined, undefined, NOW)).rows[0].offers[0];
     expect(offer.pricing.tyreSaleNetCents).toBe(11_904);
-    expect(offer.pricing.pfuStatus).toBe("TO_CONFIRM");
-    expect(offer.pricing.customerTotalCents).toBeNull();
+    expect(offer.pricing.pfuStatus).toBe("ESTIMATED");
+    expect(offer.pricing.pfuAmountCents).not.toBeNull();
+    expect(offer.pricing.customerTotalCents).not.toBeNull();
   });
 });
 

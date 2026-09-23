@@ -186,6 +186,20 @@ export function customerBasketPayload(
     vatRatePercent: settings.vatRatePercent,
     pfuInVatBase: settings.pfuVatBase === "inside_vat_base",
 
+    /**
+     * True when ANY line's PFU is the temporary estimate.
+     *
+     * Any, not all: one estimated line makes the whole total provisional, and
+     * a customer reading a single grand total must be told so.
+     */
+    pfuEstimated: lines.some((l) => l.customer.pfuEstimated),
+    pfuEstimateVersion:
+      lines.find((l) => l.customer.pfuEstimateVersion)?.customer.pfuEstimateVersion ?? null,
+    /** The strongest-to-weakest PFU provenance across the lines, for the snapshot. */
+    pfuStatus: lines.some((l) => l.customer.pfuEstimated)
+      ? "ESTIMATED"
+      : (lines[0]?.customer.pfuStatus ?? "TO_CONFIRM"),
+
     /** GommaRush's delivery commitment, by service class, never by supplier. */
     fulfilment: {
       class: fulfilmentPromise(DEFAULT_FULFILMENT_CLASS).class,

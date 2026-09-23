@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/Button";
 import { readBasket, writeBasket } from "@/lib/customer/basket";
 import { formatSalesOrderNumber } from "@/lib/commerce/order-number";
+import { useTr } from "@/lib/i18n/tr";
 
 /**
  * Checkout.
@@ -49,6 +50,7 @@ const ORDER_ERRORS: Record<string, string> = {
 };
 
 export function CustomerCheckout({ locations }: { locations: Location[] }) {
+  const tr = useTr();
   const router = useRouter();
   const [locationId, setLocationId] = useState(
     locations.find((x) => x.is_primary)?.id ?? locations[0]?.id ?? ""
@@ -81,7 +83,7 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
       });
       const j = await r.json();
       if (!r.ok) {
-        setBlockedReason(ORDER_ERRORS[j.code] ?? "Impossibile verificare il carrello.");
+        setBlockedReason(tr(ORDER_ERRORS[j.code] ?? "Impossibile verificare il carrello."));
         setReady(false);
         return;
       }
@@ -90,15 +92,17 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
       setBlockedReason(
         complete
           ? null
-          : "Il totale finale è in attesa della conferma della tariffa PFU. L'ordine non può ancora essere inviato."
+          : tr(
+              "Il totale finale è in attesa della conferma della tariffa PFU. L'ordine non può ancora essere inviato."
+            )
       );
     } catch {
-      setBlockedReason("Impossibile verificare il carrello.");
+      setBlockedReason(tr("Impossibile verificare il carrello."));
       setReady(false);
     } finally {
       setChecking(false);
     }
-  }, [router]);
+  }, [router, tr]);
 
   useEffect(() => {
     setIdempotencyKey(crypto.randomUUID());
@@ -131,7 +135,7 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
       router.replace(reference ? `/account/orders?created=${encodeURIComponent(reference)}` : "/account/orders");
       router.refresh();
     } catch (e) {
-      setError(ORDER_ERRORS[e instanceof Error ? e.message : ""] ?? "Ordine non inviato. Riprova.");
+      setError(tr(ORDER_ERRORS[e instanceof Error ? e.message : ""] ?? "Ordine non inviato. Riprova."));
       setBusy(false);
     }
   }
@@ -140,19 +144,19 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
 
   return (
     <div>
-      <h1 className="text-2xl font-extrabold text-ink">Conferma ordine</h1>
+      <h1 className="text-2xl font-extrabold text-ink">{tr("Conferma ordine")}</h1>
 
       <div className="mt-6 grid gap-5 lg:grid-cols-2">
         <section className="rounded-2xl bg-white p-5 shadow-card">
-          <h2 className="font-bold text-ink">Consegna</h2>
+          <h2 className="font-bold text-ink">{tr("Consegna")}</h2>
           {locations.length === 0 ? (
             <p className="mt-3 text-sm text-state-danger">
-              Nessun indirizzo di consegna valido configurato. Contatta GommaRush per aggiungerne uno.
+              {tr("Nessun indirizzo di consegna valido configurato. Contatta GommaRush per aggiungerne uno.")}
             </p>
           ) : (
             <>
               <label className="sr-only" htmlFor="checkout-location">
-                Indirizzo di consegna
+                {tr("Indirizzo di consegna")}
               </label>
               <select
                 id="checkout-location"
@@ -169,9 +173,9 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
             </>
           )}
 
-          <h2 className="mt-6 font-bold text-ink">Servizio</h2>
+          <h2 className="mt-6 font-bold text-ink">{tr("Servizio")}</h2>
           <label className="sr-only" htmlFor="checkout-fulfilment">
-            Servizio di consegna
+            {tr("Servizio di consegna")}
           </label>
           <select
             id="checkout-fulfilment"
@@ -181,16 +185,16 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
           >
             {FULFILMENT_OPTIONS.map((x) => (
               <option key={x.value} value={x.value}>
-                {x.label}
+                {tr(x.label)}
               </option>
             ))}
           </select>
         </section>
 
         <section className="rounded-2xl bg-white p-5 shadow-card">
-          <h2 className="font-bold text-ink">Pagamento</h2>
+          <h2 className="font-bold text-ink">{tr("Pagamento")}</h2>
           <fieldset className="mt-3 space-y-2">
-            <legend className="sr-only">Metodo di pagamento</legend>
+            <legend className="sr-only">{tr("Metodo di pagamento")}</legend>
             {PAYMENT_OPTIONS.map((x) => (
               <label
                 key={x.value}
@@ -207,15 +211,15 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
                   onChange={() => setPayment(x.value)}
                 />
                 <span>
-                  <span className="block text-sm font-semibold text-ink">{x.label}</span>
-                  <span className="block text-xs text-ink-soft">{x.hint}</span>
+                  <span className="block text-sm font-semibold text-ink">{tr(x.label)}</span>
+                  <span className="block text-xs text-ink-soft">{tr(x.hint)}</span>
                 </span>
               </label>
             ))}
           </fieldset>
 
           <label className="mt-5 block text-sm font-semibold text-ink">
-            Note
+            {tr("Note")}
             <textarea
               className="mt-2 min-h-24 w-full rounded-xl border border-ink/15 p-3 font-normal"
               value={note}
@@ -227,7 +231,16 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
 
       {checking && (
         <p className="mt-5 rounded-xl bg-white p-4 text-sm text-ink-soft shadow-card" aria-live="polite">
-          Verifica di prezzi e disponibilità in corso…
+          {tr("Verifica di prezzi e disponibilità in corso…")}
+        </p>
+      )}
+
+      {!checking && !blockedReason && (
+        <p className="mt-5 rounded-xl border border-state-warning/40 bg-state-warning-soft p-4 text-sm text-ink">
+          {tr("PFU stimato — l'importo definitivo può variare.")}{" "}
+          {tr(
+            "Il PFU indicato è una stima. L'importo definitivo può variare e sarà confermato da GommaRush."
+          )}
         </p>
       )}
 
@@ -245,12 +258,13 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
 
       <div className="mt-6 flex justify-end">
         <Button size="lg" disabled={!canSubmit} onClick={submit}>
-          {busy ? "Invio…" : "Invia ordine a GommaRush"}
+          {busy ? tr("Invio…") : tr("Invia ordine a GommaRush")}
         </Button>
       </div>
       <p className="mt-2 text-right text-xs text-ink-soft">
-        L&apos;ordine viene inviato a GommaRush per conferma manuale. Non viene inoltrato
-        automaticamente a un fornitore.
+        {tr(
+          "L'ordine viene inviato a GommaRush per conferma manuale. Non viene inoltrato automaticamente a un fornitore."
+        )}
       </p>
     </div>
   );

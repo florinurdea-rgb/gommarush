@@ -6,14 +6,22 @@
 // derivable from a tyre's weight without a published rule, and model knowledge
 // is not a source.
 //
-// So the module is built inside-out from the state it will actually be in for
-// a while: TO_CONFIRM. Resolution is a lookup against verified reference data,
-// and there is no verified reference data yet. Every shape needed to hold that
-// data later is defined here; none of it is populated.
+// Resolution is a lookup against verified reference data, and there is still no
+// verified reference data (owner decision D3 is open). Every shape needed to
+// hold that data later is defined here; none of it is populated.
+//
+// SINCE 2026-09-23 the owner has authorised a TEMPORARY ESTIMATE so that PFU
+// does not block ordering in V1. That does not weaken the rule above — it adds
+// a fourth, clearly-labelled confidence level below the three verified ones.
+// An estimate carries its own status (`ESTIMATED`), its own version id, and a
+// customer-facing disclosure, and it is preferred LAST: a supplier figure or a
+// verified tariff always wins. See pfu-estimate.ts for the amounts and why they
+// are placeholders rather than tariffs.
 //
 // Pure: no database, no I/O.
 
 import type { Cents } from "@/lib/documents/pipeline/money";
+import { estimatePfu, type PfuEstimate } from "@/lib/pricing/pfu-estimate";
 
 /**
  * How confident we are in a PFU figure, and therefore what may be done with it.
@@ -29,6 +37,17 @@ export type PfuStatus =
   | "RULE_CALCULATED"
   /** Entered by an authorized human against a document they hold. */
   | "MANUAL_CONFIRMED"
+  /**
+   * A TEMPORARY owner-authorised estimate. Carries an amount, and carries it
+   * with a version id and a visible customer disclosure.
+   *
+   * Deliberately a SEPARATE value from RULE_CALCULATED rather than a flag on
+   * it. A rule-calculated amount comes from a published tariff; an estimate
+   * comes from a placeholder band. Collapsing the two would make it impossible
+   * to find, a year from now, which orders were priced before the real tariff
+   * existed — which is exactly the question an accountant will ask.
+   */
+  | "ESTIMATED"
   /** Not determinable from any verified source. Carries NO amount. */
   | "TO_CONFIRM";
 
@@ -36,6 +55,7 @@ export const PFU_STATUSES: readonly PfuStatus[] = [
   "SUPPLIER_EXACT",
   "RULE_CALCULATED",
   "MANUAL_CONFIRMED",
+  "ESTIMATED",
   "TO_CONFIRM",
 ];
 
@@ -44,10 +64,29 @@ const RESOLVED_STATUSES: readonly PfuStatus[] = [
   "SUPPLIER_EXACT",
   "RULE_CALCULATED",
   "MANUAL_CONFIRMED",
+  "ESTIMATED",
 ];
 
 export function isResolvedPfuStatus(status: PfuStatus): boolean {
   return RESOLVED_STATUSES.includes(status);
+}
+
+/**
+ * The statuses backed by evidence someone can produce on request.
+ *
+ * ESTIMATED is NOT among them. Anything that presents a figure as final —
+ * an invoice, an accounting export, a supplier reconciliation — must check
+ * this rather than `isResolvedPfuStatus`, which only answers "is there a
+ * number".
+ */
+const VERIFIED_STATUSES: readonly PfuStatus[] = [
+  "SUPPLIER_EXACT",
+  "RULE_CALCULATED",
+  "MANUAL_CONFIRMED",
+];
+
+export function isVerifiedPfuStatus(status: PfuStatus): boolean {
+  return VERIFIED_STATUSES.includes(status);
 }
 
 /**
@@ -86,12 +125,14 @@ export interface PfuResolution {
   amountCents: Cents | null;
   /** The tariff actually used, snapshotted for audit. Null when unresolved. */
   tariff: PfuTariff | null;
+  /** The estimate actually used. Non-null ONLY when status is ESTIMATED. */
+  estimate: PfuEstimate | null;
   /** Human-readable reason, shown in the admin preview. */
   reason: string;
 }
 
 export function resolvedPfu(
-  status: Exclude<PfuStatus, "TO_CONFIRM">,
+  status: Exclude<PfuStatus, "TO_CONFIRM" | "ESTIMATED">,
   amountCents: Cents,
   tariff: PfuTariff | null,
   reason: string
@@ -101,11 +142,32 @@ export function resolvedPfu(
       `PFU amount must be a non-negative integer number of cents, received ${String(amountCents)}`
     );
   }
-  return { status, amountCents, tariff, reason };
+  return { status, amountCents, tariff, estimate: null, reason };
+}
+
+/**
+ * The only constructor that can produce an ESTIMATED resolution.
+ *
+ * It requires the estimate object, so an estimated amount cannot exist without
+ * the version and basis that explain it.
+ */
+export function estimatedPfu(estimate: PfuEstimate): PfuResolution {
+  if (!Number.isInteger(estimate.amountCents) || estimate.amountCents < 0) {
+    throw new Error(
+      `PFU estimate must be a non-negative integer number of cents, received ${String(estimate.amountCents)}`
+    );
+  }
+  return {
+    status: "ESTIMATED",
+    amountCents: estimate.amountCents,
+    tariff: null,
+    estimate,
+    reason: estimate.rationale,
+  };
 }
 
 export function unresolvedPfu(reason: string): PfuResolution {
-  return { status: "TO_CONFIRM", amountCents: null, tariff: null, reason };
+  return { status: "TO_CONFIRM", amountCents: null, tariff: null, estimate: null, reason };
 }
 
 /**
@@ -124,22 +186,34 @@ export interface PfuResolutionInput {
   weightKg?: number | null;
   /** The catalogue's product class, e.g. 'passenger_car'. */
   productClass?: string | null;
+  /**
+   * Whether the temporary estimate may be used when nothing verified applies.
+   *
+   * Defaults to true. Set false wherever only a defensible figure will do.
+   */
+  allowEstimate?: boolean;
 }
 
 /**
  * Determines the PFU position for one tyre.
  *
- * Today this returns TO_CONFIRM for every Inter-Sprint listing, because:
+ * PRECEDENCE, strongest evidence first:
  *
- *   1. No supplier PFU figure is imported — the ISB catalogue file has no such
- *      column, so `supplierStatedCents` is never supplied.
- *   2. VERIFIED_PFU_TARIFFS is empty, so no rule can be applied.
+ *   1. a PFU figure the supplier stated for this exact article;
+ *   2. a verified tariff from VERIFIED_PFU_TARIFFS;
+ *   3. the temporary owner-authorised ESTIMATE, when `allowEstimate` is set;
+ *   4. TO_CONFIRM.
  *
- * A weight alone is NOT enough. Turning kilograms into euros requires a
- * published rate per kilogram for a specific category and period, and inventing
- * that rate is precisely the failure this module is built to prevent. 1,229 of
- * 9,550 catalogue products have no verified weight at all, so even a real rule
- * would leave those unresolved.
+ * The estimate is LAST on purpose. The day a real tariff is loaded into
+ * VERIFIED_PFU_TARIFFS, step 2 starts answering and the estimate stops being
+ * produced — with no change to any caller, and with historical orders keeping
+ * the estimate they were priced with, because that amount and its version were
+ * snapshotted onto the order row.
+ *
+ * `allowEstimate` defaults to TRUE, because the owner's V1 decision is that
+ * ordering must not be blocked. Callers that must not see an estimate — an
+ * accounting export, a supplier reconciliation — pass false and get
+ * TO_CONFIRM, which is the honest answer for them.
  */
 export function resolvePfu(input: PfuResolutionInput = {}): PfuResolution {
   const supplierStated = input.supplierStatedCents;
@@ -158,14 +232,21 @@ export function resolvePfu(input: PfuResolutionInput = {}): PfuResolution {
     );
   }
 
-  if (VERIFIED_PFU_TARIFFS.length === 0) {
-    return unresolvedPfu(
-      "No verified PFU tariff data exists in this system. Sourcing tariffs is an open owner decision; a weight alone cannot produce an amount without a published rate."
-    );
-  }
-
   // Reached only once tariffs are loaded. Category/weight selection is
   // deliberately not written ahead of knowing the real tariff structure —
   // guessing the shape of a rule is the same error as guessing its value.
-  return unresolvedPfu("No tariff in the verified table applies to this product.");
+  //
+  // (No verified tariff exists yet, so this block does nothing today. It is
+  // written as a real branch rather than a TODO so that populating
+  // VERIFIED_PFU_TARIFFS is the ONLY change needed to retire the estimate.)
+
+  if (input.allowEstimate === false) {
+    return unresolvedPfu(
+      "No verified PFU tariff applies and an estimate was not permitted for this caller."
+    );
+  }
+
+  return estimatedPfu(
+    estimatePfu({ weightKg: input.weightKg ?? null, productClass: input.productClass ?? null })
+  );
 }

@@ -4,6 +4,7 @@ import { Logo } from "@/components/Logo";
 import { CustomerLoginForm } from "@/components/customer/CustomerLoginForm";
 import { getCustomerSession } from "@/lib/auth/customer-session";
 import { ROUTES } from "@/lib/site-routes";
+import { getTr } from "@/lib/i18n/tr-server";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Area clienti | GommaRush" };
@@ -25,6 +26,7 @@ export const metadata = { title: "Area clienti | GommaRush" };
  * page infers a customer from an email address.
  */
 export default async function CustomerLoginPage() {
+  const tr = getTr();
   if (await getCustomerSession()) redirect("/account");
 
   return (
@@ -38,18 +40,17 @@ export default async function CustomerLoginPage() {
       <main className="flex flex-1 items-start justify-center px-4 py-10 sm:items-center">
         <div className="w-full max-w-sm">
           <div className="rounded-2xl bg-white p-6 shadow-card sm:p-8">
-            <h1 className="text-xl font-extrabold tracking-tight text-ink">Area clienti</h1>
+            <h1 className="text-xl font-extrabold tracking-tight text-ink">{tr("Area clienti")}</h1>
             <p className="mt-1 text-sm text-ink-soft">
-              Accedi per consultare il catalogo, i prezzi riservati e i tuoi ordini.
+              {tr("Accedi per consultare il catalogo, i prezzi riservati e i tuoi ordini.")}
             </p>
             <CustomerLoginForm />
           </div>
 
           <div className="mt-4 rounded-2xl border border-ink/10 bg-white/60 p-5">
-            <h2 className="text-sm font-bold text-ink">Non hai un account?</h2>
+            <h2 className="text-sm font-bold text-ink">{tr("Non hai un account?")}</h2>
             <p className="mt-1 text-sm text-ink-soft">
-              La registrazione online non è ancora attiva. Gli accessi vengono creati da
-              GommaRush: contattaci e attiviamo il tuo account.
+              {tr("La registrazione online non è ancora attiva. Gli accessi vengono creati da GommaRush: contattaci e attiviamo il tuo account.")}
             </p>
             <button
               type="button"
@@ -57,15 +58,15 @@ export default async function CustomerLoginPage() {
               aria-disabled="true"
               className="mt-3 inline-flex min-h-[44px] w-full cursor-not-allowed items-center justify-center rounded-xl border border-ink/15 px-4 text-sm font-semibold text-ink/40"
             >
-              Registrati — prossimamente
+              {tr("Registrati — prossimamente")}
             </button>
             <p className="mt-3 text-xs text-ink-soft">
               <Link className="font-semibold underline" href={ROUTES.quote}>
-                Richiedi un&apos;offerta
+                {tr("Richiedi un\u2019offerta")}
               </Link>{" "}
-              oppure{" "}
+              {tr("oppure")}{" "}
               <Link className="font-semibold underline" href={ROUTES.register}>
-                lascia i tuoi dati
+                {tr("lascia i tuoi dati")}
               </Link>
               .
             </p>

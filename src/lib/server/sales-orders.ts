@@ -3,7 +3,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/server-admin";
 import type { CustomerSession } from "@/lib/auth/customer-session";
 import { customerBasketPayload, resolveBasket, type BasketLineInput } from "@/lib/server/customer-basket";
 import { isDeliverableLocation } from "@/lib/commerce/delivery-address";
-import type { FulfilmentClass } from "@/lib/commerce/fulfilment";
+import { fulfilmentPromise, type FulfilmentClass } from "@/lib/commerce/fulfilment";
 import { DEFAULT_PRICING_SETTINGS } from "@/lib/pricing/settings";
 
 /**
@@ -154,6 +154,10 @@ export async function createPortalSalesOrder(input: CreateInput): Promise<Create
       vat_rate_percent: DEFAULT_PRICING_SETTINGS.vatRatePercent,
       vat_rate_provenance: DEFAULT_PRICING_SETTINGS.vatRateProvenance,
       pfu_vat_base: DEFAULT_PRICING_SETTINGS.pfuVatBase,
+      pfu_status: basket.pfuStatus,
+      pfu_estimate_version: basket.pfuEstimateVersion,
+      pfu_estimated: basket.pfuEstimated,
+      delivery_promise_max_days: fulfilmentPromise(input.fulfilmentClass).maxDays,
       snapshotted_at: now,
     },
     p_fulfilment_class: input.fulfilmentClass,
@@ -165,6 +169,19 @@ export async function createPortalSalesOrder(input: CreateInput): Promise<Create
     p_vat_total_cents: basket.vatTotalCents,
     p_grand_total_cents: basket.grandTotalCents,
     p_customer_note: input.note,
+
+    // THE PFU PROVENANCE OF THIS ORDER, written as columns.
+    //
+    // An order created today rests on the temporary estimate. Recording the
+    // status and the rule version means that when a verified tariff arrives,
+    // these orders can be FOUND and re-quoted deliberately — rather than
+    // quietly reinterpreted, or worse, left looking as though they had always
+    // been priced against a real tariff.
+    p_pfu_status: basket.pfuStatus,
+    p_pfu_estimate_version: basket.pfuEstimateVersion,
+    p_vat_rate_percent: DEFAULT_PRICING_SETTINGS.vatRatePercent,
+    p_delivery_promise_max_days: fulfilmentPromise(input.fulfilmentClass).maxDays,
+
     p_items: resolved.map((line, index) => ({
       line_number: index + 1,
       catalogue_product_id: line.input.productId,
@@ -178,6 +195,9 @@ export async function createPortalSalesOrder(input: CreateInput): Promise<Create
       unit_vat_cents: line.customer.vatAmountCents,
       unit_total_cents: line.customer.customerTotalCents,
       pricing_status: basket.monetaryStatus,
+      pfu_status: line.customer.pfuStatus,
+      pfu_estimate_version: line.customer.pfuEstimateVersion,
+      vat_rate_percent: DEFAULT_PRICING_SETTINGS.vatRatePercent,
       price_observed_at: line.internal.costObservedAt,
     })),
   };

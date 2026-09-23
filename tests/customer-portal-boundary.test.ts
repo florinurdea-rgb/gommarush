@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { calculateTyrePrice } from "@/lib/pricing/calculate";
 import { DEFAULT_PRICING_SETTINGS } from "@/lib/pricing/settings";
-import { resolvePfu } from "@/lib/pricing/pfu";
+import { isVerifiedPfuStatus, resolvePfu, VERIFIED_PFU_TARIFFS } from "@/lib/pricing/pfu";
+import { PFU_ESTIMATE_VERSION } from "@/lib/pricing/pfu-estimate";
 import { isDeliverableLocation, isRealAddressField } from "@/lib/commerce/delivery-address";
 import { validateBasketLines } from "@/lib/server/customer-basket";
 
@@ -15,30 +16,55 @@ import { validateBasketLines } from "@/lib/server/customer-basket";
  * pass unchanged while the route returned internal offers.
  */
 
-describe("money fails closed while PFU policy is unresolved", () => {
+describe("an estimated PFU is never presented as a verified one", () => {
   /**
-   * The load-bearing property of the whole checkout gate. If this ever starts
-   * returning `complete`, PFU or its VAT treatment has been resolved — or
-   * invented — and the change must be deliberate rather than noticed later by
-   * a customer seeing a total GommaRush cannot stand behind.
+   * The owner decided on 2026-09-23 that PFU must not block V1 ordering, so a
+   * total IS now produced. The safety property did not disappear — it moved.
+   * What must hold is that the total is built from an amount which declares
+   * itself an estimate, and which no verified-only caller will accept.
    */
-  it("cannot produce a final customer total from real settings", () => {
+  it("produces a total from the estimate, and marks it as an estimate", () => {
     const pfu = resolvePfu({ weightKg: 8.5, productClass: "passenger_car" });
     const breakdown = calculateTyrePrice({ supplierCostCents: 10_000, pfu }, DEFAULT_PRICING_SETTINGS);
 
-    expect(breakdown.resolution).not.toBe("complete");
-    expect(breakdown.customerTotalCents).toBeNull();
-    expect(breakdown.vatAmountCents).toBeNull();
-    expect(breakdown.pfuAmountCents).toBeNull();
-    // The net selling price is knowable and is published; only the final
-    // payable amount is withheld.
+    expect(breakdown.resolution).toBe("complete");
+    expect(breakdown.pfuStatus).toBe("ESTIMATED");
+    expect(breakdown.pfuEstimated).toBe(true);
+    expect(breakdown.pfuEstimateVersion).toBe(PFU_ESTIMATE_VERSION);
+
+    // 120.00 net + 3.00 PFU = 123.00 taxable, x 22% = 27.06, total 150.06.
     expect(breakdown.tyreSaleNetCents).toBe(12_000);
+    expect(breakdown.pfuAmountCents).toBe(300);
+    expect(breakdown.taxableSubtotalCents).toBe(12_300);
+    expect(breakdown.vatAmountCents).toBe(2_706);
+    expect(breakdown.customerTotalCents).toBe(15_006);
   });
 
-  it("does not derive a PFU amount from a known tyre weight", () => {
-    const pfu = resolvePfu({ weightKg: 11.2, productClass: "truck" });
+  it("is never counted as verified, whatever else is true of it", () => {
+    const pfu = resolvePfu({ weightKg: 8.5 });
+    expect(isVerifiedPfuStatus(pfu.status)).toBe(false);
+    expect(pfu.tariff, "an estimate has no tariff behind it").toBeNull();
+    expect(pfu.estimate?.version).toBe(PFU_ESTIMATE_VERSION);
+  });
+
+  /**
+   * The escape hatch that keeps the original guarantee available. Anything
+   * that must show a defensible figure — an invoice, an accounting export —
+   * asks for no estimate and gets the honest refusal instead.
+   */
+  it("still refuses outright for a caller that cannot accept an estimate", () => {
+    const pfu = resolvePfu({ weightKg: 11.2, productClass: "truck", allowEstimate: false });
     expect(pfu.status).toBe("TO_CONFIRM");
     expect(pfu.amountCents).toBeNull();
+
+    const breakdown = calculateTyrePrice({ supplierCostCents: 10_000, pfu }, DEFAULT_PRICING_SETTINGS);
+    expect(breakdown.resolution).toBe("pfu_unresolved");
+    expect(breakdown.customerTotalCents).toBeNull();
+  });
+
+  /** No verified tariff has appeared; the estimate is standing in for one. */
+  it("still has no verified tariff table", () => {
+    expect(VERIFIED_PFU_TARIFFS).toHaveLength(0);
   });
 });
 

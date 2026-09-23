@@ -238,9 +238,10 @@ describe("search results carry cost internally and never to the customer", () =>
 
     const result = await searchCatalogue({ widthMm: 205 });
 
-    expect(result.internal[0].pfuStatus).toBe("TO_CONFIRM");
-    expect(result.internal[0].pfuAmountCents).toBeNull();
-    expect(result.internal[0].customerTotalCents).toBeNull();
+    // PFU now resolves to a temporary ESTIMATE (owner decision, 2026-09-23),
+    // so an amount exists — flagged as estimated, never as a verified tariff.
+    expect(result.internal[0].pfuStatus).toBe("ESTIMATED");
+    expect(result.internal[0].pfuAmountCents).not.toBeNull();
     // This fixture states no stock, so it is not offered; PFU is asserted on
     // the internal view. Customer-side PFU is covered where stock permits.
     expect(result.internal[0].sellable).toBe(false);
