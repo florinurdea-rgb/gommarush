@@ -55,6 +55,7 @@ export default async function CustomersPage({
                 <th scope="col" className="px-4 py-3 font-semibold">{t("locations", locale)}</th>
                 <th scope="col" className="px-4 py-3 font-semibold">Comenzi</th>
                 <th scope="col" className="px-4 py-3 font-semibold">{t("contacts", locale)}</th>
+                <th scope="col" className="px-4 py-3 font-semibold">{tr("Area clienti")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-ink/5">
@@ -76,6 +77,24 @@ export default async function CustomersPage({
                   <td className="px-4 py-3 text-sm text-ink">{customer.order_count}</td>
                   <td className="px-4 py-3 text-sm text-ink-soft">
                     {customer.email ?? customer.phone ?? "—"}
+                  </td>
+                  {/*
+                    A direct route to portal access from the list. Without it,
+                    the only way to reach account management is to open the
+                    customer and scroll — which is exactly how an operator
+                    concludes the feature does not exist.
+                  */}
+                  <td className="px-4 py-3 text-sm">
+                    <Link
+                      href={`/admin/customers/${customer.id}#accesso-area-clienti`}
+                      className="font-semibold text-accent hover:underline"
+                    >
+                      {customer.portal_account_count === null
+                        ? tr("Gestisci")
+                        : customer.portal_account_count === 0
+                          ? tr("Crea accesso")
+                          : `${customer.portal_account_count} ${tr("attivi")}`}
+                    </Link>
                   </td>
                 </tr>
               ))}

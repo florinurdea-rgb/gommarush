@@ -532,6 +532,11 @@ export const EN_STRINGS: Record<string, string> = {
   "per questo ordinamento. Restringi la ricerca, per esempio scegliendo una misura.":
     "for this sort. Narrow the search, for example by choosing a size.",
   // --- customer portal accounts (M12) ----------------------------------
+  "Impossibile leggere gli accessi di questo cliente.":
+    "Could not read this customer's portal access.",
+  "Gestisci": "Manage",
+  "attivi": "active",
+
   "Copia ora la password temporanea: non sarà più visibile dopo aver chiuso questo messaggio.":
     "Copy the temporary password now — it will not be shown again once you dismiss this message.",
   "Copia": "Copy",

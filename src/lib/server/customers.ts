@@ -1,6 +1,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/server-admin";
-import { logEvent } from "@/lib/logger";
+import { logError, logEvent } from "@/lib/logger";
+import { isMissingSchemaError } from "@/lib/server/schema-errors";
 import { matchCustomer } from "@/lib/logistics/customer-matching";
 import type {
   CustomerMatchResult,
@@ -27,35 +28,70 @@ const LOCATION_COLUMNS =
 export interface CustomerWithLocationCount extends CustomerRow {
   location_count: number;
   order_count: number;
+  /**
+   * Active portal logins for this company.
+   *
+   * Null means the count could not be determined — `customer_accounts` is not
+   * present in this environment — which is different from zero. The list shows
+   * "—" for null and "0" for zero, so an operator is never told a company has
+   * no login when the truth is that we could not look.
+   */
+  portal_account_count: number | null;
 }
 
 export async function listCustomers(search?: string): Promise<CustomerWithLocationCount[]> {
   const supabase = createSupabaseAdminClient();
 
-  let query = supabase
-    .from("customers")
-    .select(`${CUSTOMER_COLUMNS}, customer_locations ( id ), orders ( id )`)
-    .order("name", { ascending: true });
+  // `customer_accounts` arrives with migration 0005. Embedding it tells the
+  // operator at a glance which companies already have a portal login — but the
+  // customer list is core existing functionality and must NOT break in an
+  // environment where that table is absent, so the embed is attempted and then
+  // retried without it.
+  const run = async (withAccounts: boolean) => {
+    let query = supabase
+      .from("customers")
+      .select(
+        `${CUSTOMER_COLUMNS}, customer_locations ( id ), orders ( id )` +
+          (withAccounts ? ", customer_accounts ( id, active )" : "")
+      )
+      .order("name", { ascending: true });
 
-  if (search && search.trim()) {
-    const term = search.trim().replace(/[%,]/g, "");
-    // Match on either the company name or the fiscal identifier, which is how
-    // office staff actually search.
-    query = query.or(`name.ilike.%${term}%,vat_number.ilike.%${term}%`);
+    if (search && search.trim()) {
+      const term = search.trim().replace(/[%,]/g, "");
+      // Match on either the company name or the fiscal identifier, which is how
+      // office staff actually search.
+      query = query.or(`name.ilike.%${term}%,vat_number.ilike.%${term}%`);
+    }
+
+    return query;
+  };
+
+  let withAccounts = true;
+  let { data, error } = await run(true);
+
+  if (error) {
+    // Only the missing relation is recoverable. Anything else is a real
+    // failure and must surface rather than be hidden behind a degraded list.
+    if (!isMissingSchemaError(error)) throw error;
+    logError("customer_accounts_embed_unavailable", error);
+    withAccounts = false;
+    ({ data, error } = await run(false));
+    if (error) throw error;
   }
-
-  const { data, error } = await query;
-  if (error) throw error;
 
   return ((data ?? []) as unknown as (CustomerRow & {
     customer_locations: { id: string }[] | null;
     orders: { id: string }[] | null;
+    customer_accounts?: { id: string; active: boolean }[] | null;
   })[]).map((row) => {
-    const { customer_locations, orders, ...customer } = row;
+    const { customer_locations, orders, customer_accounts, ...customer } = row;
     return {
       ...customer,
       location_count: customer_locations?.length ?? 0,
       order_count: orders?.length ?? 0,
+      portal_account_count: withAccounts
+        ? (customer_accounts ?? []).filter((a) => a.active).length
+        : null,
     };
   });
 }
