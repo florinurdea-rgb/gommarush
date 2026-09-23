@@ -57,7 +57,19 @@ export function CustomerAccountsPanel({ customerId }: { customerId: string }) {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [created, setCreated] = useState<string | null>(null);
+  /**
+   * The credentials just created, shown ONCE.
+   *
+   * There is no password reset in the portal yet, so a temporary password that
+   * the operator did not copy before the field cleared would strand the
+   * customer — the only recovery would be deleting the account and making
+   * another. Holding it in component state until the operator dismisses it is
+   * the smallest honest fix: it never leaves the browser, it is never stored,
+   * and reloading the page loses it, which is the correct behaviour for a
+   * credential.
+   */
+  const [created, setCreated] = useState<{ email: string; password: string } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -93,7 +105,8 @@ export function CustomerAccountsPanel({ customerId }: { customerId: string }) {
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.details?.[0] || j.code);
-      setCreated(j.email ?? email.trim().toLowerCase());
+      setCreated({ email: j.email ?? email.trim().toLowerCase(), password });
+      setCopied(false);
       setEmail("");
       setPassword("");
       await load();
@@ -214,9 +227,38 @@ export function CustomerAccountsPanel({ customerId }: { customerId: string }) {
 
             {error && <p className="mt-3 text-sm text-state-danger">{error}</p>}
             {created && (
-              <p className="mt-3 text-sm text-state-success">
-                {tr("Accesso creato per")} {created}.
-              </p>
+              <div className="mt-4 rounded-xl border-2 border-state-success/40 bg-state-success-soft p-4">
+                <p className="text-sm font-bold text-ink">
+                  {tr("Accesso creato per")} {created.email}
+                </p>
+                <p className="mt-1 text-xs text-ink">
+                  {tr("Copia ora la password temporanea: non sarà più visibile dopo aver chiuso questo messaggio.")}
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <code className="select-all rounded-lg border border-ink/15 bg-white px-3 py-2 font-mono text-sm">
+                    {created.password}
+                  </code>
+                  <Button
+                    size="md"
+                    variant="secondary"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(created.password);
+                        setCopied(true);
+                      } catch {
+                        // Clipboard can be blocked; the code block is
+                        // select-all so it stays copyable by hand.
+                        setCopied(false);
+                      }
+                    }}
+                  >
+                    {copied ? tr("Copiata") : tr("Copia")}
+                  </Button>
+                  <Button size="md" variant="ghost" onClick={() => setCreated(null)}>
+                    {tr("Ho copiato la password")}
+                  </Button>
+                </div>
+              </div>
             )}
 
             <Button className="mt-4" disabled={!canCreate} onClick={create}>
