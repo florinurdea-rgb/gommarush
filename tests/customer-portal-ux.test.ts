@@ -324,3 +324,85 @@ describe("an estimated PFU produces a total that says it is estimated", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Catalogue controls — the "filters randomly reset" report
+// ---------------------------------------------------------------------------
+
+describe("an applied filter is never blanked out of its own control", () => {
+  const read = (path: string) => require("node:fs").readFileSync(path, "utf8") as string;
+  const CATALOGUE = "src/components/customer/CustomerCatalogue.tsx";
+
+  /**
+   * REGRESSION. The facet lists are DEPENDENT — each is computed with the
+   * other filters applied — so a chosen width can legitimately drop out of the
+   * width list once a season or rim narrows the catalogue past it. A <select>
+   * whose value matches no <option> renders BLANK while the filter is still in
+   * force: the control said "nothing selected" and the results disagreed.
+   */
+  it("keeps the selected value as an option when the facet list drops it", () => {
+    const source = read(CATALOGUE);
+    expect(source).toContain("const missing = value !== \"\" && !options.includes(value);");
+    expect(source).toContain("{missing && <option value={value}>{value}</option>}");
+  });
+
+  it("compares as strings, because a <select> value is always a string", () => {
+    const source = read(CATALOGUE);
+    expect(source).toContain("const options = values.map(String);");
+  });
+});
+
+describe("adding to the basket is visible", () => {
+  const read = (path: string) => require("node:fs").readFileSync(path, "utf8") as string;
+
+  /**
+   * REGRESSION: "I can't add items to basket." The click worked; nothing on
+   * screen moved, so it was indistinguishable from broken.
+   */
+  it("confirms the click on the button itself", () => {
+    const source = read("src/components/customer/CustomerCatalogue.tsx");
+    expect(source).toContain("setAdded(key)");
+    expect(source).toContain('tr("Aggiunto")');
+  });
+
+  it("tells the customer when storage refused the write", () => {
+    const source = read("src/components/customer/CustomerCatalogue.tsx");
+    expect(source).toContain("setAddError");
+    expect(source).toContain("if (addBasketLine(o.tyre.productId, o.tyre.oldDot))");
+  });
+
+  it("shows a live count in the account navigation", () => {
+    const layout = read("app/account/(secure)/layout.tsx");
+    expect(layout).toContain("CustomerBasketLink");
+
+    const link = read("src/components/customer/CustomerBasketLink.tsx");
+    // The event writeBasket already dispatched, which nothing used to hear.
+    expect(link).toContain("BASKET_CHANGED_EVENT");
+    // ...and cross-tab, so two open tabs cannot show two different baskets.
+    expect(link).toContain('addEventListener("storage"');
+  });
+});
+
+describe("the basket quantity box follows what was typed", () => {
+  /**
+   * REGRESSION: the input was bound to the SERVER preview, so it ignored
+   * typing until the round trip returned and then snapped back to the old
+   * number — a controlled input that appears not to accept input.
+   */
+  it("is driven by the local basket, not by the server preview", () => {
+    const source = require("node:fs").readFileSync(
+      "src/components/customer/CustomerBasket.tsx",
+      "utf8"
+    ) as string;
+    expect(source).toContain("value={s.quantity}");
+    expect(source).not.toContain("value={line.quantity}");
+  });
+
+  it("reports a storage failure instead of silently doing nothing", () => {
+    const source = require("node:fs").readFileSync(
+      "src/components/customer/CustomerBasket.tsx",
+      "utf8"
+    ) as string;
+    expect(source).toContain("if (!writeBasket(next))");
+  });
+});

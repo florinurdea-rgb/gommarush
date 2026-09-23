@@ -161,7 +161,34 @@ export function CustomerCatalogue() {
   });
 
   const lastPage = Math.max(Math.ceil(total / PAGE_SIZE) - 1, 0);
-  const add = useCallback((o: Offer) => addBasketLine(o.tyre.productId, o.tyre.oldDot), []);
+
+  /**
+   * Which card was just added, so the button can confirm it.
+   *
+   * Adding wrote to localStorage and changed nothing on screen, so a working
+   * click and a broken one looked identical. The nav badge is the durable
+   * signal; this is the immediate one, at the point of the click.
+   */
+  const [added, setAdded] = useState<string | null>(null);
+  const [addError, setAddError] = useState<string | null>(null);
+
+  const add = useCallback(
+    (o: Offer) => {
+      const key = `${o.tyre.productId}-${o.tyre.oldDot ? "old" : "new"}`;
+      if (addBasketLine(o.tyre.productId, o.tyre.oldDot)) {
+        setAddError(null);
+        setAdded(key);
+        window.setTimeout(() => setAdded((current) => (current === key ? null : current)), 1800);
+        return;
+      }
+      // Storage refused the write — private browsing, blocked site data, or a
+      // full quota. Silence here is what made this look broken.
+      setAddError(
+        tr("Impossibile salvare il carrello: il browser blocca l'archiviazione locale.")
+      );
+    },
+    [tr]
+  );
 
   function reset() {
     setWidth("");
@@ -273,6 +300,12 @@ export function CustomerCatalogue() {
         )}
       </div>
 
+      {addError && (
+        <p role="alert" className="mt-4 rounded-xl bg-state-danger-soft p-4 text-sm text-state-danger">
+          {addError}
+        </p>
+      )}
+
       <div className="mt-6" aria-live="polite" aria-busy={loading}>
         {view === "awaiting_dimensions" ? (
           <PromptForSize tr={tr} />
@@ -298,6 +331,7 @@ export function CustomerCatalogue() {
                   offer={o}
                   deliveryDays={deliveryDays}
                   onAdd={add}
+                  added={added === `${o.tyre.productId}-${o.tyre.oldDot ? "old" : "new"}`}
                   tr={tr}
                 />
               ))}
@@ -334,11 +368,13 @@ function OfferCard({
   offer,
   deliveryDays,
   onAdd,
+  added,
   tr,
 }: {
   offer: Offer;
   deliveryDays: number;
   onAdd: (o: Offer) => void;
+  added: boolean;
   tr: Tr;
 }) {
   const t = offer.tyre;
@@ -391,8 +427,14 @@ function OfferCard({
           <div className="mt-1 text-xs font-semibold text-state-success">
             {tr("Consegna entro")} {deliveryDays} {tr("giorni")}
           </div>
-          <Button className="mt-3" size="md" disabled={!offer.priceAvailable} onClick={() => onAdd(offer)}>
-            {tr("Aggiungi")}
+          <Button
+            className="mt-3"
+            size="md"
+            variant={added ? "secondary" : "primary"}
+            disabled={!offer.priceAvailable}
+            onClick={() => onAdd(offer)}
+          >
+            {added ? `✓ ${tr("Aggiunto")}` : tr("Aggiungi")}
           </Button>
         </div>
       </div>
@@ -466,6 +508,22 @@ function Select({
   values: number[];
   placeholder: string;
 }) {
+  /*
+    THE APPLIED VALUE IS ALWAYS AN OPTION.
+
+    These lists are DEPENDENT facets: each one is computed with the other
+    filters applied. So a chosen width can legitimately disappear from the
+    width list once a season or a rim narrows the catalogue past it — and a
+    <select> whose value matches no <option> renders BLANK while the filter is
+    still in force. The control said "nothing selected" and the results said
+    otherwise, which is what "filters randomly reset" looked like.
+
+    Keeping the value in the list means the control always shows what is
+    actually being filtered on, and the customer can see it to clear it.
+  */
+  const options = values.map(String);
+  const missing = value !== "" && !options.includes(value);
+
   return (
     <label className="text-sm font-semibold text-ink">
       {label}
@@ -475,7 +533,8 @@ function Select({
         className="mt-1 h-11 w-full rounded-xl border border-ink/15 px-3 font-normal"
       >
         <option value="">{placeholder}</option>
-        {values.map((v) => (
+        {missing && <option value={value}>{value}</option>}
+        {options.map((v) => (
           <option key={v} value={v}>
             {v}
           </option>
