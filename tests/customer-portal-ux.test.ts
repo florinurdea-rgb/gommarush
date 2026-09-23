@@ -406,3 +406,22 @@ describe("the basket quantity box follows what was typed", () => {
     expect(source).toContain("if (!writeBasket(next))");
   });
 });
+
+describe("the checkout idempotency key survives a retry", () => {
+  /**
+   * REGRESSION: the key was minted inside the verify effect, whose callback
+   * identity changes with the locale. Switching language re-keyed the order,
+   * so a retry after a failed submit would be treated as a NEW order — which
+   * is exactly what the key exists to prevent.
+   */
+  it("is generated once, in an effect with no dependencies", () => {
+    const source = require("node:fs").readFileSync(
+      "src/components/customer/CustomerCheckout.tsx",
+      "utf8"
+    ) as string;
+
+    expect(source).toContain("useEffect(() => {\n    setIdempotencyKey(crypto.randomUUID());\n  }, []);");
+    // ...and no longer rides along with verify.
+    expect(source).not.toContain("setIdempotencyKey(crypto.randomUUID());\n    void verify();");
+  });
+});
