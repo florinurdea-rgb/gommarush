@@ -71,6 +71,17 @@ export interface CustomerTyreOffer {
   tyreSaleNetCents: Cents | null;
   pfuStatus: PfuStatus;
   pfuAmountCents: Cents | null;
+  /**
+   * True when the PFU above is the temporary estimate.
+   *
+   * CUSTOMER-SAFE and required: the owner's decision is that an estimated PFU
+   * must be visibly disclosed. This is the flag every customer surface hangs
+   * "PFU stimato — l'importo definitivo può variare" off, so it belongs in the
+   * customer type rather than being re-derived per component.
+   */
+  pfuEstimated: boolean;
+  /** The estimation rule id. A calculation identifier, not supplier data. */
+  pfuEstimateVersion: string | null;
   vatAmountCents: Cents | null;
   customerTotalCents: Cents | null;
   /** True when a figure is missing because something is unconfirmed. */
@@ -117,6 +128,8 @@ export interface InternalTyreOffer {
   tyreSaleNetCents: Cents | null;
   pfuStatus: PfuStatus;
   pfuAmountCents: Cents | null;
+  pfuEstimated: boolean;
+  pfuEstimateVersion: string | null;
   taxableSubtotalCents: Cents | null;
   vatRatePercentApplied: number | null;
   vatAmountCents: Cents | null;
@@ -159,6 +172,8 @@ export function toCustomerOffer(listing: PricedListing): CustomerTyreOffer {
     tyreSaleNetCents: breakdown.tyreSaleNetCents,
     pfuStatus: breakdown.pfuStatus,
     pfuAmountCents: breakdown.pfuAmountCents,
+    pfuEstimated: breakdown.pfuEstimated,
+    pfuEstimateVersion: breakdown.pfuEstimateVersion,
     vatAmountCents: breakdown.vatAmountCents,
     customerTotalCents: breakdown.customerTotalCents,
     priceAvailable: breakdown.tyreSaleNetCents !== null,
@@ -188,6 +203,8 @@ export function toInternalOffer(listing: PricedListing): InternalTyreOffer {
     tyreSaleNetCents: breakdown.tyreSaleNetCents,
     pfuStatus: breakdown.pfuStatus,
     pfuAmountCents: breakdown.pfuAmountCents,
+    pfuEstimated: breakdown.pfuEstimated,
+    pfuEstimateVersion: breakdown.pfuEstimateVersion,
     taxableSubtotalCents: breakdown.taxableSubtotalCents,
     vatRatePercentApplied: breakdown.vatRatePercentApplied,
     vatAmountCents: breakdown.vatAmountCents,

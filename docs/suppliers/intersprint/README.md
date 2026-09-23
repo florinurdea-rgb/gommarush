@@ -214,16 +214,43 @@ Header note: production writes `Fuel efficiency` where the August samples wrote
 `Fuel effeciency`. Neither is mapped — the catalogue has no EU-label columns
 beyond `eprel_id` — so the difference is recorded rather than depended on.
 
+### The pipeline is live and verified (2026-09-22)
+
+The worker is deployed and **two real feeds were processed end to end into
+production**, then verified by read-only inspection of the database:
+
+| | PCR | Truck |
+| --- | --- | --- |
+| Run | `ef834c00-3326-4c47-916e-4f18561e03aa` | `77b811d4-5b0f-41ed-89ca-ec67b67fd060` |
+| File | `vrd-001-21185-107.csv` | `vrd-001-21185.csv` |
+| Checksum | `04fa0b3c6a25…` | `70a5d9196b13…` |
+| Rows | 11,207 committed, 0 rejected | 171 committed, 0 rejected |
+| Prices | 11,194 rows, **0 null, 0 zero**, €21.12–643.96 | 171 rows, **0 null, 0 zero**, €92.87–608.95 |
+| Stock | 1,614 exact / 9,580 banded | 53 exact / 118 banded |
+| Deactivations | **0** | **0** |
+
+`>  20` is stored as `stock_exact NULL` / `stock_minimum 20` on 9,698 rows —
+**no band was resolved to a number**, and an exact `20` (122 rows) stays
+distinct from the band.
+
+Integrity: 0 duplicate validated EANs, 0 duplicate product keys, 0 inactive
+listings. Orders, customers, inventory and vehicles all last changed a week
+earlier — **nothing outside the catalogue was touched**.
+
 ### Still not verified
 
 - **Whether a delivery is a complete snapshot or a delta (D14).** Recurring
   overwrites do not settle it. Absence of a row still means **nothing**, and
-  ingestion is hard-wired to `importMode: 'partial'` so no deactivation can be
-  proposed.
-- **The currency (D15).** Still null.
-- **That the production worker runs.** It is written, installed by script and
-  tested against a stub, but has **not been deployed or observed processing a
-  real file**.
+  ingestion is hard-wired to `importMode: 'partial'`. The cost: **1,841 legacy
+  listings remain active with no current price** because the live feed no
+  longer contains them.
+- **`Type` is not a reliable model identifier.** The 8 `ean_spec_mismatch`
+  conflicts are the same tyre differing only in the last character of a
+  10-character truncated field (`PRECON5` vs `PRECON5#`, `CSC5SUVVOL` vs
+  `CSC5SUVVO.`). The importer refused to merge and recorded them, which is
+  correct. Never resolve a conflict by trusting this column.
+- **Currency** is EUR **for V1 by owner decision** — *not* supplier evidence.
+  The feed still has no currency column.
 
 ### The chain, as it now stands (M10)
 

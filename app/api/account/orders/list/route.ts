@@ -1,0 +1,2 @@
+import {NextResponse} from "next/server";import {requireCustomerSession} from "@/lib/auth/customer-session";import {listCustomerSalesOrders} from "@/lib/server/sales-orders";
+export const runtime="nodejs";export async function GET(){try{const s=await requireCustomerSession();return NextResponse.json({ok:true,orders:await listCustomerSalesOrders(s.customerId)});}catch{return NextResponse.json({ok:false,code:"UNAUTHORIZED"},{status:401});}}

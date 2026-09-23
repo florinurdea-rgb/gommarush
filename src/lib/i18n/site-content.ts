@@ -534,7 +534,7 @@ const en: SiteCopy = {
   navHowItWorks: "How it works",
   navWhy: "Why GommaRush",
   navSuppliers: "For suppliers",
-  navClientArea: "Client area",
+  navClientArea: "Customer account",
   ctaRegister: "Sign up",
   ctaRegisterFree: "Sign up for free",
   ctaDiscoverHow: "See how it works",

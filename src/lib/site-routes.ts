@@ -30,6 +30,22 @@ export const OPERATIONAL_ROUTES = {
 } as const;
 
 /**
+ * The customer portal entry.
+ *
+ * Named here for the same reason as the operational routes: the header, the
+ * footer, the hamburger and the interim registration page all point at it, and
+ * a customer-facing entry that drifts between them is worse than one that does
+ * not exist.
+ *
+ * `account` is the login screen deliberately, not /account. An unauthenticated
+ * visitor sent to /account is bounced to the login anyway, and a public CTA
+ * should land where the visitor can act.
+ */
+export const CUSTOMER_ROUTES = {
+  account: "/account/login",
+} as const;
+
+/**
  * Where every "Registrati" CTA points.
  *
  * The registration funnel is being built separately. Until it exists this

@@ -60,7 +60,12 @@ describe("operational string map", () => {
    * slip. A handful are legitimately identical in both languages.
    */
   it("has no accidental identity entries", () => {
-    const SAME_IN_BOTH = new Set(["Email", "Model"]);
+    // Words that genuinely are the same in Italian and English. "Account" is
+    // the Italian term too — it is what the customer portal's own navigation
+    // says — so translating it would be the error, not leaving it.
+    // "PFU" is the Italian acronym and has no English equivalent — the
+    // owner's own English wording is "Estimated PFU", keeping the acronym.
+    const SAME_IN_BOTH = new Set(["Email", "Model", "Account", "PFU"]);
     const identical = Object.entries(EN_STRINGS)
       .filter(([source, target]) => source === target && !SAME_IN_BOTH.has(source))
       .map(([source]) => source);

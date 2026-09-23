@@ -31,10 +31,10 @@ const QUOTES_HREF = "/admin/richieste-offerta";
 const SECONDARY_NAV: NavItem[] = [
   { href: PREPARE_HREF, label: "Da preparare" },
   { href: QUOTES_HREF, label: "Richieste di offerta" },
+  { href: "/admin/sales-orders", label: "Ordini clienti" },
   { href: "/admin/customers", label: "Clienti" },
   { href: "/admin/suppliers", label: "Fornitori" },
   { href: "/admin/catalogue", label: "Catalogo" },
-  { href: "/admin/catalogue/ricerca", label: "Ricerca e prezzi" },
   { href: "/admin/sistema", label: "Sistema" },
 ];
 

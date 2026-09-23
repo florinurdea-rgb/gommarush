@@ -480,4 +480,234 @@ export const EN_STRINGS: Record<string, string> = {
   "scartate": "rejected",
   "Nessun import riuscito finora.": "No successful import yet.",
   "Ultimo tentativo": "Last attempt",
+  // --- M11B: catalogue workspace ---
+  "Cerca pneumatici e confronta le offerte dei fornitori.":
+    "Search tyres and compare supplier offers.",
+  "Importa listino": "Import price list",
+  "Carica manualmente il listino di un fornitore. Il flusso Inter-Sprint arriva da solo.":
+    "Manually upload a supplier price list. The Inter-Sprint feed arrives on its own.",
+  "← Torna al catalogo": "← Back to catalogue",
+  "Auto e furgone": "Car & van",
+  "Marca": "Brand",
+  "Cerca": "Search",
+  "EAN o modello": "EAN or model",
+  "Solo da verificare": "Needs review only",
+  "pneumatici": "tyres",
+  "ricarico": "markup",
+  "minimo vendita": "selling minimum",
+  "Precedente": "Previous",
+  "Successiva": "Next",
+  "Pagina": "Page",
+  "nessun articolo a catalogo": "no catalogue listings",
+  "Questo fornitore non ha ancora un listino importato. Nessun dato viene inventato.":
+    "This supplier has no imported price list yet. No data is fabricated.",
+  "Nessun articolo corrisponde a questi filtri.": "No listing matches these filters.",
+  "stagione non indicata": "season not stated",
+  "Nessuna offerta fornitore per questo filtro.": "No supplier offer under this filter.",
+  "adesso": "now",
+  "Costo": "Cost",
+  "Articolo": "Article",
+  "Vendibile": "Sellable",
+  "Prezzo netto GommaRush": "GommaRush net price",
+  "+ PFU da confermare": "+ PFU to be confirmed",
+  "sì": "yes",
+  "sotto il minimo": "below minimum",
+  "esaurito": "out of stock",
+  "stock non noto": "stock unknown",
+  "Senza prezzo attuale": "No current price",
+  "Conflitto": "Conflict",
+  "non aggiornato": "not refreshed",
+  // --- M11B amendment: sorting and brand tiers ---
+  "Ordina": "Sort",
+  "Marca A–Z": "Brand A–Z",
+  "Prezzo più basso": "Lowest price",
+  "Aggiornati di recente": "Recently updated",
+  "Più disponibilità": "Most availability",
+  "Fascia": "Tier",
+  "Fasce di marca non ancora configurate": "Brand tiers not configured yet",
+  "Fascia media": "Mid-range",
+  "Economiche": "Value",
+  "Ordinamento non applicato": "Sort not applied",
+  "articoli superano il limite di": "listings exceed the limit of",
+  "per questo ordinamento. Restringi la ricerca, per esempio scegliendo una misura.":
+    "for this sort. Narrow the search, for example by choosing a size.",
+  // --- customer portal accounts (M12) ----------------------------------
+  "Accesso area clienti": "Customer portal access",
+  "L'accesso al portale viene creato manualmente. Non esiste registrazione pubblica e nessun cliente viene riconosciuto dall'indirizzo email.":
+    "Portal access is created manually. There is no public registration, and no customer is identified from an email address.",
+  "Il modulo account clienti non \u00e8 ancora attivato nel database.":
+    "The customer accounts module is not activated in the database yet.",
+  "Nessun accesso configurato.": "No access configured.",
+  "Attivo": "Active",
+  "Disattivato": "Deactivated",
+  "Creato il": "Created on",
+  "Disattiva": "Deactivate",
+  "Riattiva": "Reactivate",
+  "Nuovo accesso": "New access",
+  "Password temporanea": "Temporary password",
+  "Genera": "Generate",
+  "Almeno 12 caratteri. Comunicala al cliente: non sar\u00e0 pi\u00f9 visibile qui.":
+    "At least 12 characters. Pass it to the customer: it will not be shown here again.",
+  "Accesso creato per": "Access created for",
+  "Crea accesso": "Create access",
+  "Creazione\u2026": "Creating\u2026",
+  "Creazione non riuscita.": "Could not create access.",
+  "Aggiornamento non riuscito.": "Could not update.",
+
+  // --- customer sales orders (M13/M14) ---------------------------------
+  "Ordini clienti": "Customer orders",
+  "Ordini da confermare": "Orders to confirm",
+  "Ordini cliente ricevuti da GommaRush. Nessun ordine viene inviato automaticamente ai fornitori.":
+    "Customer orders received by GommaRush. No order is sent to a supplier automatically.",
+  "Il modulo vendite non \u00e8 ancora attivato nel database.":
+    "The sales module is not activated in the database yet.",
+  "Nessun ordine da confermare.": "No orders to confirm.",
+  "Conferma e invia ordine": "Confirm and send order",
+  "Ordinazione fornitore non ancora attiva": "Supplier ordering is not active yet",
+  "Ordine cliente": "Customer order",
+  "Richiesta ricevuta \u00b7 revisione manuale obbligatoria":
+    "Request received \u00b7 manual review required",
+  "DOT precedente": "Older DOT",
+  "Totale": "Total",
+  "Servizio": "Service",
+  "Pagamento": "Payment",
+  "Da confermare": "To confirm",
+  "Torna agli ordini da confermare": "Back to orders to confirm",
+  // --- customer portal (M12+): customer-facing, not operational ----------
+  "oppure": "or",
+  "Richiedi un\u2019offerta": "Request an offer",
+  "La cronologia ordini sarà disponibile dopo l\u2019attivazione del modulo vendite.":
+    "Order history will be available once the sales module is activated.",
+  "Un nostro operatore lo verifica e ti conferma disponibilità e importo finale.":
+    "One of our team will check it and confirm availability and the final amount.",
+  "La registrazione online non è ancora attiva. Gli accessi vengono creati da GommaRush: contattaci e attiviamo il tuo account.":
+    "Online registration is not open yet. Accounts are created by GommaRush — contact us and we will set yours up.",
+
+  "Impossibile verificare il carrello.": "Could not verify the basket.",
+  "Il totale finale è in attesa della conferma della tariffa PFU. L'ordine non può ancora essere inviato.":
+    "The final total is waiting on the PFU tariff. The order cannot be sent yet.",
+
+  "netto / pz": "net / ea.",
+  "L'IVA si applica a pneumatici + PFU.": "VAT applies to tyres + PFU.",
+  "Totale stimato": "Estimated total",
+  "Non ancora disponibile": "Not available yet",
+  "Il totale finale non è ancora disponibile. L'importo indicato sopra è il valore dei pneumatici, non la cifra che sarà fatturata.":
+    "The final total is not available yet. The amount above is the value of the tyres, not the figure that will be invoiced.",
+
+  "Misura": "Size",
+  "La selezione è troppo ampia per essere ordinata correttamente.":
+    "The selection is too large to be ordered correctly.",
+  "Aggiungi un filtro per restringere la ricerca.": "Add a filter to narrow the search.",
+  "PFU": "PFU",
+  "e": "and",
+  "da confermare": "to be confirmed",
+  "Consegna entro": "Delivery within",
+  "giorni": "days",
+
+  // The Italian text is the key, exactly as above. These reach /account
+  // through the same LocaleProvider / gr_locale cookie the rest of the app
+  // uses, so a visitor who switches to English on the public site stays in
+  // English when they sign in.
+  "Scegli la misura per vedere i pneumatici disponibili e il prezzo GommaRush.":
+    "Choose a size to see available tyres and your GommaRush price.",
+  "Spalla": "Profile",
+  "Scegli": "Choose",
+  "obbligatoria": "required",
+  "Filtri aggiuntivi": "More filters",
+  "Tutte le stagioni": "All seasons",
+  "Estive": "Summer",
+  "Invernali": "Winter",
+  "4 stagioni": "All-season",
+  "Tutte le marche": "All brands",
+  "Ordina per": "Sort by",
+  "Tutte le fasce": "All tiers",
+  "Azzera i filtri": "Clear filters",
+  "Scegli larghezza, spalla e cerchio": "Choose width, profile and rim",
+  "Il catalogo mostra i risultati dopo che hai indicato la misura completa, per esempio 205 / 55 / R16.":
+    "Results appear once you have given a complete size, for example 205 / 55 / R16.",
+  "Catalogo non disponibile. Riprova.": "Catalogue unavailable. Please try again.",
+  "Nessun pneumatico disponibile con questi filtri.": "No tyres available with these filters.",
+  "pneumatici disponibili": "tyres available",
+  "Nessun risultato": "No results",
+  "Misura non indicata": "Size not stated",
+  "netto": "net",
+  "di": "of",
+  "Paginazione": "Pagination",
+
+  // PFU / VAT disclosure. Owner-approved wording; see pfu-estimate.ts.
+  "PFU stimato": "Estimated PFU",
+  "PFU stimato — l'importo definitivo può variare.":
+    "Estimated PFU — final amount may change.",
+  "Il PFU indicato è una stima. L'importo definitivo può variare e sarà confermato da GommaRush.":
+    "The PFU shown is an estimate. The final amount may change and will be confirmed by GommaRush.",
+
+  // Basket
+  "Carrello": "Basket",
+  "Il carrello è vuoto.": "Your basket is empty.",
+  "Vai al catalogo": "Go to the catalogue",
+  "Quantità": "Quantity",
+  "Rimuovi": "Remove",
+  "Valore pneumatici": "Tyre value",
+  "Imponibile pneumatici": "Tyres, net",
+  "inclusa nel prezzo": "included in the price",
+  "Imposte e contributi": "Levies and tax",
+  "Totale da pagare": "Total to pay",
+  "Procedi all'ordine": "Proceed to order",
+  "Aggiornamento prezzi e disponibilità…": "Updating prices and availability…",
+  "Impossibile aggiornare il carrello. Riprova.": "Could not update the basket. Please try again.",
+  "Uno o più articoli non sono più disponibili. Aggiorna il carrello.":
+    "One or more items are no longer available. Please update your basket.",
+  "La quantità richiesta non è più disponibile. Riduci la quantità.":
+    "The requested quantity is no longer available. Please reduce it.",
+
+  // Checkout
+  "Conferma ordine": "Confirm order",
+  "Indirizzo di consegna": "Delivery address",
+  "Nessun indirizzo di consegna valido configurato. Contatta GommaRush per aggiungerne uno.":
+    "No valid delivery address is configured. Contact GommaRush to add one.",
+  "Servizio di consegna": "Delivery service",
+  "Standard · consegna entro 7 giorni": "Standard · delivery within 7 days",
+  "Express · 24–48h, su verifica": "Express · 24–48h, subject to confirmation",
+  "Coordinate inviate con la conferma": "Bank details sent with the confirmation",
+  "Contanti alla consegna": "Cash on delivery",
+  "Pagamento al momento della consegna": "Paid when the order is delivered",
+  "Note": "Notes",
+  "Verifica di prezzi e disponibilità in corso…": "Checking prices and availability…",
+  "Invia ordine a GommaRush": "Send order to GommaRush",
+  "Invio…": "Sending…",
+  "Ordine non inviato. Riprova.": "Order not sent. Please try again.",
+  "L'ordine viene inviato a GommaRush per conferma manuale. Non viene inoltrato automaticamente a un fornitore.":
+    "Your order is sent to GommaRush for manual confirmation. It is not forwarded to a supplier automatically.",
+  "L'indirizzo di consegna selezionato non è valido.": "The selected delivery address is not valid.",
+  "Account non abilitato. Contatta GommaRush.": "Account not enabled. Please contact GommaRush.",
+  "Il totale finale non è ancora confermato, quindi l'ordine non può essere inviato.":
+    "The final total is not confirmed yet, so the order cannot be sent.",
+
+  // Orders
+  "Ordini": "Orders",
+  "Ordine inviato a GommaRush": "Order sent to GommaRush",
+  "In attesa di conferma": "Awaiting confirmation",
+  "Confermato": "Confirmed",
+  "Rifiutato": "Rejected",
+  "Annullato": "Cancelled",
+  "Non hai ancora ordini.": "You have no orders yet.",
+  "La cronologia ordini sarà disponibile dopo l'attivazione del modulo vendite.":
+    "Order history will be available once the sales module is activated.",
+
+  // Account shell + login
+  "Area clienti": "Customer account",
+  "Account": "Account",
+  "Esci": "Sign out",
+  "Accedi per consultare il catalogo, i prezzi riservati e i tuoi ordini.":
+    "Sign in to browse the catalogue, your prices and your orders.",
+  "Accedi": "Sign in",
+  "Accesso…": "Signing in…",
+  "Email o password non validi.": "Invalid email or password.",
+  "Account non abilitato al portale.": "This account is not enabled for the portal.",
+  "Accesso non disponibile. Riprova.": "Sign-in unavailable. Please try again.",
+  "Non hai un account?": "Don't have an account?",
+  "Registrati — prossimamente": "Sign up — coming soon",
+  "Richiedi un'offerta": "Request an offer",
+  "lascia i tuoi dati": "leave your details",
+  "Sedi di consegna": "Delivery locations",
 };

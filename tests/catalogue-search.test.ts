@@ -238,9 +238,10 @@ describe("search results carry cost internally and never to the customer", () =>
 
     const result = await searchCatalogue({ widthMm: 205 });
 
-    expect(result.internal[0].pfuStatus).toBe("TO_CONFIRM");
-    expect(result.internal[0].pfuAmountCents).toBeNull();
-    expect(result.internal[0].customerTotalCents).toBeNull();
+    // PFU now resolves to a temporary ESTIMATE (owner decision, 2026-09-23),
+    // so an amount exists — flagged as estimated, never as a verified tariff.
+    expect(result.internal[0].pfuStatus).toBe("ESTIMATED");
+    expect(result.internal[0].pfuAmountCents).not.toBeNull();
     // This fixture states no stock, so it is not offered; PFU is asserted on
     // the internal view. Customer-side PFU is covered where stock permits.
     expect(result.internal[0].sellable).toBe(false);
@@ -356,5 +357,55 @@ describe("search results carry cost internally and never to the customer", () =>
     expect(result.schemaAvailable).toBe(false);
     expect(result.internal).toEqual([]);
     expect(result.customer).toEqual([]);
+  });
+});
+
+describe("lane attribution is no longer hardcoded", () => {
+  /**
+   * Until M11B the selling policy was called with a literal
+   * `laneCode: "intersprint"` for every listing. That was true while
+   * Inter-Sprint was the only supplier with data and would have silently
+   * applied its offer policy to every other lane the moment a second one had
+   * any. The lane now comes from the adapter that wrote the listing.
+   */
+  it("derives the lane from the listing's own import adapter", async () => {
+    const { searchCatalogue } = await import("@/lib/server/catalogue-search");
+    const { DEFAULT_SELLING_POLICY } = await import("@/lib/commerce/selling-policy");
+
+    const withRun = (adapter: string | null) => ({
+      ...listingRow({
+        purchase_price: "61.5000", currency: "EUR", stock_raw: "6",
+        stock_exact: 6, stock_minimum: 6, observed_at: "2026-09-08T14:46:30.554Z",
+      }),
+      catalogue_import_runs: adapter ? { adapter } : null,
+    });
+
+    // A per-supplier floor that only Inter-Sprint should feel.
+    const policy = { ...DEFAULT_SELLING_POLICY, bySupplier: { intersprint: 10 } };
+
+    mockListings([withRun("intersprint-feed")]);
+    const isb = await searchCatalogue({ widthMm: 205 }, undefined, policy);
+    expect(isb.internal[0].minimumOfferQuantity).toBe(10);
+    expect(isb.internal[0].sellable).toBe(false);
+
+    // A different lane keeps the default floor of 5 and stays sellable.
+    mockListings([withRun("deldo-feed")]);
+    const deldo = await searchCatalogue({ widthMm: 205 }, undefined, policy);
+    expect(deldo.internal[0].minimumOfferQuantity).toBe(5);
+    expect(deldo.internal[0].sellable).toBe(true);
+  });
+
+  it("falls back to the default policy for an unattributed listing", async () => {
+    const { searchCatalogue } = await import("@/lib/server/catalogue-search");
+    mockListings([
+      { ...listingRow({
+          purchase_price: "61.5000", currency: "EUR", stock_raw: "6",
+          stock_exact: 6, stock_minimum: 6, observed_at: "2026-09-08T14:46:30.554Z",
+        }),
+        catalogue_import_runs: null },
+    ]);
+
+    const result = await searchCatalogue({ widthMm: 205 });
+    expect(result.internal[0].minimumOfferQuantity).toBe(5);
   });
 });

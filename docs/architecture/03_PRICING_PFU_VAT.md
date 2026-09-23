@@ -38,10 +38,13 @@ customer_total   = taxable_subtotal + vat_amount
 Rounding uses deterministic currency rules. Net, tax and gross values are always
 preserved separately.
 
-> **OWNER_DECISION — is PFU inside the VAT base?** The model above assumes yes.
-> This is a tax position for the commercialista, not an engineering choice, and
-> it changes every customer total. Must be settled before the first price
-> snapshot is written, because snapshots are immutable.
+> **RESOLVED 2026-09-23 — PFU is inside the VAT base.** The owner confirmed the
+> tax position: tyre net + PFU is the taxable base, and the Italian ordinary
+> rate of 22% applies to that base. `pfuVatBase` is now `inside_vat_base`, so
+> the model above is the implemented behaviour rather than an assumption.
+>
+> This settles the accounting position ONLY. The tariff itself — D3 — is still
+> open, so no customer total is produced for a real catalogue tyre. See below.
 
 > **OWNER_DECISION — rounding scope:** per unit or per line. Same reason.
 
@@ -123,11 +126,32 @@ Italian ordinary rate, recorded as configuration rather than inferred at a call
 site. A rate whose provenance is `UNRESOLVED` produces no VAT at all rather
 than a zero-rated total.
 
-The engine will not produce a customer total today, because `pfuVatBase` is
-`unresolved`: whether PFU sits inside the taxable base is the open accounting
-question above, and both answers give different totals. Net selling price,
-markup and gross profit are still reported, which is what B2B competitiveness
-is judged on.
+**IMPLEMENTED.** `pfuVatBase` is `inside_vat_base` (owner decision D11,
+2026-09-23), so the VAT step is configured and runs.
+
+`VERIFIED_PFU_TARIFFS` is still empty — D3 is open — so a real catalogue tyre
+has no verified PFU. Since 2026-09-23 the owner has authorised a **temporary
+estimate** so that PFU does not block V1 ordering, and the engine therefore
+does produce a customer total.
+
+That total is provisional, and the system says so at every layer:
+
+* `PfuStatus` gained `ESTIMATED`, a value distinct from `RULE_CALCULATED`.
+  `isResolvedPfuStatus` accepts it (there is an amount); `isVerifiedPfuStatus`
+  does not (there is no evidence).
+* `resolvePfu` prefers a supplier-stated figure, then a verified tariff, then
+  the estimate. Loading real tariffs retires the estimate with no code change.
+* A caller that cannot accept an estimate passes `allowEstimate: false` and
+  gets the original `TO_CONFIRM` refusal.
+* Every customer surface carries the disclosure "PFU stimato — l'importo
+  definitivo può variare."
+* Every order records `pfu_status` and `pfu_estimate_version` as columns, so
+  orders priced on the estimate can be found and re-quoted later. They are
+  never silently reinterpreted.
+
+The amounts live in `src/lib/pricing/pfu-estimate.ts` and are **owner
+placeholders, not tariffs** — no PFU figure exists anywhere in GommaRush's
+data. See that file's header before changing anything in it.
 
 ## Price snapshots
 
