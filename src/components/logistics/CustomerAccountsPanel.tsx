@@ -51,7 +51,17 @@ export function CustomerAccountsPanel({ customerId }: { customerId: string }) {
   const tr = useTr();
   const [accounts, setAccounts] = useState<CustomerAccountRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [unavailable, setUnavailable] = useState(false);
+  /**
+   * Why the list could not be read, when it could not.
+   *
+   * This used to be a single `unavailable` boolean that rendered "the module
+   * is not activated in the database" for ANY failure. Once the migrations
+   * were applied that message became actively misleading: a permissions
+   * problem, a network blip or a 500 all claimed the schema was missing, and
+   * an operator following that advice would go and re-run migrations that
+   * were already in place. The real code is shown instead.
+   */
+  const [loadError, setLoadError] = useState<{ schemaMissing: boolean; code: string } | null>(null);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -75,15 +85,22 @@ export function CustomerAccountsPanel({ customerId }: { customerId: string }) {
     setLoading(true);
     try {
       const r = await fetch(`/api/admin/customers/${customerId}/accounts`);
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.code);
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setLoadError({
+          // 0005 not applied is the one cause with a specific remedy, and the
+          // route reports it distinctly. Everything else keeps its own code.
+          schemaMissing: j.code === "SCHEMA_NOT_READY",
+          code: j.code || `HTTP ${r.status}`,
+        });
+        setAccounts([]);
+        return;
+      }
       setAccounts(j.accounts ?? []);
-      setUnavailable(false);
-    } catch {
-      // The table arrives with migration 0005. Until it is applied this panel
-      // says so rather than showing an empty list, which would read as "this
-      // customer has no logins".
-      setUnavailable(true);
+      setLoadError(null);
+    } catch (e) {
+      setLoadError({ schemaMissing: false, code: e instanceof Error ? e.message : "NETWORK_ERROR" });
+      setAccounts([]);
     } finally {
       setLoading(false);
     }
@@ -138,7 +155,10 @@ export function CustomerAccountsPanel({ customerId }: { customerId: string }) {
   const canCreate = email.includes("@") && password.length >= MIN_PASSWORD_LENGTH && !busy;
 
   return (
-    <section className="rounded-xl border border-ink/10 bg-white p-5">
+    <section
+      id="accesso-area-clienti"
+      className="scroll-mt-24 rounded-xl border-2 border-accent/30 bg-white p-5"
+    >
       <h2 className="text-sm font-extrabold uppercase tracking-wide text-ink">
         {tr("Accesso area clienti")}
       </h2>
@@ -148,10 +168,18 @@ export function CustomerAccountsPanel({ customerId }: { customerId: string }) {
         )}
       </p>
 
-      {unavailable ? (
-        <p className="mt-4 text-sm text-ink-soft">
-          {tr("Il modulo account clienti non è ancora attivato nel database.")}
-        </p>
+      {loadError ? (
+        <div className="mt-4 rounded-lg bg-state-danger-soft p-3">
+          <p className="text-sm font-semibold text-state-danger">
+            {loadError.schemaMissing
+              ? tr("Il modulo account clienti non è ancora attivato nel database.")
+              : tr("Impossibile leggere gli accessi di questo cliente.")}
+          </p>
+          <p className="mt-1 text-xs text-state-danger">{loadError.code}</p>
+          <Button className="mt-3" size="md" variant="secondary" onClick={() => void load()}>
+            {tr("Riprova")}
+          </Button>
+        </div>
       ) : (
         <>
           <div className="mt-4">

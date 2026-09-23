@@ -3,6 +3,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/server-admin";
 import { logError, logEvent } from "@/lib/logger";
 import { fail, ok, readJsonBody, runAdminRoute } from "@/lib/server/route-helpers";
 import { listCustomerAccounts } from "@/lib/server/customer-accounts";
+import { isMissingSchemaError } from "@/lib/server/schema-errors";
 
 export const runtime = "nodejs";
 
@@ -25,9 +26,19 @@ const MIN_PASSWORD_LENGTH = 12;
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return runAdminRoute(async () => {
     const { id: customerId } = await params;
-    // Never the password, and never a hash of it: nothing here can echo a
-    // credential back, because nothing here reads one.
-    return ok({ accounts: await listCustomerAccounts(customerId) });
+    try {
+      // Never the password, and never a hash of it: nothing here can echo a
+      // credential back, because nothing here reads one.
+      return ok({ accounts: await listCustomerAccounts(customerId) });
+    } catch (error) {
+      // "0005 has not been applied" is the one failure with a specific remedy,
+      // so it gets its own code. Everything else keeps the generic handling —
+      // reporting a permissions or network fault as a missing migration sends
+      // an operator to re-run migrations that are already in place.
+      if (isMissingSchemaError(error as { code?: string | null; message?: string | null }))
+        return fail(503, "SCHEMA_NOT_READY");
+      throw error;
+    }
   });
 }
 

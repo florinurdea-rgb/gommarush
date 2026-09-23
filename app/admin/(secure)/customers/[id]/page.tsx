@@ -24,10 +24,17 @@ export default async function CustomerDetailPage({
         description={tr("Azienda cliente e i suoi luoghi di consegna.")}
         back
       />
-      <CustomerEditor customer={result.customer} locations={result.locations} />
-      <div className="mt-5">
+      {/*
+        Portal access sits ABOVE the locations editor deliberately.
+        The editor is a long, multi-branch form, and anything below it is
+        reached only by scrolling past every delivery address the company has
+        — which is how an operator concludes a feature is missing. This is the
+        section they come here for today.
+      */}
+      <div className="mb-5">
         <CustomerAccountsPanel customerId={result.customer.id} />
       </div>
+      <CustomerEditor customer={result.customer} locations={result.locations} />
     </>
   );
 }
