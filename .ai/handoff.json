@@ -125,6 +125,8 @@
     "Deldo persistence remains gated; untouched."
   ],
   "risks": [
+    "The live availability check calls the Inter-Sprint gateway over PLAIN HTTP (http://customers.inter-sprint.nl, Gateway Manual v2.2 §1.1), so the customer number, username and password cross the wire in clear text on every call. This is security finding 2 and it is now on the order path, one call per Inter-Sprint basket line at confirm. It was scoped to confirm-only (D21) to bound the exposure, NOT to remove it. The gateway has also never been exercised from the application - only from the env-gated live probe - so whether production credentials are set is UNVERIFIED from this environment. If they are not, verifyBasketLive detects it, makes no call, and every line stays on the feed with source 'feed'; nothing breaks, but nothing is checked live either. Confirm INTERSPRINT_GATEWAY_* is set in Vercel before treating the live check as active.",
+    "Pre-existing and NOT fixed here: the customer catalogue payload's tyre spec carries `reviewRequired` and `reviewReasons`, which are internal catalogue data-quality flags with no customer-facing purpose. Found while adding `ean` to FORBIDDEN_CUSTOMER_FIELDS - that addition was reverted because an EAN is printed on the tyre's own label and is not confidential, but the review flags are a different matter. `laneCode` IS on the forbidden list and is verified not to leak.",
     "Catalogue dimension dropdowns are now UNFILTERED (src/lib/server/catalogue-dimensions.ts): they list every distinct width_mm / aspect_ratio / rim_inch in catalogue_products, so the catalogue's own data-quality problems are now VISIBLE to customers. Production currently holds rim_inch values 175, 195 and 225 - almost certainly 17.5, 19.5 and 22.5 truck rims lost to an integer parse - and widths 10, 11, 12, 13 alongside 750, 825, 950, 1050, 1150, 1250, which are industrial/agricultural sizes or parse artefacts. These were previously hidden by the dependent facet query, which never offered a value with no tyre behind it. They are NOT filtered out here: silently hiding them would resolve a data-quality conflict by concealing it, and would also hide genuinely buyable truck stock. Two separate follow-ups: (1) investigate whether rim_inch needs a decimal type and a re-parse of the affected listings, (2) decide whether the customer portal should scope to passenger-car sizes at all - that is a commercial decision, not an engineering one.",
     "The PFU estimate magnitudes (EUR 3 / 6 / 12 / 25 by weight band) are placeholders chosen for order-flow testing. They are not sourced from any published tariff, because no PFU evidence exists anywhere in GommaRush's data. They are deliberately round and conservative, they are disclosed to the customer, and every order records that it used them - but a real customer charged on them would be charged an unverified amount. Confirm or replace before opening the portal beyond controlled testing.",
     "The customer portal is Italian-only. The root layout already provides LocaleProvider and the operational string map (useTr) reaches /account, so the mechanism exists and is unused there - an English visitor follows an English 'Customer account' CTA into an Italian portal. Not in Mission 1's scope and deliberately not half-done; it is a contained follow-up (convert the five customer components to useTr and add the strings to admin-strings.data.ts).",
@@ -243,6 +245,30 @@
     }
   ],
   "owner_decisions_required": [
+    {
+      "id": "D21",
+      "question": "RESOLVED 2026-09-24. The live Inter-Sprint stock check runs at the FINAL CONFIRM only, not on quantity edits.",
+      "why": "Reverses the earlier 'do NOT make external calls during checkout'. Protocol 103 is read-only and cannot place an order, but the gateway is plain HTTP (security finding 2) and credentials cross the wire in clear text on every call. One call per basket line at the moment a promise is made is a very different exposure from one per keystroke, and buys the same guarantee. Quantity edits re-resolve against the stored feed instead.",
+      "blocks": "Nothing. Recorded as resolved."
+    },
+    {
+      "id": "D22",
+      "question": "RESOLVED 2026-09-24. A live lookup that fails or times out falls back to the stored feed observation, and the line says so.",
+      "why": "Fail-closed would let one Inter-Sprint outage stop every checkout, including the 3,289 isb-lane listings that have no live lane and could never be verified. Silent fallback was rejected: a customer told a figure was verified live must be able to rely on it. The line is marked feed_after_live_failure with the reason, on screen and in the order snapshot.",
+      "blocks": "Nothing. Recorded as resolved."
+    },
+    {
+      "id": "D23",
+      "question": "RESOLVED 2026-09-24. When the recomputed price differs from the one shown, the NEW price wins and the change is shown before the confirm re-enables.",
+      "why": "Enforced on the server, not by the screen: the order carries acceptedTotalCents and createPortalSalesOrder refuses with PRICE_CHANGED at any other figure, returning the recomputed basket so the customer sees the new number. Holding the quoted price was rejected as an open-ended margin commitment with no expiry.",
+      "blocks": "Nothing. Recorded as resolved."
+    },
+    {
+      "id": "D24",
+      "question": "RESOLVED 2026-09-24. isb-lane listings (3,289 active) are treated as available per the stored feed, labelled with the observation time.",
+      "why": "They have no live API and inventing one is not possible. Showing them identically to a live-verified line would imply a check that cannot happen; requiring manual confirmation would put a human in the loop on ~25% of orders.",
+      "blocks": "Nothing. Recorded as resolved."
+    },
     {
       "id": "D20",
       "question": "CONFIRM OR REPLACE the temporary PFU estimate amounts: EUR 3.00 (<=11kg), 6.00 (11-20kg), 12.00 (20-40kg), 25.00 (>40kg), 6.00 fallback.",

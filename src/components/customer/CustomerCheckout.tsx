@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/Button";
+import { LineAvailability, type LineState, type VerifiedSource } from "@/components/customer/LineAvailability";
 import { readBasket, writeBasket } from "@/lib/customer/basket";
 import { formatSalesOrderNumber } from "@/lib/commerce/order-number";
 import { useTr } from "@/lib/i18n/tr";
@@ -12,11 +13,23 @@ import { useTr } from "@/lib/i18n/tr";
  * The customer chooses a GommaRush SERVICE — where it goes, how fast, how they
  * pay. They never choose a supplier, and no screen here mentions one.
  *
- * The submit button stays disabled until the server has confirmed the basket is
- * monetarily complete. While the PFU tariff is unresolved that never happens,
- * and this screen says so plainly instead of offering a button that fails. The
- * gate is enforced again in createPortalSalesOrder, which refuses with
- * PRICING_NOT_FINAL regardless of what the browser believes.
+ * THREE GATES, and all three are enforced on the server as well as here:
+ *
+ *   MONEY        the basket must be monetarily complete. While the PFU tariff
+ *                is unresolved that never happens, and this screen says so
+ *                plainly instead of offering a button that fails.
+ *   STOCK        every line must be available in the quantity asked for.
+ *   PRICE        the order carries the total the customer accepted, and the
+ *                server refuses to create it at any other figure.
+ *
+ * THE LIVE SUPPLIER CHECK HAPPENS ON SUBMIT, not here. Pressing the button
+ * asks Inter-Sprint for the real quantity behind every line it can (protocol
+ * 103, read-only), and the order is created in the same request if nothing
+ * moved. If something did move, the request comes back refused WITH the
+ * recomputed basket, this screen redraws with the new truth, and the customer
+ * confirms again against what is now on the page. That second press is not
+ * friction for its own sake: it is the difference between a customer agreeing
+ * to a price and a customer being charged one.
  */
 
 type Location = {
@@ -26,6 +39,37 @@ type Location = {
   city: string;
   postal_code: string | null;
   is_primary: boolean;
+};
+
+type Line = {
+  productId: string;
+  oldDot: boolean;
+  quantity: number;
+  tyre: {
+    brand: string | null;
+    modelPattern: string | null;
+    sizeDisplay: string | null;
+    widthMm: number | null;
+    aspectRatio: number | null;
+    rimInch: number | null;
+    season: string | null;
+  } | null;
+  state: LineState;
+  availableQuantity: number | null;
+  unavailableReason: string | null;
+  verifiedSource: VerifiedSource;
+  verifiedAt: string | null;
+  unitTyreNetCents: number | null;
+  unitTotalCents: number | null;
+};
+
+type Basket = {
+  lines: Line[];
+  grandTotalCents: number | null;
+  monetaryStatus: string;
+  orderable: boolean;
+  pfuEstimated: boolean;
+  verifiedSource: VerifiedSource;
 };
 
 /** V1 payment methods, owner-confirmed. POS on delivery is not among them. */
@@ -49,6 +93,9 @@ const ORDER_ERRORS: Record<string, string> = {
   CUSTOMER_NOT_FOUND: "Account non abilitato. Contatta GommaRush.",
 };
 
+const money = (c: number | null) =>
+  c === null ? "—" : new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(c / 100);
+
 export function CustomerCheckout({ locations }: { locations: Location[] }) {
   const tr = useTr();
   const router = useRouter();
@@ -63,10 +110,21 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
   // second click cannot create a second order.
   const [idempotencyKey, setIdempotencyKey] = useState("");
   const [checking, setChecking] = useState(true);
-  const [ready, setReady] = useState(false);
+  const [basket, setBasket] = useState<Basket | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [blockedReason, setBlockedReason] = useState<string | null>(null);
+
+  /**
+   * The total the customer has seen and is confirming.
+   *
+   * Sent with the order and checked by the server. When a submit comes back
+   * refused because the price moved, this is deliberately NOT updated until
+   * the customer has been shown the change — that is what makes the second
+   * press an agreement rather than a formality.
+   */
+  const [acceptedTotalCents, setAcceptedTotal] = useState<number | null>(null);
+  const [priceChange, setPriceChange] = useState<{ from: number; to: number | null } | null>(null);
 
   const verify = useCallback(async () => {
     setChecking(true);
@@ -84,13 +142,14 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
       const j = await r.json();
       if (!r.ok) {
         setBlockedReason(tr(ORDER_ERRORS[j.code] ?? "Impossibile verificare il carrello."));
-        setReady(false);
+        setBasket(null);
         return;
       }
-      const complete = j.basket?.monetaryStatus === "complete";
-      setReady(complete);
+      setBasket(j.basket);
+      setAcceptedTotal(j.basket?.grandTotalCents ?? null);
+      setPriceChange(null);
       setBlockedReason(
-        complete
+        j.basket?.monetaryStatus === "complete"
           ? null
           : tr(
               "Il totale finale è in attesa della conferma della tariffa PFU. L'ordine non può ancora essere inviato."
@@ -98,7 +157,7 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
       );
     } catch {
       setBlockedReason(tr("Impossibile verificare il carrello."));
-      setReady(false);
+      setBasket(null);
     } finally {
       setChecking(false);
     }
@@ -112,7 +171,9 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
     the locale. Switching language — or anything else that re-created `verify`
     — minted a NEW key, and a retry after a failed submit would then be treated
     as a different order rather than the same one. The key's whole job is to be
-    the same across retries of one order.
+    the same across retries of one order, and that now includes the retry after
+    a price change: the customer confirming a new total is still the SAME
+    order, so it deliberately survives that round trip too.
   */
   useEffect(() => {
     setIdempotencyKey(crypto.randomUUID());
@@ -123,8 +184,10 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
   }, [verify]);
 
   async function submit() {
+    if (acceptedTotalCents === null) return;
     setBusy(true);
     setError(null);
+    const submittedTotal = acceptedTotalCents;
     try {
       const r = await fetch("/api/account/orders", {
         method: "POST",
@@ -136,10 +199,27 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
           fulfilmentClass,
           note,
           idempotencyKey,
+          acceptedTotalCents: submittedTotal,
         }),
       });
       const j = await r.json();
-      if (!r.ok) throw new Error(j.code);
+
+      if (!r.ok) {
+        /*
+          A refusal carries the recomputed basket. Redraw with it rather than
+          sending the customer back to reload: the availability and the prices
+          in that payload are the result of the live check that just ran, and
+          they are newer than anything this screen currently shows.
+        */
+        if (j.basket) {
+          setBasket(j.basket);
+          if (j.code === "PRICE_CHANGED") {
+            setPriceChange({ from: submittedTotal, to: j.basket.grandTotalCents ?? null });
+            setAcceptedTotal(j.basket.grandTotalCents ?? null);
+          }
+        }
+        throw new Error(j.code);
+      }
 
       writeBasket([]);
       // The allocated order number travels to the confirmation, so the customer
@@ -148,12 +228,29 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
       router.replace(reference ? `/account/orders?created=${encodeURIComponent(reference)}` : "/account/orders");
       router.refresh();
     } catch (e) {
-      setError(tr(ORDER_ERRORS[e instanceof Error ? e.message : ""] ?? "Ordine non inviato. Riprova."));
+      const code = e instanceof Error ? e.message : "";
+      // PRICE_CHANGED and BASKET_NOT_ORDERABLE are explained by the panels
+      // below, which now carry the new figures. A second banner repeating it
+      // in worse words would only compete with them.
+      if (code !== "PRICE_CHANGED" && code !== "BASKET_NOT_ORDERABLE") {
+        setError(tr(ORDER_ERRORS[code] ?? "Ordine non inviato. Riprova."));
+      }
       setBusy(false);
     }
   }
 
-  const canSubmit = ready && !!locationId && !!idempotencyKey && !busy && !checking;
+  const complete = basket?.monetaryStatus === "complete";
+  const orderable = basket?.orderable === true;
+  const blockedLines = basket?.lines.filter((l) => l.state !== "available") ?? [];
+
+  const canSubmit =
+    complete &&
+    orderable &&
+    acceptedTotalCents !== null &&
+    !!locationId &&
+    !!idempotencyKey &&
+    !busy &&
+    !checking;
 
   return (
     <div>
@@ -242,6 +339,96 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
         </section>
       </div>
 
+      {/* ---- WHAT IS BEING ORDERED, with each line's availability ------- */}
+      {basket && (
+        <section className="mt-5 rounded-2xl bg-white p-5 shadow-card">
+          <h2 className="font-bold text-ink">{tr("Articoli")}</h2>
+          <div className="mt-3 space-y-3">
+            {basket.lines.map((line) => (
+              <div
+                key={`${line.productId}-${line.oldDot}`}
+                className="border-b border-ink/10 pb-3 last:border-0 last:pb-0"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-ink">
+                      {line.tyre?.brand ?? tr("Articolo non disponibile")} {line.tyre?.modelPattern ?? ""}
+                    </div>
+                    <div className="text-sm text-ink-soft">
+                      {line.tyre?.sizeDisplay ?? ""} · {line.quantity} {tr("pz")}
+                    </div>
+                  </div>
+                  <strong>
+                    {money(
+                      line.unitTotalCents === null ? null : line.unitTotalCents * line.quantity
+                    )}
+                  </strong>
+                </div>
+                {/*
+                  Quantities are not editable here on purpose: the basket is
+                  where a basket is changed. What this screen must do is say
+                  exactly which line is blocking the order, and give the same
+                  two ways out the basket gives.
+                */}
+                <LineAvailability
+                  state={line.state}
+                  availableQuantity={line.availableQuantity}
+                  unavailableReason={line.unavailableReason}
+                  requestedQuantity={line.quantity}
+                  verifiedSource={line.verifiedSource}
+                  verifiedAt={line.verifiedAt}
+                  tyre={line.tyre}
+                  onAcceptAvailable={null}
+                  tr={tr}
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 flex items-baseline justify-between border-t border-ink/10 pt-4">
+            <span className="text-sm font-bold text-ink">
+              {basket.pfuEstimated ? tr("Totale stimato") : tr("Totale da pagare")}
+            </span>
+            <strong className="text-lg">{money(basket.grandTotalCents)}</strong>
+          </div>
+        </section>
+      )}
+
+      {/* ---- THE PRICE MOVED, and the customer has to see it ------------ */}
+      {priceChange && (
+        <div
+          role="alert"
+          className="mt-5 rounded-2xl border-2 border-state-warning/50 bg-state-warning-soft p-4"
+        >
+          <p className="font-bold text-ink">{tr("Il prezzo è cambiato")}</p>
+          <p className="mt-1 text-sm text-ink">
+            {tr("Al momento della conferma il totale era")} <strong>{money(priceChange.from)}</strong>.{" "}
+            {tr("Il prezzo aggiornato dal fornitore è")} <strong>{money(priceChange.to)}</strong>.{" "}
+            {tr("Nessun ordine è stato creato. Conferma di nuovo per procedere al nuovo importo.")}
+          </p>
+        </div>
+      )}
+
+      {/* ---- A LINE CANNOT BE SUPPLIED --------------------------------- */}
+      {!checking && basket && !orderable && (
+        <div className="mt-5 rounded-2xl border border-state-danger/30 bg-state-danger-soft p-4">
+          <p className="font-bold text-state-danger">
+            {blockedLines.length === 1
+              ? tr("Un articolo non è disponibile nella quantità richiesta.")
+              : `${blockedLines.length} ${tr("articoli non sono disponibili nella quantità richiesta.")}`}
+          </p>
+          <p className="mt-1 text-sm text-ink">
+            {tr("Torna al carrello per aggiornare le quantità o scegliere un'alternativa.")}
+          </p>
+          <a
+            href="/account/basket"
+            className="mt-3 inline-flex min-h-[40px] items-center justify-center rounded-xl bg-ink px-4 text-sm font-bold text-white"
+          >
+            {tr("Torna al carrello")}
+          </a>
+        </div>
+      )}
+
       {checking && (
         <p className="mt-5 rounded-xl bg-white p-4 text-sm text-ink-soft shadow-card" aria-live="polite">
           {tr("Verifica di prezzi e disponibilità in corso…")}
@@ -271,10 +458,11 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
 
       <div className="mt-6 flex justify-end">
         <Button size="lg" disabled={!canSubmit} onClick={submit}>
-          {busy ? tr("Invio…") : tr("Invia ordine a GommaRush")}
+          {busy ? tr("Verifica con il fornitore…") : tr("Invia ordine a GommaRush")}
         </Button>
       </div>
       <p className="mt-2 text-right text-xs text-ink-soft">
+        {tr("Disponibilità e prezzo vengono verificati con il fornitore alla conferma.")}{" "}
         {tr(
           "L'ordine viene inviato a GommaRush per conferma manuale. Non viene inoltrato automaticamente a un fornitore."
         )}

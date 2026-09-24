@@ -281,6 +281,8 @@ function realLine(quantity: number): BasketResolvedLine {
     supplierListingId: "l-1",
     supplierName: "SECRET SUPPLIER",
     supplierArticleId: "SECRET-SKU",
+    laneCode: "intersprint",
+    ean: "1234567890123",
     costObservedAt: "2026-09-22T14:00:00Z",
     breakdown: calculateTyrePrice(
       { supplierCostCents: 10_000, pfu: resolvePfu({ weightKg: 8.5 }) },
@@ -294,8 +296,11 @@ function realLine(quantity: number): BasketResolvedLine {
 
   return {
     input: { productId: listing.tyre.productId, oldDot: false, quantity },
+    tyre: listing.tyre,
     customer: toCustomerOffer(listing),
     internal: toInternalOffer(listing),
+    availability: { state: "available" },
+    provenance: { source: "feed", observedAt: listing.costObservedAt },
   };
 }
 
@@ -716,5 +721,204 @@ describe("the checkout idempotency key survives a retry", () => {
     expect(source).toContain("useEffect(() => {\n    setIdempotencyKey(crypto.randomUUID());\n  }, []);");
     // ...and no longer rides along with verify.
     expect(source).not.toContain("setIdempotencyKey(crypto.randomUUID());\n    void verify();");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Availability: per line, checked live at confirm
+// ---------------------------------------------------------------------------
+
+describe("a short line no longer fails the whole basket", () => {
+  const read = (path: string) => require("node:fs").readFileSync(path, "utf8") as string;
+
+  /**
+   * REGRESSION. resolveBasket threw BASKET_ITEM_UNAVAILABLE for the entire
+   * request the moment one tyre ran short, so the customer got a banner that
+   * named no tyre and offered nothing to do. The refusal is intact — the
+   * order is still impossible — but it is now reported on the line.
+   */
+  it("prices and reports the lines it can, alongside the ones it cannot", () => {
+    const available = realLine(4);
+    const gone: BasketResolvedLine = {
+      ...realLine(4),
+      input: { productId: "22222222-2222-2222-2222-222222222222", oldDot: false, quantity: 4 },
+      customer: null,
+      internal: null,
+      availability: { state: "unavailable", reason: "out_of_stock" },
+    };
+
+    const payload = customerBasketPayload([available, gone]);
+    expect(payload.lines).toHaveLength(2);
+    expect(payload.lines[0].state).toBe("available");
+    expect(payload.lines[1].state).toBe("unavailable");
+    expect(payload.lines[1].unavailableReason).toBe("out_of_stock");
+  });
+
+  /** A total describing a purchase that cannot happen is not a total. */
+  it("withholds the grand total while any line is unorderable", () => {
+    const gone: BasketResolvedLine = {
+      ...realLine(4),
+      customer: null,
+      internal: null,
+      availability: { state: "unavailable", reason: "out_of_stock" },
+    };
+
+    const payload = customerBasketPayload([realLine(4), gone]);
+    expect(payload.orderable).toBe(false);
+    expect(payload.grandTotalCents).toBeNull();
+  });
+
+  it("reports how short a limited line is, so the customer can accept it", () => {
+    const short: BasketResolvedLine = {
+      ...realLine(20),
+      availability: { state: "limited", availableQuantity: 6 },
+    };
+
+    const payload = customerBasketPayload([short]);
+    expect(payload.lines[0].availableQuantity).toBe(6);
+    expect(payload.orderable).toBe(false);
+  });
+
+  it("is orderable only when every line is available", () => {
+    expect(customerBasketPayload([realLine(4)]).orderable).toBe(true);
+    expect(customerBasketPayload([]).orderable).toBe(false);
+  });
+
+  /**
+   * An unavailable line keeps its tyre so the card can name itself and link to
+   * alternatives in its own size. Dropping it would leave the customer looking
+   * for a tyre they believed they had added.
+   */
+  it("keeps the tyre on a line it cannot price", () => {
+    const gone: BasketResolvedLine = {
+      ...realLine(4),
+      customer: null,
+      internal: null,
+      availability: { state: "unavailable", reason: "out_of_stock" },
+    };
+    expect(customerBasketPayload([gone]).lines[0].tyre?.sizeDisplay).toBe("205/55 R16");
+  });
+
+  it("shows the blocked line and the way out on both screens", () => {
+    for (const file of [
+      "src/components/customer/CustomerBasket.tsx",
+      "src/components/customer/CustomerCheckout.tsx",
+    ]) {
+      expect(read(file), `${file} must render the verdict`).toContain("<LineAvailability");
+    }
+    const shared = read("src/components/customer/LineAvailability.tsx");
+    expect(shared).toContain('tr("Non disponibile in stock")');
+    expect(shared).toContain('tr("Vedi alternative")');
+  });
+
+  it("disables checkout while a line is blocked, on both screens", () => {
+    expect(read("src/components/customer/CustomerBasket.tsx")).toContain("!orderable");
+    expect(read("src/components/customer/CustomerCheckout.tsx")).toContain("orderable &&");
+  });
+});
+
+describe("what gets checked live, and when", () => {
+  const read = (path: string) => require("node:fs").readFileSync(path, "utf8") as string;
+
+  /**
+   * Owner decision, 2026-09-24. Quantity edits fire this endpoint constantly;
+   * the gateway is plain HTTP with credentials in the clear, and one call per
+   * keystroke is a very different exposure from one per order.
+   */
+  it("never calls the supplier from the basket preview", () => {
+    const route = read("app/api/account/basket/preview/route.ts");
+    expect(route).not.toContain("verifyBasketLive");
+    expect(route).not.toContain("supplier-gateway");
+  });
+
+  it("calls it once, from order creation", () => {
+    const orders = read("src/lib/server/sales-orders.ts");
+    expect(orders).toContain("verifyBasketLive(resolved)");
+  });
+
+  /** A retry must not make a second round of supplier calls. */
+  it("answers a repeated submit from the existing order, before verifying", () => {
+    const source = read("src/lib/server/sales-orders.ts");
+    expect(source.indexOf("findByIdempotencyKey")).toBeLessThan(
+      source.indexOf("verifyBasketLive(resolved)")
+    );
+  });
+
+  it("tells the customer the check happens at confirm", () => {
+    const checkout = read("src/components/customer/CustomerCheckout.tsx");
+    expect(checkout).toContain(
+      'tr("Disponibilità e prezzo vengono verificati con il fornitore alla conferma.")'
+    );
+  });
+});
+
+describe("the price the customer agreed to is the price they get", () => {
+  const read = (path: string) => require("node:fs").readFileSync(path, "utf8") as string;
+
+  /** A UI convention cannot guarantee this; the browser is not trusted. */
+  it("is enforced on the server, not by the screen", () => {
+    const orders = read("src/lib/server/sales-orders.ts");
+    expect(orders).toContain("basket.grandTotalCents !== input.acceptedTotalCents");
+    expect(orders).toContain('throw new OrderRefusal("PRICE_CHANGED", basket)');
+  });
+
+  it("refuses a request that does not say what was accepted", () => {
+    const route = read("app/api/account/orders/route.ts");
+    expect(route).toContain("!Number.isInteger(v.acceptedTotalCents)");
+  });
+
+  /**
+   * Owner decision: the new price wins, and the change is SHOWN before the
+   * confirm re-enables. The refusal carries the recomputed basket so the
+   * screen can show the new figure rather than "something changed".
+   */
+  it("shows the old and the new figure before asking again", () => {
+    const checkout = read("src/components/customer/CustomerCheckout.tsx");
+    expect(checkout).toContain('tr("Il prezzo è cambiato")');
+    expect(checkout).toContain("setPriceChange({ from: submittedTotal");
+    expect(checkout).toContain('tr("Nessun ordine è stato creato. Conferma di nuovo per procedere al nuovo importo.")');
+  });
+
+  /** The retry is the SAME order, so the key must survive the round trip. */
+  it("keeps the idempotency key across a price-change retry", () => {
+    const checkout = read("src/components/customer/CustomerCheckout.tsx");
+    const effect = checkout.slice(checkout.indexOf("setIdempotencyKey(crypto.randomUUID())"));
+    expect(effect.slice(0, 60)).toContain("}, []);");
+  });
+});
+
+describe("an order records what was actually verified", () => {
+  const read = (path: string) => require("node:fs").readFileSync(path, "utf8") as string;
+
+  /**
+   * When a customer disputes an availability promise, the answer turns on
+   * whether the supplier was asked at the moment of sale or whether a stored
+   * observation stood in.
+   */
+  it("snapshots the source and the observation time per line", () => {
+    const orders = read("src/lib/server/sales-orders.ts");
+    expect(orders).toContain("availability_verified: basket.verifiedSource");
+    expect(orders).toContain("availability_lines: orderLines.map");
+    expect(orders).toContain("live_failure_reason");
+  });
+
+  /** Weakest wins: one fallback line makes the whole basket's claim "feed". */
+  it("never overstates the basket's claim", () => {
+    const fallback: BasketResolvedLine = {
+      ...realLine(4),
+      provenance: { source: "feed_after_live_failure", observedAt: "2026-09-24T10:31:00Z" },
+    };
+    const live: BasketResolvedLine = {
+      ...realLine(4),
+      provenance: { source: "live", observedAt: "2026-09-24T12:00:00Z" },
+    };
+    expect(customerBasketPayload([live, fallback]).verifiedSource).toBe("feed_after_live_failure");
+    expect(customerBasketPayload([live]).verifiedSource).toBe("live");
+  });
+
+  it("says on screen when the supplier could not be reached", () => {
+    const shared = read("src/components/customer/LineAvailability.tsx");
+    expect(shared).toContain('tr("Fornitore non raggiungibile — dato del")');
+    expect(shared).toContain('tr("Verificato ora con il fornitore")');
   });
 });

@@ -3,7 +3,12 @@ import { requireCustomerSession } from "@/lib/auth/customer-session";
 import { logError } from "@/lib/logger";
 import { readJsonBody } from "@/lib/server/route-helpers";
 import { validateBasketLines } from "@/lib/server/customer-basket";
-import { createPortalSalesOrder, FULFILMENT_CLASSES, PAYMENT_METHODS } from "@/lib/server/sales-orders";
+import {
+  createPortalSalesOrder,
+  FULFILMENT_CLASSES,
+  OrderRefusal,
+  PAYMENT_METHODS,
+} from "@/lib/server/sales-orders";
 
 export const runtime = "nodejs";
 
@@ -20,6 +25,8 @@ const CLIENT_SAFE: Record<string, number> = {
   PRICING_NOT_FINAL: 409,
   BASKET_ITEM_UNAVAILABLE: 409,
   BASKET_QUANTITY_UNAVAILABLE: 409,
+  BASKET_NOT_ORDERABLE: 409,
+  PRICE_CHANGED: 409,
   DELIVERY_ADDRESS_INVALID: 400,
   CUSTOMER_NOT_FOUND: 404,
 };
@@ -47,7 +54,13 @@ export async function POST(request: NextRequest) {
     v.idempotencyKey.length > 200 ||
     !PAYMENT_METHODS.includes(v.paymentMethod as never) ||
     !FULFILMENT_CLASSES.includes(v.fulfilmentClass as never) ||
-    !(v.note === null || v.note === undefined || typeof v.note === "string")
+    !(v.note === null || v.note === undefined || typeof v.note === "string") ||
+    // The total the customer agreed to. Required, not optional: an order
+    // request that does not say what was accepted has nothing to check the
+    // recomputed total against, and would be created at whatever price the
+    // server happened to arrive at.
+    !Number.isInteger(v.acceptedTotalCents) ||
+    Number(v.acceptedTotalCents) < 0
   ) {
     return NextResponse.json({ ok: false, code: "VALIDATION_FAILED" }, { status: 400 });
   }
@@ -61,9 +74,25 @@ export async function POST(request: NextRequest) {
       fulfilmentClass: v.fulfilmentClass as (typeof FULFILMENT_CLASSES)[number],
       note: typeof v.note === "string" ? v.note.trim().slice(0, 2000) || null : null,
       idempotencyKey: v.idempotencyKey,
+      acceptedTotalCents: Number(v.acceptedTotalCents),
     });
     return NextResponse.json({ ok: true, order }, { status: 201 });
   } catch (error) {
+    /*
+      A refusal hands the recomputed basket back with it.
+
+      Without it the checkout can only say "something changed" and the
+      customer has to go and look for what. With it, the screen redraws with
+      the new prices and the new availability already in place, and the
+      confirm re-enables against the figure now on screen.
+    */
+    if (error instanceof OrderRefusal) {
+      return NextResponse.json(
+        { ok: false, code: error.code, basket: error.basket },
+        { status: CLIENT_SAFE[error.code] ?? 409 }
+      );
+    }
+
     const raw = error instanceof Error ? error.message : "";
     const status = CLIENT_SAFE[raw];
     if (status) return NextResponse.json({ ok: false, code: raw }, { status });

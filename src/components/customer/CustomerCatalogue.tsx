@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/Button";
 import { CartIcon } from "@/components/customer/CartIcon";
@@ -34,6 +35,12 @@ import { useTr } from "@/lib/i18n/tr";
  * A SIZE WITH NO TYRES IS REACHABLE, and answered plainly. That is the
  * deliberate cost of lists that never narrow, and a better screen than a
  * dimension the customer cannot select and cannot explain the absence of.
+ *
+ * IT OPENS ON A SELECTION WHEN ASKED TO. "Vedi alternative" on an unavailable
+ * basket line links here with that tyre's size in the query string, and the
+ * screen must arrive already showing those results — a link that lands on
+ * "choose a size" has sent the customer back to the beginning of the job they
+ * were already halfway through.
  */
 
 type Offer = {
@@ -101,10 +108,32 @@ export function CustomerCatalogue({
   const [tiersConfigured, setTiersConfigured] = useState(false);
   const [deliveryDays, setDeliveryDays] = useState(7);
 
-  const [width, setWidth] = useState("");
-  const [aspect, setAspect] = useState("");
-  const [rim, setRim] = useState("");
-  const [season, setSeason] = useState("");
+  /*
+    INITIAL SELECTION FROM THE URL.
+
+    Read once, as the initial state of each control, and never again: these
+    are `useState` initialisers, not an effect that writes back on every
+    render. An effect would fight the customer — every change they made would
+    be overwritten by the query string that is still in the address bar.
+
+    Only the size and season are honoured, which is exactly what
+    alternativesHref puts there. Anything else in the query string is ignored
+    rather than trusted, so a hand-written URL cannot drive this screen into a
+    state the controls cannot represent.
+  */
+  const searchParams = useSearchParams();
+  const initial = (key: string) => searchParams?.get(key)?.trim() ?? "";
+  const initialNumber = (key: string) => {
+    const raw = initial(key);
+    return /^\d{1,4}$/.test(raw) ? raw : "";
+  };
+
+  const [width, setWidth] = useState(() => initialNumber("width"));
+  const [aspect, setAspect] = useState(() => initialNumber("aspect"));
+  const [rim, setRim] = useState(() => initialNumber("rim"));
+  const [season, setSeason] = useState(() =>
+    ["summer", "winter", "all_season"].includes(initial("season")) ? initial("season") : ""
+  );
   const [brand, setBrand] = useState("");
   const [tier, setTier] = useState("");
   const [sort, setSort] = useState("price_asc");
