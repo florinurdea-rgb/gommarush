@@ -1,9 +1,11 @@
 "use client";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/Button";
+import { CartIcon } from "@/components/customer/CartIcon";
 import { addBasketLine } from "@/lib/customer/basket";
 import { BRAND_TIER_LABELS } from "@/lib/catalogue/brand-tiers";
-import { catalogueViewState } from "@/lib/customer/catalogue-view";
+import { catalogueViewState, sameFacets } from "@/lib/customer/catalogue-view";
 import { useTr } from "@/lib/i18n/tr";
 
 /**
@@ -19,6 +21,11 @@ import { useTr } from "@/lib/i18n/tr";
  * — swaps the results for skeleton cards of the same shape, and the controls
  * stay usable throughout. A stale list sitting under a new filter is worse than
  * a placeholder, because it looks like an answer.
+ *
+ * ONE STICKY ROW. The filters are a single row of labelled selections pinned to
+ * the top of the viewport. A customer comparing tyres scrolls, and a filter bar
+ * that scrolls away turns every adjustment into a round trip to the top of the
+ * page — which is also when a half-remembered selection gets re-entered wrongly.
  */
 
 type Offer = {
@@ -64,6 +71,9 @@ const AVAILABILITY_LABELS: Record<Offer["availability"], string> = {
   on_request: "Su richiesta",
   unknown: "Da verificare",
 };
+
+/** How long the card keeps its confirmed state, and the toast stays up. */
+const CONFIRMATION_MS = 2600;
 
 export function CustomerCatalogue() {
   const tr = useTr();
@@ -131,7 +141,13 @@ export function CustomerCatalogue() {
         if (!r.ok) throw new Error();
         // Facets always apply; results only once the server actually ran the
         // catalogue read. `awaitingDimensions` says which of the two this was.
-        setFacets(j.facets ?? EMPTY_FACETS);
+        //
+        // Replaced only when they actually DIFFER. Handing React a new array of
+        // identical values re-renders every <option> in every selector, and a
+        // browser rebuilding the options of an OPEN dropdown closes it. See the
+        // note in Select: this is half of the "dropdowns reset" fix, and the
+        // cheaper half — a response that changes nothing now disturbs nothing.
+        setFacets((current) => (sameFacets(current, j.facets) ? current : (j.facets ?? EMPTY_FACETS)));
         setOffers(j.awaitingDimensions ? [] : (j.offers ?? []));
         setTotal(j.awaitingDimensions ? 0 : (j.total ?? 0));
         setRefused(j.awaitingDimensions ? null : (j.refused ?? null));
@@ -167,10 +183,12 @@ export function CustomerCatalogue() {
    *
    * Adding wrote to localStorage and changed nothing on screen, so a working
    * click and a broken one looked identical. The nav badge is the durable
-   * signal; this is the immediate one, at the point of the click.
+   * signal; this is the immediate one, at the point of the click, and the
+   * toast below is the one a customer looking at the card cannot miss.
    */
   const [added, setAdded] = useState<string | null>(null);
   const [addError, setAddError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ id: number; tyre: string } | null>(null);
 
   const add = useCallback(
     (o: Offer) => {
@@ -178,7 +196,16 @@ export function CustomerCatalogue() {
       if (addBasketLine(o.tyre.productId, o.tyre.oldDot)) {
         setAddError(null);
         setAdded(key);
-        window.setTimeout(() => setAdded((current) => (current === key ? null : current)), 1800);
+        const id = Date.now();
+        setToast({
+          id,
+          tyre: [o.tyre.brand, o.tyre.modelPattern, o.tyre.sizeDisplay].filter(Boolean).join(" "),
+        });
+        window.setTimeout(() => setAdded((current) => (current === key ? null : current)), CONFIRMATION_MS);
+        window.setTimeout(
+          () => setToast((current) => (current?.id === id ? null : current)),
+          CONFIRMATION_MS
+        );
         return;
       }
       // Storage refused the write — private browsing, blocked site data, or a
@@ -199,6 +226,10 @@ export function CustomerCatalogue() {
     setTier("");
   }
 
+  const hasFilters = Boolean(width || aspect || rim || season || brand || tier);
+  // Both literals appear in the source, so Tailwind's scanner emits both.
+  const columns = tiersConfigured ? "lg:grid-cols-7" : "lg:grid-cols-6";
+
   return (
     <div>
       <h1 className="text-2xl font-extrabold text-ink">{tr("Catalogo pneumatici")}</h1>
@@ -206,63 +237,74 @@ export function CustomerCatalogue() {
         {tr("Scegli la misura per vedere i pneumatici disponibili e il prezzo GommaRush.")}
       </p>
 
-      <div className="mt-6 rounded-2xl bg-white p-4 shadow-card">
-        <fieldset>
-          <legend className="text-xs font-bold uppercase tracking-wide text-ink-soft">
-            {tr("Misura")}{" "}
-            <span className="font-semibold text-state-danger">{tr("obbligatoria")}</span>
-          </legend>
-          <div className="mt-2 grid gap-3 sm:grid-cols-3">
-            <Select label={tr("Larghezza")} value={width} set={setWidth} values={facets.widths} placeholder={tr("Scegli")} />
-            <Select label={tr("Spalla")} value={aspect} set={setAspect} values={facets.aspectRatios} placeholder={tr("Scegli")} />
-            <Select label={tr("Cerchio")} value={rim} set={setRim} values={facets.rims} placeholder={tr("Scegli")} />
-          </div>
-        </fieldset>
+      {/*
+        THE STICKY FILTER BAR.
 
-        <fieldset className="mt-4 border-t border-ink/10 pt-4">
-          <legend className="sr-only">{tr("Filtri aggiuntivi")}</legend>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <label className="text-sm font-semibold text-ink">
-              {tr("Stagione")}
-              <select
-                value={season}
-                onChange={(e) => setSeason(e.target.value)}
-                className="mt-1 h-11 w-full rounded-xl border border-ink/15 px-3 font-normal"
-              >
-                <option value="">{tr("Tutte le stagioni")}</option>
+        Pinned to the top of the viewport, full container width (the negative
+        gutters cancel the page padding so the backdrop reaches the edges and
+        results do not show through beside it).
+      */}
+      <div className="sticky top-0 z-30 -mx-4 mt-5 border-b border-ink/10 bg-surface-soft/90 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
+        <div className="rounded-2xl bg-white p-3 shadow-card">
+          <p className="sr-only">
+            {tr("Larghezza, spalla e cerchio sono obbligatori per vedere i risultati.")}
+          </p>
+
+          <div className={`grid grid-cols-3 gap-2 ${columns}`}>
+            <Select
+              label={tr("Larghezza")}
+              required
+              value={width}
+              set={setWidth}
+              facetValues={facets.widths}
+              placeholder={tr("Scegli")}
+            />
+            <Select
+              label={tr("Spalla")}
+              required
+              value={aspect}
+              set={setAspect}
+              facetValues={facets.aspectRatios}
+              placeholder={tr("Scegli")}
+            />
+            <Select
+              label={tr("Cerchio")}
+              required
+              value={rim}
+              set={setRim}
+              facetValues={facets.rims}
+              placeholder={tr("Scegli")}
+            />
+
+            <Field label={tr("Stagione")}>
+              <select value={season} onChange={(e) => setSeason(e.target.value)} className={CONTROL}>
+                <option value="">{tr("Tutte")}</option>
                 <option value="summer">{tr("Estive")}</option>
                 <option value="winter">{tr("Invernali")}</option>
                 <option value="all_season">{tr("4 stagioni")}</option>
               </select>
-            </label>
+            </Field>
 
-            <label className="text-sm font-semibold text-ink">
-              {tr("Marca")}
-              <input
-                value={brand}
-                onChange={(e) => setBrand(e.target.value)}
-                placeholder={tr("Tutte le marche")}
-                list="customer-catalogue-brands"
-                className="mt-1 h-11 w-full rounded-xl border border-ink/15 px-3 font-normal"
-              />
-              <datalist id="customer-catalogue-brands">
-                {facets.brands.map((b) => (
-                  <option key={b} value={b} />
-                ))}
-              </datalist>
-            </label>
+            {/*
+              A selection, not free text. The brands come from the same
+              dependent facet query as the sizes, so every option here is a
+              brand that actually exists in the current selection — a typed
+              name never matched anything and simply emptied the results.
+            */}
+            <Select
+              label={tr("Marca")}
+              value={brand}
+              set={setBrand}
+              facetValues={facets.brands}
+              placeholder={tr("Tutte")}
+            />
 
-            <label className="text-sm font-semibold text-ink">
-              {tr("Ordina per")}
-              <select
-                value={sort}
-                onChange={(e) => setSort(e.target.value)}
-                className="mt-1 h-11 w-full rounded-xl border border-ink/15 px-3 font-normal"
-              >
+            <Field label={tr("Ordina per")}>
+              <select value={sort} onChange={(e) => setSort(e.target.value)} className={CONTROL}>
                 <option value="price_asc">{tr("Prezzo più basso")}</option>
                 <option value="brand_asc">{tr("Marca A–Z")}</option>
               </select>
-            </label>
+            </Field>
 
             {/*
               Premium / Fascia media / Economiche appear only once an APPROVED
@@ -270,34 +312,31 @@ export function CustomerCatalogue() {
               would read as an empty catalogue instead of an unset business rule.
             */}
             {tiersConfigured && (
-              <label className="text-sm font-semibold text-ink">
-                {tr("Fascia")}
-                <select
-                  value={tier}
-                  onChange={(e) => setTier(e.target.value)}
-                  className="mt-1 h-11 w-full rounded-xl border border-ink/15 px-3 font-normal"
-                >
-                  <option value="">{tr("Tutte le fasce")}</option>
+              <Field label={tr("Fascia")}>
+                <select value={tier} onChange={(e) => setTier(e.target.value)} className={CONTROL}>
+                  <option value="">{tr("Tutte")}</option>
                   {BRAND_TIER_LABELS.map((x) => (
                     <option key={x.tier} value={x.tier}>
                       {x.label}
                     </option>
                   ))}
                 </select>
-              </label>
+              </Field>
             )}
           </div>
-        </fieldset>
 
-        {(width || aspect || rim || season || brand || tier) && (
-          <button
-            type="button"
-            onClick={reset}
-            className="mt-4 text-sm font-semibold text-ink-soft underline hover:text-ink"
-          >
-            {tr("Azzera i filtri")}
-          </button>
-        )}
+          {hasFilters && (
+            <div className="mt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={reset}
+                className="text-xs font-semibold text-ink-soft underline hover:text-ink"
+              >
+                {tr("Azzera i filtri")}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {addError && (
@@ -358,11 +397,52 @@ export function CustomerCatalogue() {
           </>
         )}
       </div>
+
+      {toast && <AddedToast key={toast.id} tyre={toast.tyre} tr={tr} />}
     </div>
   );
 }
 
 type Tr = (text: string) => string;
+
+/** Shared control styling, so every field in the bar is the same object. */
+const CONTROL =
+  "mt-1 h-11 w-full rounded-xl border border-ink/15 bg-white px-2.5 text-sm font-normal text-ink";
+
+/**
+ * Confirms an add where the customer is already looking, then gets out of the
+ * way.
+ *
+ * `role="status"` rather than an alert: it is a confirmation, not a problem,
+ * and a screen reader should hear it after the current phrase rather than
+ * interrupting. It is announced once and removed on a timer, so nothing
+ * accumulates in the corner of a long browse.
+ */
+function AddedToast({ tyre, tr }: { tyre: string; tr: Tr }) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex justify-center px-4"
+    >
+      <div className="gr-toast pointer-events-auto flex max-w-full items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-white shadow-modal">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-state-success">
+          <CartIcon className="h-4 w-4" />
+        </span>
+        <span className="min-w-0">
+          <span className="block text-sm font-bold">{tr("Aggiunto al carrello")}</span>
+          {tyre && <span className="block truncate text-xs text-white/70">{tyre}</span>}
+        </span>
+        <Link
+          href="/account/basket"
+          className="ml-1 shrink-0 rounded-lg px-2 py-1 text-sm font-bold text-white underline underline-offset-2"
+        >
+          {tr("Vai al carrello")}
+        </Link>
+      </div>
+    </div>
+  );
+}
 
 function OfferCard({
   offer,
@@ -381,7 +461,11 @@ function OfferCard({
   const loadSpeed = t.loadSpeedRaw ?? [t.loadIndex, t.speedRating].filter(Boolean).join("");
 
   return (
-    <article className="rounded-2xl bg-white p-5 shadow-card">
+    <article
+      className={`rounded-2xl bg-white p-5 shadow-card transition-shadow ${
+        added ? "ring-2 ring-state-success" : ""
+      }`}
+    >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="font-extrabold text-ink">
@@ -427,18 +511,55 @@ function OfferCard({
           <div className="mt-1 text-xs font-semibold text-state-success">
             {tr("Consegna entro")} {deliveryDays} {tr("giorni")}
           </div>
-          <Button
-            className="mt-3"
-            size="md"
-            variant={added ? "secondary" : "primary"}
+          {/*
+            The confirmed state is a DIFFERENT button, not a recoloured one:
+            green ground, a tick and a changed word. The previous cue was a
+            switch to the secondary variant, which on a white card is close
+            enough to the resting state to be missed entirely — which is how
+            "I added it and nothing happened" survived the first fix.
+          */}
+          <button
+            type="button"
             disabled={!offer.priceAvailable}
             onClick={() => onAdd(offer)}
+            className={`mt-3 inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold transition-colors disabled:cursor-not-allowed disabled:bg-ink/10 disabled:text-ink/40 ${
+              added
+                ? "bg-state-success text-white"
+                : "bg-gr-accent text-white shadow-cta hover:bg-gr-accent-hover"
+            }`}
           >
-            {added ? `✓ ${tr("Aggiunto")}` : tr("Aggiungi")}
-          </Button>
+            {added ? (
+              <>
+                <CheckIcon className="h-4 w-4" />
+                {tr("Aggiunto")}
+              </>
+            ) : (
+              <>
+                <CartIcon className="h-4 w-4" />
+                {tr("Aggiungi")}
+              </>
+            )}
+          </button>
         </div>
       </div>
     </article>
+  );
+}
+
+function CheckIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M5 12.5l4.5 4.5L19 7" />
+    </svg>
   );
 }
 
@@ -495,19 +616,70 @@ function ResultsSkeleton({ tr }: { tr: Tr }) {
   );
 }
 
+/**
+ * One labelled control in the filter bar.
+ *
+ * The label sits ABOVE the field in small caps rather than beside it, so seven
+ * controls fit on one line at a readable size and each one still says what it
+ * is. Wrapping the control in the <label> keeps them associated without an id.
+ */
+function Field({
+  label,
+  required,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block min-w-0">
+      <span className="block text-[11px] font-bold uppercase tracking-wide text-ink-soft">
+        {label}
+        {required && <span className="ml-0.5 text-state-danger">*</span>}
+      </span>
+      {children}
+    </label>
+  );
+}
+
 function Select({
   label,
+  required,
   value,
   set,
-  values,
+  facetValues,
   placeholder,
 }: {
   label: string;
+  required?: boolean;
   value: string;
   set: (v: string) => void;
-  values: number[];
+  facetValues: (number | string)[];
   placeholder: string;
 }) {
+  /*
+    THE LIST DOES NOT MOVE WHILE THE CUSTOMER IS IN IT.
+
+    REGRESSION: "the dropdowns reset as I browse through them."
+
+    Every keystroke or selection starts a debounced request, and its response
+    rewrites all four facet lists. If that response lands while a dropdown is
+    OPEN, the browser is rebuilding the options of a live popup — and Chrome,
+    Safari and Firefox all close it. From the customer's side the list they
+    were scrolling vanishes and the field looks like it reset.
+
+    So the list is frozen for as long as the control has focus: whatever was
+    on screen when it was opened stays on screen until the customer picks
+    something or leaves. Released on change and on blur, so the next
+    interaction gets the current, correctly narrowed facets.
+
+    This is a display freeze only. `facetValues` keeps arriving and the applied
+    filter is untouched — nothing here can change what is being searched for.
+  */
+  const [frozen, setFrozen] = useState<(number | string)[] | null>(null);
+  const values = frozen ?? facetValues;
+
   /*
     THE APPLIED VALUE IS ALWAYS AN OPTION.
 
@@ -525,12 +697,16 @@ function Select({
   const missing = value !== "" && !options.includes(value);
 
   return (
-    <label className="text-sm font-semibold text-ink">
-      {label}
+    <Field label={label} required={required}>
       <select
         value={value}
-        onChange={(e) => set(e.target.value)}
-        className="mt-1 h-11 w-full rounded-xl border border-ink/15 px-3 font-normal"
+        onFocus={() => setFrozen(facetValues)}
+        onBlur={() => setFrozen(null)}
+        onChange={(e) => {
+          setFrozen(null);
+          set(e.target.value);
+        }}
+        className={CONTROL}
       >
         <option value="">{placeholder}</option>
         {missing && <option value={value}>{value}</option>}
@@ -540,6 +716,6 @@ function Select({
           </option>
         ))}
       </select>
-    </label>
+    </Field>
   );
 }
