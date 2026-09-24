@@ -348,6 +348,85 @@ export async function listRequestedSalesOrders() {
   return data ?? [];
 }
 
+/**
+ * One of the CUSTOMER'S OWN orders, for the customer's own detail screen.
+ *
+ * Ownership is a FILTER, not a check after the fact: an order id belonging to
+ * another customer resolves to no row, so it cannot be read and cannot be
+ * probed for existence. That is the same rule the delivery-location lookup
+ * uses, and it is the reason this exists separately from getSalesOrderDetail
+ * below — that one takes an id alone, which is correct for an operator and
+ * would be an authorisation hole here.
+ *
+ * The projection is explicit and deliberately narrow. `sales_orders` holds a
+ * pricing snapshot containing commercial settings and verification
+ * provenance; none of it is selected, so none of it can reach a customer
+ * payload by someone later adding a field to a spread.
+ */
+export interface CustomerSalesOrderView {
+  id: string;
+  order_number: number;
+  status: string;
+  fulfilment_class: string;
+  payment_method: string;
+  currency: string;
+  tyre_net_total_cents: number | null;
+  pfu_total_cents: number | null;
+  vat_total_cents: number | null;
+  grand_total_cents: number | null;
+  vat_rate_percent: number | null;
+  pfu_status: string | null;
+  customer_note: string | null;
+  delivery_snapshot: Record<string, unknown> | null;
+  requested_at: string;
+}
+
+export interface CustomerSalesOrderItemView {
+  id: string;
+  line_number: number;
+  quantity: number;
+  tyre_snapshot: Record<string, unknown> | null;
+  condition_snapshot: string | null;
+  unit_tyre_net_cents: number | null;
+  unit_pfu_cents: number | null;
+  unit_vat_cents: number | null;
+  unit_total_cents: number | null;
+}
+
+export async function getCustomerSalesOrderDetail(
+  orderId: string,
+  customerId: string
+): Promise<{ order: CustomerSalesOrderView; items: CustomerSalesOrderItemView[] } | null> {
+  const admin = createSupabaseAdminClient();
+  const { data: order, error: oe } = await admin
+    .from("sales_orders")
+    .select(
+      "id,order_number,status,fulfilment_class,payment_method,currency," +
+        "tyre_net_total_cents,pfu_total_cents,vat_total_cents,grand_total_cents," +
+        "vat_rate_percent,pfu_status,customer_note,delivery_snapshot,requested_at"
+    )
+    .eq("id", orderId)
+    .eq("customer_id", customerId)
+    .maybeSingle();
+  if (oe) throw oe;
+  if (!order) return null;
+
+  const { data: items, error: ie } = await admin
+    .from("sales_order_items")
+    .select(
+      "id,line_number,quantity,tyre_snapshot,condition_snapshot," +
+        "unit_tyre_net_cents,unit_pfu_cents,unit_vat_cents,unit_total_cents"
+    )
+    .eq("sales_order_id", orderId)
+    .order("line_number", { ascending: true });
+  if (ie) throw ie;
+
+  return {
+    order: order as unknown as CustomerSalesOrderView,
+    items: (items ?? []) as unknown as CustomerSalesOrderItemView[],
+  };
+}
+
 export async function getSalesOrderDetail(orderId: string) {
   const admin = createSupabaseAdminClient();
   const [{ data: order, error: oe }, { data: items, error: ie }] = await Promise.all([

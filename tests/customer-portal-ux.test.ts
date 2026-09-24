@@ -1,3 +1,59 @@
+describe("the basket in the customer navigation", () => {
+  const read = (path: string) => require("node:fs").readFileSync(path, "utf8") as string;
+  const NAV = "src/components/customer/CustomerShellNav.tsx";
+
+  it("carries the approved cart mark before the count", () => {
+    const source = read(NAV);
+    expect(source).toContain("CommerceCartIcon");
+    expect(source.indexOf("<Icon")).toBeLessThan(source.indexOf("<Badge"));
+  });
+
+  /**
+   * One drawing of each concept, from the approved asset file. A second
+   * hand-rolled cart somewhere in the tree is how two carts end up on one
+   * screen looking almost but not quite the same.
+   */
+  it("uses the approved asset set, with no local redraws beside it", () => {
+    const icons = read("src/components/customer/CommerceIcons.tsx");
+    expect(icons).toContain("export function CommerceCartIcon");
+    for (const file of [
+      NAV,
+      "src/components/customer/CustomerCatalogue.tsx",
+      "src/components/customer/LineAvailability.tsx",
+      "src/components/customer/QuantityStepper.tsx",
+    ]) {
+      expect(read(file)).toContain('from "@/components/customer/CommerceIcons"');
+    }
+    expect(
+      require("node:fs").existsSync("src/components/customer/CartIcon.tsx"),
+      "the ad-hoc cart drawing is gone"
+    ).toBe(false);
+  });
+
+  /** Decorative: the count beside it already carries the meaning. */
+  it("hides the icons from assistive technology", () => {
+    expect(read("src/components/customer/CommerceIcons.tsx")).toContain('"aria-hidden": true');
+  });
+
+  /** Growing on a REMOVAL would celebrate the wrong event. */
+  it("draws the eye only when the count goes up", () => {
+    const source = read(NAV);
+    expect(source).toContain("next > previous.current");
+    expect(source).toContain("scale-125");
+  });
+
+  /**
+   * A fixed bar that hides the last row of a list is worse than no bar, and a
+   * phone with a home indicator needs clearing too.
+   */
+  it("keeps the phone bar clear of the home indicator and of content", () => {
+    expect(read(NAV)).toContain("pb-[env(safe-area-inset-bottom)]");
+    expect(read("app/account/(secure)/layout.tsx")).toContain(
+      "h-[calc(56px+env(safe-area-inset-bottom))]"
+    );
+  });
+});
+
 import { describe, expect, it } from "vitest";
 import {
   catalogueViewState,
@@ -454,8 +510,10 @@ describe("the filter bar is one sticky row of labelled selections", () => {
    * A customer comparing tyres scrolls. A filter bar that scrolls away turns
    * every adjustment into a trip back to the top of the page.
    */
-  it("pins the bar to the top of the viewport", () => {
-    expect(read(CATALOGUE)).toContain("sticky top-0 z-30");
+  it("pins the bar below the shell header, not over it", () => {
+    // The customer shell header is itself sticky at top-0, so the search bar
+    // offsets by its height instead of competing for the same strip.
+    expect(read(CATALOGUE)).toContain("sticky top-[57px] z-30");
   });
 
   it("puts a small label above each field rather than beside it", () => {
@@ -464,10 +522,23 @@ describe("the filter bar is one sticky row of labelled selections", () => {
     expect(source).toContain('className="block text-[11px] font-bold uppercase tracking-wide text-ink-soft"');
   });
 
-  it("lays the controls out as a single row at full width", () => {
+  /**
+   * PRIMARY IS THE SIZE. It is the one thing a tyre shop always knows and the
+   * one thing without which this screen cannot answer, so it gets its own row
+   * of three equal columns at every width. Season, brand and sort follow in a
+   * separate, quieter row. Previously all seven controls shared one grid and
+   * the required three were indistinguishable from the optional four.
+   */
+  it("gives the size its own row, ahead of the secondary filters", () => {
     const source = read(CATALOGUE);
-    // Seven columns when the tier filter is configured, six when it is not.
-    expect(source).toContain('tiersConfigured ? "lg:grid-cols-8" : "lg:grid-cols-7"');
+    const bar = source.slice(source.indexOf("THE SEARCH BAR"), source.indexOf("THE RESULTS REGION"));
+    const size = bar.indexOf('grid grid-cols-3 gap-2');
+    const secondary = bar.indexOf("SECONDARY — season, brand, sort");
+    expect(size).toBeGreaterThan(-1);
+    expect(size, "the size trio comes first").toBeLessThan(secondary);
+    // Width, then aspect, then rim, in that order.
+    expect(bar.indexOf("facetValues={widths}")).toBeLessThan(bar.indexOf("facetValues={aspectRatios}"));
+    expect(bar.indexOf("facetValues={aspectRatios}")).toBeLessThan(bar.indexOf("facetValues={rims}"));
   });
 
   /**
@@ -491,9 +562,16 @@ describe("the filter bar is one sticky row of labelled selections", () => {
     }
   });
 
-  /** Disabled rather than hidden, so the row does not reflow under the cursor. */
-  it("keeps the reset in the bar at all times", () => {
-    expect(read(CATALOGUE)).toContain("disabled={!hasSelection}");
+  /**
+   * The reset now sits on its own full-width row at the end of the bar, so
+   * showing it only when there is something to clear cannot reflow the
+   * controls above it — which is what the previous always-present-but-disabled
+   * treatment existed to prevent.
+   */
+  it("offers a reset once there is something to clear", () => {
+    const source = read(CATALOGUE);
+    expect(source).toContain("{hasSelection && (");
+    expect(source).toContain('tr("Azzera")');
   });
 });
 
@@ -513,18 +591,26 @@ describe("adding to the basket is visible", () => {
   it("tells the customer when storage refused the write", () => {
     const source = read("src/components/customer/CustomerCatalogue.tsx");
     expect(source).toContain("setAddError");
-    expect(source).toContain("if (addBasketLine(o.tyre.productId, o.tyre.oldDot))");
+    expect(source).toContain("if (addBasketLine(o.tyre.productId, o.tyre.oldDot, quantity))");
+  });
+
+  /** One write, not `quantity` of them: the store merges by product+condition. */
+  it("adds the chosen quantity in a single operation", () => {
+    const source = read("src/components/customer/CustomerCatalogue.tsx");
+    expect(source).toContain("onAdd(offer, quantity)");
+    expect(source, "no loop of single adds").not.toContain("for (let i = 0; i < quantity");
   });
 
   it("shows a live count in the account navigation", () => {
     const layout = read("app/account/(secure)/layout.tsx");
-    expect(layout).toContain("CustomerBasketLink");
+    expect(layout).toContain("CustomerHeaderNav");
+    expect(layout).toContain("CustomerMobileNav");
 
-    const link = read("src/components/customer/CustomerBasketLink.tsx");
+    const nav = read("src/components/customer/CustomerShellNav.tsx");
     // The event writeBasket already dispatched, which nothing used to hear.
-    expect(link).toContain("BASKET_CHANGED_EVENT");
+    expect(nav).toContain("BASKET_CHANGED_EVENT");
     // ...and cross-tab, so two open tabs cannot show two different baskets.
-    expect(link).toContain('addEventListener("storage"');
+    expect(nav).toContain('addEventListener("storage"');
   });
 });
 
@@ -612,8 +698,8 @@ describe("the confirmation a customer cannot miss", () => {
   it("confirms on the card with a changed colour, word and icon", () => {
     const source = read(CATALOGUE);
     expect(source).toContain('"bg-state-success text-white"');
-    expect(source).toContain("<CheckIcon");
-    expect(source).toContain("ring-2 ring-state-success");
+    expect(source).toContain("<CommerceCheckIcon");
+    expect(source).toContain('added ? "border-state-success" : "border-ink/10"');
   });
 
   it("raises a toast naming what was added and where it went", () => {
@@ -644,40 +730,6 @@ describe("the confirmation a customer cannot miss", () => {
     const reduced = css.slice(css.indexOf(".gr-toast"));
     expect(reduced).toContain("prefers-reduced-motion: reduce");
     expect(reduced, "reduced motion must not hide the confirmation").not.toContain("display: none");
-  });
-});
-
-describe("the basket in the top bar", () => {
-  const read = (path: string) => require("node:fs").readFileSync(path, "utf8") as string;
-  const LINK = "src/components/customer/CustomerBasketLink.tsx";
-
-  it("carries an ordinary cart icon before the count", () => {
-    const source = read(LINK);
-    expect(source).toContain("<CartIcon");
-    // Icon first, then the label, then the badge.
-    expect(source.indexOf("<CartIcon")).toBeLessThan(source.indexOf('tr("Carrello")'));
-    expect(source.indexOf('tr("Carrello")')).toBeLessThan(source.indexOf("aria-label="));
-  });
-
-  it("uses one cart mark everywhere, not a second drawing of the same thing", () => {
-    const icon = read("src/components/customer/CartIcon.tsx");
-    expect(icon).toContain("export function CartIcon");
-    expect(read(LINK)).toContain('from "@/components/customer/CartIcon"');
-    expect(read("src/components/customer/CustomerCatalogue.tsx")).toContain(
-      'from "@/components/customer/CartIcon"'
-    );
-  });
-
-  /** Decorative: the count beside it already carries the meaning. */
-  it("hides the icon from assistive technology", () => {
-    expect(read("src/components/customer/CartIcon.tsx")).toContain('aria-hidden="true"');
-  });
-
-  /** Growing on a REMOVAL would celebrate the wrong event. */
-  it("draws the eye only when the count goes up", () => {
-    const source = read(LINK);
-    expect(source).toContain("next > previous.current");
-    expect(source).toContain("scale-125");
   });
 });
 
@@ -807,7 +859,7 @@ describe("a short line no longer fails the whole basket", () => {
       expect(read(file), `${file} must render the verdict`).toContain("<LineAvailability");
     }
     const shared = read("src/components/customer/LineAvailability.tsx");
-    expect(shared).toContain('tr("Non disponibile in stock")');
+    expect(shared).toContain('tr("Non disponibile")');
     expect(shared).toContain('tr("Vedi alternative")');
   });
 
@@ -844,11 +896,27 @@ describe("what gets checked live, and when", () => {
     );
   });
 
-  it("tells the customer the check happens at confirm", () => {
+  /**
+   * The wording lost "con il fornitore" deliberately. The customer buys from
+   * GommaRush; naming the source of the check on a customer screen is exactly
+   * what the reskin brief forbids. The promise it makes is unchanged.
+   */
+  it("tells the customer the check happens at confirm, without naming a source", () => {
     const checkout = read("src/components/customer/CustomerCheckout.tsx");
-    expect(checkout).toContain(
-      'tr("Disponibilità e prezzo vengono verificati con il fornitore alla conferma.")'
-    );
+    expect(checkout).toContain('tr("Disponibilità e prezzo vengono verificati alla conferma.")');
+  });
+
+  /**
+   * The one surviving mention of a supplier is long-standing production copy
+   * reassuring the customer that their order is NOT forwarded automatically.
+   * That is a business statement about GommaRush's process, not the mechanism
+   * behind a figure, and removing the word would invert its meaning.
+   */
+  it("keeps the standing reassurance that no order is forwarded automatically", () => {
+    const checkout = read("src/components/customer/CustomerCheckout.tsx");
+    expect(checkout).toContain("Non viene inoltrato automaticamente a un fornitore.");
+    const mentions = checkout.match(/fornitore/g) ?? [];
+    expect(mentions, "and it is the only one left").toHaveLength(1);
   });
 });
 
@@ -916,9 +984,23 @@ describe("an order records what was actually verified", () => {
     expect(customerBasketPayload([live]).verifiedSource).toBe("live");
   });
 
-  it("says on screen when the supplier could not be reached", () => {
+  /**
+   * The wording changed deliberately. "con il fornitore" named the mechanism
+   * behind the answer, and the customer buys from GommaRush — the reskin
+   * brief forbids supplier terminology on a customer screen. What the line
+   * must still do is distinguish a confirmed figure from a stored one.
+   */
+  it("says on screen when the check did not complete, without naming a source", () => {
     const shared = read("src/components/customer/LineAvailability.tsx");
-    expect(shared).toContain('tr("Fornitore non raggiungibile — dato del")');
-    expect(shared).toContain('tr("Verificato ora con il fornitore")');
+    expect(shared).toContain('tr("Verifica non riuscita — dato del")');
+    expect(shared).toContain('tr("Verificato ora")');
+    expect(shared.toLowerCase(), "no supplier wording").not.toContain("fornitore");
+  });
+
+  /** A verification failure is amber and non-blocking; out of stock is red. */
+  it("never dresses a failed check as out of stock", () => {
+    const shared = read("src/components/customer/LineAvailability.tsx");
+    const failure = shared.slice(shared.indexOf("feed_after_live_failure"));
+    expect(failure.slice(0, 200)).not.toContain("Non disponibile");
   });
 });

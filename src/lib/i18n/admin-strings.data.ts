@@ -589,6 +589,20 @@ export const EN_STRINGS: Record<string, string> = {
   "articoli nel carrello": "items in the basket",
   "Aggiunto al carrello": "Added to basket",
 
+  // --- customer commerce reskin (M21) -----------------------------------
+  "pneumatico": "tyre",
+  "Non disponibile": "Unavailable",
+  "Verificato ora": "Checked just now",
+  "Verifica in corso\u2026": "Checking\u2026",
+  "Verifica non riuscita": "Check did not complete",
+  "Verifica non riuscita \u2014 dato del": "Check did not complete \u2014 figure from",
+  "Il prezzo aggiornato \u00e8": "The updated price is",
+  "Disponibilit\u00e0 e prezzo vengono verificati alla conferma.":
+    "Availability and price are checked on confirmation.",
+  "P. IVA": "VAT no.",
+  "Telefono": "Phone",
+  "Principale": "Primary",
+
   // --- availability verification (M20) ----------------------------------
   "Verificato ora con il fornitore": "Checked now with the supplier",
   "Fornitore non raggiungibile \u2014 dato del": "Supplier unreachable \u2014 figure from",
