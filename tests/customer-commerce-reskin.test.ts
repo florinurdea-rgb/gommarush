@@ -395,3 +395,92 @@ describe("the approved icon set is the only one used", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// The public site and the customer area are one product
+// ---------------------------------------------------------------------------
+
+describe("the primary action looks the same on both sides of sign-in", () => {
+  /**
+   * The single most-seen element on the site. It used to be a gradient with a
+   * tinted lift on the public pages and a flat accent inside the account, so
+   * it changed appearance at exactly the moment a customer crossed between
+   * them — the discontinuity this pass exists to remove.
+   */
+  it("uses one flat accent treatment in both places", () => {
+    const publicPrimary = read("src/components/site/Section.tsx");
+    expect(publicPrimary).toContain("bg-accent text-white hover:bg-accent-dark");
+    expect(publicPrimary, "no gradient on the primary CTA").not.toContain(
+      "primary: `${BUTTON_BASE} bg-gr-accent"
+    );
+
+    const commercePrimary = read("src/components/Button.tsx");
+    expect(commercePrimary).toContain("bg-accent text-white hover:bg-accent-dark");
+  });
+
+  /** Restrained: a border or a shadow, not both. */
+  it("keeps the public surfaces as bordered cards without a lift", () => {
+    for (const file of ["src/components/site/OrderMockup.tsx", "src/components/site/ImagePlaceholder.tsx"]) {
+      expect(read(file), `${file}`).not.toContain("shadow-card");
+    }
+  });
+
+  /**
+   * The marketing palette is otherwise untouched: the inverted band and the
+   * section grounds still use their gradients.
+   */
+  it("changes only the button, not the marketing palette", () => {
+    const config = read("tailwind.config.js");
+    expect(config).toContain('"gr-ink"');
+    expect(config).toContain('"gr-soft"');
+  });
+
+  /** Copy and destinations are out of bounds for a visual pass. */
+  it("leaves the homepage copy and CTA destinations alone", () => {
+    const page = read("app/page.tsx");
+    // Every string on the landing page still comes from the locale copy object.
+    expect(page).toContain("const { copy } = useLocale();");
+    expect(page, "no literal marketing sentence introduced").not.toMatch(
+      />\s*[A-ZÀ-Ý][a-zà-ÿ]+(\s+[a-zà-ÿ]+){4,}\s*</
+    );
+    const routes = read("src/lib/site-routes.ts");
+    expect(routes).toContain('account: "/account/login"');
+  });
+
+  /** The public header keeps the logo it always had. */
+  it("keeps the public header's logo untouched", () => {
+    const header = read("src/components/site/GlobalHeader.tsx");
+    expect(header).toContain('from "@/components/Logo"');
+    expect(header).toContain("<Logo iconClassName=");
+  });
+});
+
+describe("mobile stays first-class at 375-430px", () => {
+  /**
+   * Gutters are enforced in one place on the marketing side, so no section can
+   * lose them on a narrow phone. Asserted rather than trusted because it is a
+   * property a single careless `className` would break.
+   */
+  it("keeps the marketing gutter decision in one place", () => {
+    const section = read("src/components/site/Section.tsx");
+    expect(section).toContain("px-4");
+  });
+
+  /** Nothing fixed may sit on top of the content it refers to. */
+  it("reserves room for every fixed element in the customer area", () => {
+    const layout = read("app/account/(secure)/layout.tsx");
+    expect(layout).toContain("h-[calc(56px+env(safe-area-inset-bottom))]");
+
+    const catalogue = read("src/components/customer/CustomerCatalogue.tsx");
+    // The sticky basket bar sits above the navigation, and the toast above it.
+    expect(catalogue).toContain("bottom-[calc(56px+env(safe-area-inset-bottom))]");
+    expect(catalogue).toContain("bottom-[calc(116px+env(safe-area-inset-bottom))]");
+  });
+
+  /** Primary actions and steppers are thumb-sized, not mouse-sized. */
+  it("keeps touch targets at 44px or more", () => {
+    expect(read("src/components/site/Section.tsx")).toContain("min-h-[44px]");
+    expect(read("src/components/customer/QuantityStepper.tsx")).toContain("w-11");
+    expect(read("src/components/customer/LineAvailability.tsx")).toContain("min-h-[44px]");
+  });
+});

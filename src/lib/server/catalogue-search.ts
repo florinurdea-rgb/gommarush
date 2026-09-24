@@ -319,6 +319,7 @@ export async function searchCatalogue(
       supplierArticleId: row.supplier_article_id ?? null,
       laneCode,
       ean: (product.ean as string | null) ?? null,
+      weightKg: Number(product.weight_kg) || null,
       costObservedAt: price?.observed_at ?? null,
       breakdown: calculateTyrePrice({ supplierCostCents, pfu }, settings),
       supplierStockExact: stockExact,

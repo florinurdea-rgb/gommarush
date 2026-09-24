@@ -134,6 +134,14 @@ export interface InternalTyreOffer {
    */
   laneCode: string | null;
   ean: string | null;
+  /**
+   * Verified tyre weight, for re-resolving PFU when a live price arrives.
+   *
+   * PFU is a function of weight, not of price, so a re-price must reuse the
+   * SAME weight rather than inventing a band. Internal because it is an input
+   * to a calculation, not something a customer is quoted.
+   */
+  weightKg: number | null;
 
   resolution: PriceResolution;
   supplierCostCents: Cents | null;
@@ -163,9 +171,10 @@ export interface PricedListing {
   supplierListingId: string;
   supplierName: string | null;
   supplierArticleId: string | null;
-  /** The lane that wrote this listing, and the tyre's EAN. Internal only. */
+  /** The lane that wrote this listing, the tyre's EAN and its weight. Internal only. */
   laneCode?: string | null;
   ean?: string | null;
+  weightKg?: number | null;
   costObservedAt: string | null;
   breakdown: PriceBreakdown;
   /** The supplier's stock, verbatim. */
@@ -215,6 +224,7 @@ export function toInternalOffer(listing: PricedListing): InternalTyreOffer {
     supplierArticleId: listing.supplierArticleId,
     laneCode: listing.laneCode ?? null,
     ean: listing.ean ?? null,
+    weightKg: listing.weightKg ?? null,
     resolution: breakdown.resolution,
     supplierCostCents: breakdown.supplierCostCents,
     markupPercentApplied: breakdown.markupPercentApplied,

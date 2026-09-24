@@ -100,7 +100,7 @@ export function OverlayStatus({
 }) {
   return (
     <div
-      className={`absolute bottom-4 left-4 right-4 rounded-xl border border-steel-soft bg-white/95 px-4 py-3 shadow-card backdrop-blur-sm sm:bottom-6 sm:left-6 sm:right-auto sm:max-w-[16rem] ${className}`}
+      className={`absolute bottom-4 left-4 right-4 rounded-xl border border-steel-soft bg-white/95 px-4 py-3 backdrop-blur-sm sm:bottom-6 sm:left-6 sm:right-auto sm:max-w-[16rem] ${className}`}
     >
       <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-soft">{label}</p>
       <p className="mt-0.5 text-[15px] font-bold leading-tight text-ink">{value}</p>

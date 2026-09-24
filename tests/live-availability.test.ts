@@ -41,10 +41,23 @@ function line(overrides: Partial<BasketResolvedLine> = {}, quantity = 4): Basket
     tyre: { sizeDisplay: "205/55 R16" } as never,
     customer: { tyreSaleNetCents: 12_000 } as never,
     internal: {
+      tyre: { productId: "p-1", productClass: "passenger_car", sizeDisplay: "205/55 R16" },
+      availability: "in_stock",
       supplierListingId: "l-1",
+      supplierName: "SECRET",
+      supplierArticleId: "SECRET-SKU",
       laneCode: "intersprint",
       ean: "1234567890123",
+      weightKg: 8.5,
       costObservedAt: OBSERVED,
+      supplierCostCents: 10_000,
+      tyreSaleNetCents: 12_000,
+      supplierStockExact: 40,
+      supplierStockMinimum: null,
+      supplierStockRaw: "40",
+      sellable: true,
+      sellabilityReason: "sellable",
+      minimumOfferQuantity: 5,
     } as never,
     availability: { state: "available" },
     provenance: { source: "feed", observedAt: OBSERVED },
@@ -52,19 +65,29 @@ function line(overrides: Partial<BasketResolvedLine> = {}, quantity = 4): Basket
   };
 }
 
-/** A protocol-103 data response carrying `available` in column 9. */
+/**
+ * A protocol-103 data response: net price in column 7, `available` in column 9.
+ *
+ * The price quoted here matches the fixture's stored cost, so these rows test
+ * availability WITHOUT incidentally triggering a re-price. The re-pricing
+ * tests below quote a different figure on purpose.
+ */
 function stockRow(ean: string, available: string) {
   return {
     outcome: {
       status: "data",
-      rows: [["SYS", ean, "ALPHA", "G", "205/55 R16", "EUR", "28.79", "35.00", available]],
+      rows: [["SYS", ean, "ALPHA", "G", "205/55 R16", "EUR", "100.00", "125.00", available]],
       truncated: false,
     },
   };
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   describeGatewayConfig.mockReturnValue({ configured: true });
+  // The per-EAN call-rate cache is module state; a test must not inherit
+  // another test's supplier answer.
+  const { resetLiveAvailabilityCache } = await import("@/lib/server/live-availability");
+  resetLiveAvailabilityCache();
 });
 
 afterEach(() => vi.clearAllMocks());
@@ -238,5 +261,144 @@ describe("the ordering protocol is not reachable from here", () => {
     expect(source).not.toContain("placeOrder");
     expect(source).not.toContain("validateOrder");
     expect(source.match(/stockByEan/g)?.length ?? 0).toBeGreaterThan(0);
+  });
+});
+
+describe("the live price drives the customer's price", () => {
+  /**
+   * The half of the requirement that quantity checking alone does not cover.
+   * A line whose cost has moved must be re-priced, or the customer agrees to a
+   * figure the supplier has already left behind and finds out at the order
+   * gate.
+   */
+  it("re-prices the line through the approved engine when the cost has moved", async () => {
+    const { verifyBasketLive } = await import("@/lib/server/live-availability");
+    // 100.00 was the stored cost; the supplier now says 110.00.
+    stockByEan.mockResolvedValue({
+      outcome: {
+        status: "data",
+        rows: [["SYS", "1234567890123", "ALPHA", "G", "205/55 R16", "EUR", "110.00", "140.00", "40"]],
+        truncated: false,
+      },
+    });
+
+    const result = await verifyBasketLive([line()]);
+    // +20% markup, exactly as the catalogue applies it. 110.00 -> 132.00.
+    expect(result.lines[0].customer?.tyreSaleNetCents).toBe(13_200);
+    expect(result.lines[0].provenance.source).toBe("live");
+  });
+
+  it("leaves the price alone when the cost has not moved", async () => {
+    const { verifyBasketLive } = await import("@/lib/server/live-availability");
+    stockByEan.mockResolvedValue(stockRow("1234567890123", "40"));
+    const result = await verifyBasketLive([line()]);
+    expect(result.lines[0].customer?.tyreSaleNetCents).toBe(12_000);
+  });
+
+  /** A malformed price column must not cancel a good quantity answer. */
+  it("keeps the line live when the price cannot be read", async () => {
+    const { verifyBasketLive } = await import("@/lib/server/live-availability");
+    stockByEan.mockResolvedValue({
+      outcome: {
+        status: "data",
+        rows: [["SYS", "1234567890123", "ALPHA", "G", "205/55 R16", "EUR", "op aanvraag", "", "40"]],
+        truncated: false,
+      },
+    });
+
+    const result = await verifyBasketLive([line()]);
+    expect(result.lines[0].provenance.source).toBe("live");
+    expect(result.lines[0].availability).toEqual({ state: "available" });
+    expect(result.lines[0].customer?.tyreSaleNetCents).toBe(12_000);
+  });
+
+  it("reads both decimal conventions and refuses anything else", async () => {
+    const { parseNetPriceCents } = await import("@/lib/server/live-availability");
+    expect(parseNetPriceCents("28.79")).toBe(2879);
+    expect(parseNetPriceCents("28,79")).toBe(2879);
+    expect(parseNetPriceCents(" 110 ")).toBe(11_000);
+    // Never zero, never free.
+    expect(parseNetPriceCents("op aanvraag")).toBeNull();
+    expect(parseNetPriceCents("")).toBeNull();
+    expect(parseNetPriceCents("-5.00")).toBeNull();
+  });
+
+  /** Sourcing cost has no field to travel in on a customer payload. */
+  it("never lets the live cost reach the customer projection", async () => {
+    const { verifyBasketLive } = await import("@/lib/server/live-availability");
+    stockByEan.mockResolvedValue({
+      outcome: {
+        status: "data",
+        rows: [["SYS", "1234567890123", "ALPHA", "G", "205/55 R16", "EUR", "110.00", "140.00", "40"]],
+        truncated: false,
+      },
+    });
+
+    const result = await verifyBasketLive([line()]);
+    const json = JSON.stringify(result.lines[0].customer);
+    expect(json).not.toContain("11000");
+    expect(json).not.toContain("supplierCostCents");
+    expect(json).not.toContain("SECRET");
+  });
+});
+
+describe("the per-EAN call-rate guard", () => {
+  /**
+   * A customer nudging a quantity from 4 to 8 fires several previews in a few
+   * seconds. Each would otherwise be its own plain-HTTP round trip carrying
+   * credentials in the clear.
+   */
+  it("collapses a burst of checks on one tyre into a single lookup", async () => {
+    const { verifyBasketLive } = await import("@/lib/server/live-availability");
+    stockByEan.mockResolvedValue(stockRow("1234567890123", "40"));
+
+    await verifyBasketLive([line()]);
+    await verifyBasketLive([line()]);
+    await verifyBasketLive([line()]);
+
+    expect(stockByEan).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * THE PROPERTY THAT MATTERS MOST. It caches the SUPPLIER'S ANSWER, not a
+   * verdict about a line, so "reduce the quantity and it becomes available
+   * again" still works inside the window — same live figure, different
+   * question.
+   */
+  it("re-decides a different quantity against the cached answer", async () => {
+    const { verifyBasketLive } = await import("@/lib/server/live-availability");
+    stockByEan.mockResolvedValue(stockRow("1234567890123", "6"));
+
+    const tooMany = await verifyBasketLive([line({}, 20)]);
+    expect(tooMany.lines[0].availability).toEqual({ state: "limited", availableQuantity: 6 });
+
+    const reduced = await verifyBasketLive([line({}, 6)]);
+    expect(reduced.lines[0].availability).toEqual({ state: "available" });
+    expect(stockByEan, "and without asking again").toHaveBeenCalledTimes(1);
+  });
+
+  /** A failure must not be remembered: the next request tries again. */
+  it("never caches a failure", async () => {
+    const { verifyBasketLive } = await import("@/lib/server/live-availability");
+    stockByEan.mockRejectedValueOnce(new Error("timeout"));
+    const failed = await verifyBasketLive([line()]);
+    expect(failed.lines[0].provenance.source).toBe("feed_after_live_failure");
+
+    stockByEan.mockResolvedValue(stockRow("1234567890123", "40"));
+    const retried = await verifyBasketLive([line()]);
+    expect(retried.lines[0].provenance.source).toBe("live");
+  });
+
+  it("expires, so a stale answer cannot outlive the window", async () => {
+    const { verifyBasketLive } = await import("@/lib/server/live-availability");
+    stockByEan.mockResolvedValue(stockRow("1234567890123", "40"));
+    let clock = 1_000_000;
+    const now = () => clock;
+
+    await verifyBasketLive([line()], now);
+    clock += 21_000;
+    await verifyBasketLive([line()], now);
+
+    expect(stockByEan).toHaveBeenCalledTimes(2);
   });
 });

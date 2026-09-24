@@ -1,5 +1,9 @@
 import "server-only";
 import { getGatewayClient } from "@/lib/server/supplier-gateway";
+import { calculateTyrePrice } from "@/lib/pricing/calculate";
+import { resolvePfu } from "@/lib/pricing/pfu";
+import { DEFAULT_PRICING_SETTINGS } from "@/lib/pricing/settings";
+import { toCustomerOffer, toInternalOffer } from "@/lib/pricing/projection";
 import { describeGatewayConfig } from "@/lib/suppliers/gateway/config";
 import { toStockRow } from "@/lib/suppliers/gateway/response";
 import { logError } from "@/lib/logger";
@@ -12,18 +16,24 @@ import type {
 /**
  * The last check before an order is created.
  *
- * WHEN THIS RUNS, AND WHY ONLY THEN. Owner decision, 2026-09-24: the live
- * supplier lookup happens at the FINAL CONFIRM and nowhere else. Quantity
- * edits in the basket and on the checkout screen re-resolve against the
- * stored feed instead — instant, free, and accurate to the last import.
+ * WHEN THIS RUNS. Every basket preview and every order confirmation.
  *
- * The reason for the restriction is not performance. The Inter-Sprint gateway
- * is documented as plain HTTP (§1.1, `http://customers.inter-sprint.nl`) and
- * the credentials travel in the clear on every call; that is already recorded
- * as security finding 2. One call per basket line at the single moment a
- * promise is actually made is a very different exposure from one per
- * keystroke, and it buys the same guarantee — the figure is checked at the
- * instant it starts to matter.
+ * This SUPERSEDES the earlier confirm-only restriction (D21, 2026-09-24).
+ * That decision had quantity edits answered from the stored feed, and the
+ * approved requirement is now explicit: a quantity change must be checked
+ * against the real current price and quantity, not against imported catalogue
+ * state. Anything less means a customer can reduce a line to a quantity the
+ * feed believes is available, be told it is fine, and have the order refused
+ * moments later by the check that actually counts.
+ *
+ * THE COST THAT RESTRICTION EXISTED TO BOUND IS STILL REAL. The Inter-Sprint
+ * gateway is documented as plain HTTP (§1.1,
+ * `http://customers.inter-sprint.nl`) and the credentials travel in the clear
+ * on every call — security finding 2. Two things keep the call count sane
+ * rather than removing the exposure: the client debounces typing, and the
+ * per-EAN cache below collapses a burst of edits on one tyre into a single
+ * lookup. Moving the gateway to HTTPS remains the actual fix and is the
+ * supplier's to provide.
  *
  * WHAT IT CALLS. Protocol 103, "Extended stock search" (§2.1), addressed by
  * EAN. It is `kind: "read"`, it is not gated by the live-ordering flag, and it
@@ -50,6 +60,37 @@ const LIVE_BUDGET_MS = 6_000;
 /** Lanes with a documented, implemented live stock lookup. */
 const LIVE_LANES = new Set(["intersprint"]);
 
+/**
+ * How long one EAN's live answer is reused.
+ *
+ * THIS IS A CALL-RATE GUARD, NOT A FRESHNESS COMPROMISE. The window is short
+ * enough that a wholesaler's stock cannot meaningfully move inside it, and it
+ * exists because a customer nudging a quantity from 4 to 8 with the +
+ * button fires several previews in a few seconds — each of which would
+ * otherwise be its own plain-HTTP round trip carrying credentials.
+ *
+ * It caches the SUPPLIER'S ANSWER (quantity and price for an EAN), never a
+ * verdict about a line. The requested quantity is compared against that answer
+ * on every single request, so "reduce the quantity and it becomes available
+ * again" still works within the window — same live figure, different question.
+ *
+ * A failure is never cached: the next request tries again.
+ */
+const LIVE_CACHE_MS = 20_000;
+
+interface LiveAnswer {
+  readonly quantity: number;
+  readonly costCents: number | null;
+  readonly at: number;
+}
+
+const liveCache = new Map<string, { value: LiveAnswer; expiresAt: number }>();
+
+/** Test seam. Never called by application code. */
+export function resetLiveAvailabilityCache(): void {
+  liveCache.clear();
+}
+
 export interface LiveVerificationOutcome {
   readonly lines: readonly BasketResolvedLine[];
   /** True when at least one line was actually answered by the supplier. */
@@ -74,6 +115,99 @@ function parseAvailable(raw: string): number | null {
 }
 
 /**
+ * Inter-Sprint's own net price for one EAN, in cents.
+ *
+ * Column 7 of the protocol-103 row (§2.1). Parsed strictly and conservatively:
+ * a value that is not a plain decimal is NOT read as zero or as free, because
+ * a misparse here would reprice a tyre rather than merely fail to reprice it.
+ * Both separators are accepted — the gateway is a Dutch system quoting a
+ * European wholesaler, and neither convention can be assumed.
+ */
+export function parseNetPriceCents(raw: string): number | null {
+  const trimmed = raw.trim().replace(",", ".");
+  if (!/^\d+(\.\d{1,4})?$/.test(trimmed)) return null;
+  const value = Number(trimmed);
+  if (!Number.isFinite(value) || value < 0) return null;
+  return Math.round(value * 100);
+}
+
+/**
+ * Re-prices one line from a live supplier cost.
+ *
+ * THROUGH THE SAME ENGINE, NOT BESIDE IT. `calculateTyrePrice` applies the
+ * approved markup, the PFU and the VAT chain exactly as the catalogue did;
+ * this only changes the cost it starts from. A second price path here would
+ * be a second set of commercial rules, and the two would disagree the first
+ * time either changed.
+ *
+ * PFU is re-resolved from the SAME weight, because PFU is a function of the
+ * tyre, not of what it cost today.
+ *
+ * The customer projection is rebuilt with `toCustomerOffer`, so the live cost
+ * has no field to travel in and cannot reach a customer payload.
+ */
+function repriceLine(line: BasketResolvedLine, liveCostCents: number): BasketResolvedLine {
+  const internal = line.internal;
+  if (!internal) return line;
+
+  try {
+    return rebuild(line, internal, liveCostCents);
+  } catch (error) {
+    /*
+      A re-price that cannot be completed must NOT discard an answer the
+      supplier gave us. The quantity was good; only the price could not be
+      re-derived. The line keeps the price it already had and stays live.
+    */
+    logError("live_reprice_failed", error);
+    return line;
+  }
+}
+
+function rebuild(
+  line: BasketResolvedLine,
+  internal: NonNullable<BasketResolvedLine["internal"]>,
+  liveCostCents: number
+): BasketResolvedLine {
+
+  const pfu = resolvePfu({
+    weightKg: internal.weightKg,
+    productClass: internal.tyre.productClass,
+  });
+  const breakdown = calculateTyrePrice(
+    { supplierCostCents: liveCostCents, pfu },
+    DEFAULT_PRICING_SETTINGS
+  );
+
+  const listing = {
+    tyre: internal.tyre,
+    availability: internal.availability,
+    supplierListingId: internal.supplierListingId,
+    supplierName: internal.supplierName,
+    supplierArticleId: internal.supplierArticleId,
+    laneCode: internal.laneCode,
+    ean: internal.ean,
+    weightKg: internal.weightKg,
+    costObservedAt: internal.costObservedAt,
+    breakdown,
+    supplierStockExact: internal.supplierStockExact,
+    supplierStockMinimum: internal.supplierStockMinimum,
+    supplierStockRaw: internal.supplierStockRaw,
+    sellability: {
+      sellable: internal.sellable,
+      reason: internal.sellabilityReason,
+      assessedQuantity: internal.supplierStockExact ?? internal.supplierStockMinimum,
+      minimumApplied: internal.minimumOfferQuantity,
+    },
+  };
+
+  return {
+    ...line,
+    customer: toCustomerOffer(listing as never),
+    internal: toInternalOffer(listing as never),
+  };
+}
+
+/**
  * Re-decides one line's availability against a live quantity.
  *
  * Deliberately the SAME shape the feed path produces, so every screen and the
@@ -86,6 +220,35 @@ function applyLiveQuantity(
   if (liveQuantity <= 0) return { state: "unavailable", reason: "out_of_stock" };
   if (liveQuantity >= line.input.quantity) return { state: "available" };
   return { state: "limited", availableQuantity: liveQuantity };
+}
+
+/**
+ * Applies one supplier answer to one line: availability AND price.
+ *
+ * Both, because the approved requirement is that a quantity change is checked
+ * against the real current price and quantity. Checking only the quantity
+ * would let a customer agree to a figure the supplier has already moved away
+ * from, and discover it at the order gate instead.
+ *
+ * Re-pricing is skipped when the cost is unchanged or unreadable, so the
+ * common case does no work and a malformed price column cannot disturb a line.
+ */
+function applyLiveAnswer(line: BasketResolvedLine, answer: LiveAnswer): BasketResolvedLine {
+  const provenance: AvailabilityProvenance = {
+    source: "live",
+    observedAt: new Date(answer.at).toISOString(),
+  };
+
+  const repriced =
+    answer.costCents !== null && answer.costCents !== line.internal?.supplierCostCents
+      ? repriceLine(line, answer.costCents)
+      : line;
+
+  return {
+    ...repriced,
+    availability: applyLiveQuantity(repriced, answer.quantity),
+    provenance,
+  };
 }
 
 /**
@@ -145,6 +308,15 @@ export async function verifyBasketLive(
       continue;
     }
 
+    // The supplier's answer for this EAN, reused within a short window so a
+    // burst of quantity edits on one tyre is one lookup rather than several.
+    const cached = liveCache.get(ean);
+    if (cached && cached.expiresAt > now()) {
+      anyLive = true;
+      verified.push(applyLiveAnswer(line, cached.value));
+      continue;
+    }
+
     try {
       const result = await client.stockByEan(ean);
 
@@ -174,16 +346,23 @@ export async function verifyBasketLive(
         continue;
       }
 
-      anyLive = true;
-      const provenance: AvailabilityProvenance = {
-        source: "live",
-        observedAt: new Date(now()).toISOString(),
+      /*
+        The price is read but is NOT allowed to fail the check.
+
+        An unparseable price means "we could not re-price", not "this tyre is
+        unavailable" — the quantity answer is still good and refusing the line
+        over a malformed price column would turn a formatting quirk into a lost
+        sale. The line simply keeps the price it already had.
+      */
+      const answer: LiveAnswer = {
+        quantity,
+        costCents: row ? parseNetPriceCents(row.netPrice) : null,
+        at: now(),
       };
-      verified.push({
-        ...line,
-        availability: applyLiveQuantity(line, quantity),
-        provenance,
-      });
+      liveCache.set(ean, { value: answer, expiresAt: now() + LIVE_CACHE_MS });
+
+      anyLive = true;
+      verified.push(applyLiveAnswer(line, answer));
     } catch (error) {
       // Timeout, DNS, TLS, HTTP 5xx — the client throws GatewayError for all
       // of them. Logged with no credential and no basket content.

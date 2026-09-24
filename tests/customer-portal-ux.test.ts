@@ -339,6 +339,7 @@ function realLine(quantity: number): BasketResolvedLine {
     supplierArticleId: "SECRET-SKU",
     laneCode: "intersprint",
     ean: "1234567890123",
+    weightKg: 8.5,
     costObservedAt: "2026-09-22T14:00:00Z",
     breakdown: calculateTyrePrice(
       { supplierCostCents: 10_000, pfu: resolvePfu({ weightKg: 8.5 }) },
@@ -873,19 +874,47 @@ describe("what gets checked live, and when", () => {
   const read = (path: string) => require("node:fs").readFileSync(path, "utf8") as string;
 
   /**
-   * Owner decision, 2026-09-24. Quantity edits fire this endpoint constantly;
-   * the gateway is plain HTTP with credentials in the clear, and one call per
-   * keystroke is a very different exposure from one per order.
+   * THIS TEST ASSERTED THE OPPOSITE, AND THE REVERSAL IS THE POINT.
+   *
+   * Under D21 the preview deliberately made no supplier call and answered
+   * quantity changes from imported catalogue state. The approved requirement
+   * is now that a quantity change is checked against the real current price
+   * and quantity — otherwise a customer can reduce a line until the stored
+   * figure accepts it, be told it is fine, and have the order refused seconds
+   * later by the check that actually counts.
    */
-  it("never calls the supplier from the basket preview", () => {
+  it("checks the real current figures from the basket preview", () => {
     const route = read("app/api/account/basket/preview/route.ts");
-    expect(route).not.toContain("verifyBasketLive");
-    expect(route).not.toContain("supplier-gateway");
+    expect(route).toContain("verifyBasketLive");
+    // Resolve first, then verify: the same two stages, in the same order, as
+    // the order path — not a second engine.
+    expect(route.indexOf("await resolveBasket(lines)")).toBeLessThan(
+      route.indexOf("await verifyBasketLive")
+    );
   });
 
-  it("calls it once, from order creation", () => {
+  it("uses the same two stages at order creation", () => {
     const orders = read("src/lib/server/sales-orders.ts");
     expect(orders).toContain("verifyBasketLive(resolved)");
+  });
+
+  /** One implementation, called from both places. */
+  it("has exactly one live verification module", () => {
+    const files = require("node:fs").readdirSync("src/lib/server") as string[];
+    expect(files.filter((f: string) => /live|availability/i.test(f))).toEqual([
+      "live-availability.ts",
+    ]);
+  });
+
+  /**
+   * The preview authorises nothing. A browser can send whatever it likes to
+   * the order route, which resolves, verifies and re-checks the accepted
+   * total again before writing a row.
+   */
+  it("still re-checks authoritatively at the order gate", () => {
+    const orders = read("src/lib/server/sales-orders.ts");
+    expect(orders).toContain("if (!basketIsOrderable(orderLines)) {");
+    expect(orders).toContain("basket.grandTotalCents !== input.acceptedTotalCents");
   });
 
   /** A retry must not make a second round of supplier calls. */

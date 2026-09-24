@@ -76,6 +76,7 @@
     "m10_production_verification": "READ-ONLY inspection of the production database on 2026-09-22, after two real Inter-Sprint feeds were processed by the deployed worker. Run ef834c00-3326-4c47-916e-4f18561e03aa (PCR, vrd-001-21185-107.csv, 3,060,504 B, checksum 04fa0b3c6a25) and run 77b811d4-5b0f-41ed-89ca-ec67b67fd060 (truck, vrd-001-21185.csv, 46,527 B, checksum 70a5d9196b13). Both status='committed', both supplier_id=4ce0b557-9575-4784-aa80-99e78af4da2f, both adapter='intersprint-feed', both import_mode='partial', both deactivated_listings=0, both rejected_rows=0."
   },
   "completed": [
+    "M21 final: live verification moved onto every basket preview (supersedes D21), live PRICE read and re-priced through the approved engine, 20s per-EAN call-rate cache; public primary CTA flattened to match the commerce primary and lift shadows removed from public cards.",
     "M18 (PR #12): catalogue filter bar rebuilt as one sticky labelled row; dropdown freeze-on-focus; basket toast and cart icon.",
     "M19 (PR #13): size lists served unfiltered from a cached server source and rendered with the page; fetch gate restored; 'no tyres in this size' state.",
     "M20 (PR #14): per-line availability (available/limited/unavailable), live Inter-Sprint protocol-103 check at final confirm only, accepted-total price gate, View alternatives deep link.",
@@ -129,6 +130,7 @@
     "Deldo persistence remains gated; untouched."
   ],
   "risks": [
+    "Live verification now runs on every basket preview, so the plain-HTTP Inter-Sprint gateway (security finding 2) is called far more often than under D21. Rate is bounded by a 500ms client debounce and a 20s per-EAN server cache, not by the confirm-only restriction that was lifted. If INTERSPRINT_GATEWAY_* are unset in Vercel - still UNVERIFIED from this environment - no call is made, every line reads 'feed', and the basket silently stops being live-checked without failing. Confirm those variables before treating the new behaviour as active.",
     "M21 BRIEF AMBIGUITY, not resolved silently. The brief says 'Keep dependent facets' AND 'Preserve the existing technically correct behaviour'. Those conflict: M19 (merged, deployed, owner-requested) made the three SIZE lists deliberately non-dependent because the narrowing was both the slow half and the unstable half of the screen; the BRAND facet remains dependent. Current verified behaviour was preserved and M19 was not reverted. If dependent size lists are genuinely wanted back, that is a reversal of M19 and needs saying explicitly.",
     "M21 SCOPE JUDGEMENT on the public marketing site. The brief lists the public homepage and header in scope. They already use the target system (white surfaces, GommaRush blue primary, steel hairlines, rounded-2xl cards, 'Area clienti' as the primary CTA at every breakpoint), and the actual discontinuity was the customer shell, which was a single unstyled line of links. The shell was rebuilt to mirror the public header exactly. Marketing pages were NOT recomposed: their copy is out of bounds for this mission and their tokens already match. If a visual change to the marketing pages is wanted it needs its own pass with copy authority.",
     "M21 COPY CHANGES, deliberate and bounded. The reskin brief forbids supplier terminology on customer screens, which conflicted with four strings introduced earlier the same day by M20: 'Verificato ora con il fornitore', 'Fornitore non raggiungibile — dato del', 'Verifica con il fornitore…' and 'Il prezzo aggiornato dal fornitore è'. All four lost the supplier reference; their meaning is unchanged. 'Non disponibile in stock' was shortened to 'Non disponibile'. The LONG-STANDING production line 'Non viene inoltrato automaticamente a un fornitore' was KEPT untouched - it is a business statement about GommaRush's process, and removing the word would invert its meaning. No other customer-facing copy was added, shortened or rewritten.",
@@ -252,6 +254,13 @@
     }
   ],
   "owner_decisions_required": [
+    {
+      "id": "D26",
+      "question": "RESOLVED 2026-09-24, SUPERSEDES D21. The live supplier check runs on EVERY basket preview - basket open and every quantity change - as well as at order confirmation. It now verifies the current QUANTITY and the current PRICE.",
+      "why": "D21 had quantity edits answered from imported catalogue state. That let a customer reduce a line until the stored figure accepted it, be told it was fine, and have the order refused seconds later by the check that actually counts. The approved requirement is a real current check. Price was previously not read at all, even at confirm: protocol 103 column 7 is now parsed and a changed cost is re-priced through calculateTyrePrice, so the customer's selling price and totals follow it.",
+      "blocks": "Nothing. Recorded as resolved.",
+      "note": "The plain-HTTP credential exposure D21 bounded is NOT removed, only rate-limited: client debounce plus a 20s per-EAN server cache that collapses a burst of edits on one tyre into one lookup. The cache holds the SUPPLIER'S ANSWER, never a verdict, so reduce-to-available still works inside the window. Moving the gateway to HTTPS remains the real fix and is the supplier's to provide."
+    },
     {
       "id": "D25",
       "question": "RESOLVED 2026-09-24. Catalogue results show the GommaRush net selling price and the PFU amount only — no VAT line, no VAT-inclusive total, no 'PFU stimato' wording and no estimate warning.",
