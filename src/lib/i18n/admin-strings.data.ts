@@ -588,6 +588,14 @@ export const EN_STRINGS: Record<string, string> = {
   "Aggiunto": "Added",
   "articoli nel carrello": "items in the basket",
   "Aggiunto al carrello": "Added to basket",
+  "Azzera": "Clear",
+  "Rimuovi i filtri": "Remove filters",
+  "Ricerca pneumatici in corso\u2026": "Searching for tyres\u2026",
+  "Nessun pneumatico per questa misura": "No tyres in this size",
+  "Prova a rimuovere stagione, marca o fascia, oppure scegli un'altra misura.":
+    "Try removing season, brand or tier, or choose another size.",
+  "Prova un'altra misura. Se ti serve questa, contattaci e la cerchiamo per te.":
+    "Try another size. If you need this one, contact us and we will look for it.",
   "Vai al carrello": "Go to basket",
   "Larghezza, spalla e cerchio sono obbligatori per vedere i risultati.":
     "Width, aspect ratio and rim are required to see results.",

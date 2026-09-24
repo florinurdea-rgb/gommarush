@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   catalogueViewState,
   hasCompleteDimensions,
-  sameFacets,
+  sameValues,
   shouldQueryCatalogue,
 } from "@/lib/customer/catalogue-view";
 import { formatSalesOrderNumber, parseSalesOrderNumber } from "@/lib/commerce/order-number";
@@ -42,26 +42,46 @@ describe("the catalogue asks for a size before it asks the database", () => {
     expect(hasCompleteDimensions({ widthMm: 205, aspectRatio: Number.NaN, rimInch: 16 })).toBe(false);
   });
 
-  /**
-   * This gates the CATALOGUE READ, not the request. The request always goes
-   * out — it is what fetches the facets that fill the selectors.
-   */
   it("gates the catalogue read on the same rule the view uses", () => {
     expect(shouldQueryCatalogue({ widthMm: "205", aspectRatio: "55", rimInch: "" })).toBe(false);
     expect(shouldQueryCatalogue({ widthMm: "205", aspectRatio: "55", rimInch: "16" })).toBe(true);
   });
 
   /**
-   * REGRESSION: the component must not gate its FETCH on this, or the facets
-   * that fill the selectors never arrive and the size can never be completed.
+   * THE PREMISE OF THIS TEST CHANGED, AND THE CHANGE IS THE POINT.
+   *
+   * It used to assert the OPPOSITE: the component must never gate its fetch,
+   * because the selectors were filled from the facets that same request
+   * returned, so no request meant no widths and the size could never be
+   * completed. That deadlock was real and this test was what kept it closed.
+   *
+   * The deadlock is now structurally impossible — the size lists are props,
+   * resolved on the server and rendered with the page — so the gate belongs
+   * back in the component, and the guarantee worth pinning is the one that
+   * makes it safe: the selectors must not depend on a response.
    */
-  it("is not used to suppress the fetch in the component", () => {
+  it("gates the component fetch, now that the selectors do not depend on it", () => {
     const source = require("node:fs").readFileSync(
       "src/components/customer/CustomerCatalogue.tsx",
       "utf8"
     ) as string;
-    expect(source).not.toContain("shouldQueryCatalogue");
-    expect(source, "the effect must always reach fetch()").toContain("await fetch(");
+    expect(source, "the gate is back").toContain("shouldQueryCatalogue");
+    expect(source, "and it short-circuits the effect").toContain("if (!canQuery) {");
+    // The sizes arrive as props. If they were ever read from a response again,
+    // gating the fetch would re-create the deadlock.
+    expect(source).toContain("facetValues={widths}");
+    expect(source).toContain("facetValues={aspectRatios}");
+    expect(source).toContain("facetValues={rims}");
+    expect(source).not.toContain("facets.widths");
+  });
+
+  it("is handed those lists by the page, not asked for them by the browser", () => {
+    const page = require("node:fs").readFileSync(
+      "app/account/(secure)/catalogue/page.tsx",
+      "utf8"
+    ) as string;
+    expect(page).toContain("getTyreDimensions");
+    expect(page).toContain("widths={[...dimensions.widths]}");
   });
 });
 
@@ -388,37 +408,36 @@ describe("a dropdown is not yanked out from under the customer", () => {
     expect(select).not.toContain("value={frozen");
   });
 
-  it("keeps the previous facet object when the response changed nothing", () => {
+  it("keeps the previous brand array when the response changed nothing", () => {
     const source = read(CATALOGUE);
-    expect(source).toContain("sameFacets(current, j.facets)");
+    expect(source).toContain("sameValues(current, j.facets?.brands)");
   });
 });
 
-describe("facet equality", () => {
-  const facets = {
-    widths: [195, 205],
-    aspectRatios: [55, 60],
-    rims: [16, 17],
-    brands: ["MICHELIN", "SUNNY"],
-  };
+describe("list equality", () => {
+  const brands = ["MICHELIN", "SUNNY"];
 
-  it("recognises an identical payload, so nothing re-renders", () => {
-    expect(sameFacets(facets, { ...facets, widths: [195, 205] })).toBe(true);
+  it("recognises an identical list, so nothing re-renders", () => {
+    expect(sameValues(brands, ["MICHELIN", "SUNNY"])).toBe(true);
   });
 
   it("recognises a genuinely changed list", () => {
-    expect(sameFacets(facets, { ...facets, widths: [195] })).toBe(false);
-    expect(sameFacets(facets, { ...facets, brands: ["MICHELIN"] })).toBe(false);
+    expect(sameValues(brands, ["MICHELIN"])).toBe(false);
+    expect(sameValues(brands, ["MICHELIN", "SUNNY", "NOKIAN"])).toBe(false);
   });
 
   /** The server sorts these, so a different order is a different answer. */
   it("treats a reordered list as different", () => {
-    expect(sameFacets(facets, { ...facets, rims: [17, 16] })).toBe(false);
+    expect(sameValues(brands, ["SUNNY", "MICHELIN"])).toBe(false);
   });
 
   it("never claims equality with a missing payload", () => {
-    expect(sameFacets(facets, undefined)).toBe(false);
-    expect(sameFacets(facets, null)).toBe(false);
+    expect(sameValues(brands, undefined)).toBe(false);
+    expect(sameValues(brands, null)).toBe(false);
+  });
+
+  it("holds for an empty list against an empty list", () => {
+    expect(sameValues([], [])).toBe(true);
   });
 });
 
@@ -443,7 +462,7 @@ describe("the filter bar is one sticky row of labelled selections", () => {
   it("lays the controls out as a single row at full width", () => {
     const source = read(CATALOGUE);
     // Seven columns when the tier filter is configured, six when it is not.
-    expect(source).toContain('tiersConfigured ? "lg:grid-cols-7" : "lg:grid-cols-6"');
+    expect(source).toContain('tiersConfigured ? "lg:grid-cols-8" : "lg:grid-cols-7"');
   });
 
   /**
@@ -453,8 +472,23 @@ describe("the filter bar is one sticky row of labelled selections", () => {
    */
   it("makes brand a selection too", () => {
     const source = read(CATALOGUE);
-    expect(source).toContain("facetValues={facets.brands}");
+    expect(source).toContain("facetValues={brands}");
     expect(source, "the datalist is gone").not.toContain("<datalist");
+  });
+
+  /** "Add a clear/reset button that would reset selections." */
+  it("carries a reset that clears the size as well as the filters", () => {
+    const source = read(CATALOGUE);
+    expect(source).toContain('tr("Azzera")');
+    const reset = source.slice(source.indexOf("function reset()"), source.indexOf("function resetExtraFilters"));
+    for (const setter of ['setWidth("")', 'setAspect("")', 'setRim("")', 'setSeason("")', 'setBrand("")', 'setTier("")']) {
+      expect(reset, `reset must clear ${setter}`).toContain(setter);
+    }
+  });
+
+  /** Disabled rather than hidden, so the row does not reflow under the cursor. */
+  it("keeps the reset in the bar at all times", () => {
+    expect(read(CATALOGUE)).toContain("disabled={!hasSelection}");
   });
 });
 
@@ -486,6 +520,78 @@ describe("adding to the basket is visible", () => {
     expect(link).toContain("BASKET_CHANGED_EVENT");
     // ...and cross-tab, so two open tabs cannot show two different baskets.
     expect(link).toContain('addEventListener("storage"');
+  });
+});
+
+describe("a size with no tyres is answered, not left blank", () => {
+  const read = (path: string) => require("node:fs").readFileSync(path, "utf8") as string;
+  const CATALOGUE = "src/components/customer/CustomerCatalogue.tsx";
+
+  /**
+   * The deliberate cost of size lists that never narrow: a combination with
+   * nothing behind it IS selectable now. That is a better screen than a
+   * dimension the customer cannot pick and cannot explain the absence of —
+   * but only if the empty result reads as an answer rather than a failure.
+   */
+  it("says there is no tyre in this size, above a drawing of one", () => {
+    const source = read(CATALOGUE);
+    expect(source).toContain('tr("Nessun pneumatico per questa misura")');
+    expect(source).toContain("function TyreIcon(");
+    const empty = source.slice(source.indexOf("function NoResults("));
+    expect(
+      empty.indexOf("<TyreIcon"),
+      "the icon sits above the sentence"
+    ).toBeLessThan(empty.indexOf("Nessun pneumatico per questa misura"));
+  });
+
+  it("offers the way out that matches why it is empty", () => {
+    const source = read(CATALOGUE);
+    // Extra filters applied -> offer to drop them. None applied -> the size
+    // itself is the thing to change, and suggesting "remove filters" would be
+    // advice the customer cannot act on.
+    expect(source).toContain("hasExtraFilters");
+    expect(source).toContain('tr("Rimuovi i filtri")');
+  });
+
+  it("distinguishes an empty size from a selection that was refused", () => {
+    const source = read(CATALOGUE);
+    // The refusal is its own branch and keeps its own wording; a too-large
+    // selection is not "no tyres".
+    expect(source).toContain('view === "refused"');
+    expect(source).toContain("offers.length === 0 ? (");
+    expect(source.indexOf('view === "refused"')).toBeLessThan(source.indexOf("offers.length === 0 ? ("));
+  });
+});
+
+describe("loading is shown where the tyres will be", () => {
+  const read = (path: string) => require("node:fs").readFileSync(path, "utf8") as string;
+  const CATALOGUE = "src/components/customer/CustomerCatalogue.tsx";
+
+  it("names what is loading, inside the results region", () => {
+    const source = read(CATALOGUE);
+    expect(source).toContain('tr("Ricerca pneumatici in corso…")');
+    expect(source).toContain('aria-busy={loading}');
+  });
+
+  /** Nothing is in flight before a size is chosen, so a spinner would lie. */
+  it("shows the instruction rather than a spinner before a size is chosen", () => {
+    expect(
+      catalogueViewState({
+        widthMm: "205",
+        aspectRatio: "55",
+        rimInch: "",
+        loading: true,
+        error: false,
+        refused: false,
+      })
+    ).toBe("awaiting_dimensions");
+  });
+
+  /** The controls stay usable while tyres load; only the results swap out. */
+  it("never puts the skeleton over the filter bar", () => {
+    const source = read(CATALOGUE);
+    const bar = source.slice(source.indexOf("THE STICKY FILTER BAR"), source.indexOf("THE RESULTS REGION"));
+    expect(bar).not.toContain("ResultsSkeleton");
   });
 });
 

@@ -5,27 +5,35 @@ import { Button } from "@/components/Button";
 import { CartIcon } from "@/components/customer/CartIcon";
 import { addBasketLine } from "@/lib/customer/basket";
 import { BRAND_TIER_LABELS } from "@/lib/catalogue/brand-tiers";
-import { catalogueViewState, sameFacets } from "@/lib/customer/catalogue-view";
+import { catalogueViewState, sameValues, shouldQueryCatalogue } from "@/lib/customer/catalogue-view";
 import { useTr } from "@/lib/i18n/tr";
 
 /**
  * The customer tyre search.
  *
- * DELIBERATE, NOT EAGER. Nothing is fetched until width, aspect ratio and rim
- * are all chosen. A tyre shop buys a size; a catalogue that dumps thousands of
- * unrelated tyres on arrival is slower to use, not faster, and it is also the
- * one query shape the global sort has to refuse. The route enforces the same
- * rule, so this is the pleasant half of the gate rather than the whole of it.
+ * THE SIZE LISTS ARE GIVEN, NOT FETCHED. `widths`, `aspectRatios` and `rims`
+ * arrive as props, resolved on the server and rendered with the page, and they
+ * are the WHOLE unfiltered set the catalogue holds. They do not change while
+ * the customer is here — not when a rim is picked, not when results load,
+ * never. See src/lib/server/catalogue-dimensions.ts for why that is both the
+ * fast answer and the stable one.
  *
- * NEVER FROZEN. Every fetch — a changed dimension, season, brand, order or page
- * — swaps the results for skeleton cards of the same shape, and the controls
- * stay usable throughout. A stale list sitting under a new filter is worse than
- * a placeholder, because it looks like an answer.
+ * DELIBERATE, NOT EAGER. Nothing is requested until width, aspect ratio and
+ * rim are all chosen. A tyre shop buys a size; a catalogue that dumps
+ * thousands of unrelated tyres on arrival is slower to use, not faster, and it
+ * is also the one query shape the global sort has to refuse. This used to be
+ * impossible to enforce here, because suppressing the request also suppressed
+ * the facets that filled the selectors — with the lists handed in as props
+ * that deadlock cannot exist, so the gate is back where it belongs. The route
+ * applies the same rule independently.
  *
- * ONE STICKY ROW. The filters are a single row of labelled selections pinned to
- * the top of the viewport. A customer comparing tyres scrolls, and a filter bar
- * that scrolls away turns every adjustment into a round trip to the top of the
- * page — which is also when a half-remembered selection gets re-entered wrongly.
+ * NEVER FROZEN. Every fetch swaps the results for skeleton cards of the same
+ * shape while the controls stay usable. A stale list sitting under a new
+ * filter is worse than a placeholder, because it looks like an answer.
+ *
+ * A SIZE WITH NO TYRES IS REACHABLE, and answered plainly. That is the
+ * deliberate cost of lists that never narrow, and a better screen than a
+ * dimension the customer cannot select and cannot explain the absence of.
  */
 
 type Offer = {
@@ -51,11 +59,10 @@ type Offer = {
   customerTotalCents: number | null;
   priceAvailable: boolean;
 };
-type Facets = { widths: number[]; aspectRatios: number[]; rims: number[]; brands: string[] };
 type Refusal = { reason: string; matched: number; maximum: number };
 
 const PAGE_SIZE = 24;
-const EMPTY_FACETS: Facets = { widths: [], aspectRatios: [], rims: [], brands: [] };
+const NO_BRANDS: string[] = [];
 
 const money = (c: number | null) =>
   c === null ? "—" : new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(c / 100);
@@ -75,10 +82,19 @@ const AVAILABILITY_LABELS: Record<Offer["availability"], string> = {
 /** How long the card keeps its confirmed state, and the toast stays up. */
 const CONFIRMATION_MS = 2600;
 
-export function CustomerCatalogue() {
+export function CustomerCatalogue({
+  widths,
+  aspectRatios,
+  rims,
+}: {
+  widths: number[];
+  aspectRatios: number[];
+  rims: number[];
+}) {
   const tr = useTr();
   const [offers, setOffers] = useState<Offer[]>([]);
-  const [facets, setFacets] = useState<Facets>(EMPTY_FACETS);
+  /** The only list that still comes from a response — see the note on Select. */
+  const [brands, setBrands] = useState<string[]>(NO_BRANDS);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const [refused, setRefused] = useState<Refusal | null>(null);
@@ -97,6 +113,7 @@ export function CustomerCatalogue() {
   const [error, setError] = useState<string | null>(null);
 
   const dimensions = { widthMm: width, aspectRatio: aspect, rimInch: rim };
+  const canQuery = shouldQueryCatalogue(dimensions);
 
   const filters = useMemo(() => {
     const p = new URLSearchParams();
@@ -115,21 +132,29 @@ export function CustomerCatalogue() {
   useEffect(() => setPage(0), [filters]);
 
   useEffect(() => {
-    // ALWAYS FETCH — including before a size is chosen.
-    //
-    // The facet lists that FILL these dropdowns come back from this same
-    // endpoint. Skipping the request until all three dimensions were set was a
-    // deadlock: no request meant no widths, no widths meant nothing to select,
-    // and the size could never be completed.
-    //
-    // The gate that matters is server-side and still in force: with an
-    // incomplete size the route returns facets and `awaitingDimensions: true`
-    // WITHOUT touching the catalogue read, so this costs a cheap facet query
-    // and never the whole-catalogue scan the sort would have to refuse.
+    /*
+      NOTHING IS REQUESTED UNTIL THE SIZE IS COMPLETE.
+
+      Safe to enforce here now. The selectors are filled from props, so an
+      unmade request no longer starves them of the values needed to make one —
+      which is exactly the deadlock that forced the previous version to fetch
+      on every render whether it could use the answer or not.
+
+      The results panel shows the "choose a size" instruction in this state,
+      never a spinner: nothing is loading, so a spinner would be a lie.
+    */
+    if (!canQuery) {
+      setLoading(false);
+      setOffers([]);
+      setTotal(0);
+      setRefused(null);
+      return;
+    }
+
     const controller = new AbortController();
-    // Debounced so typing a brand does not fire a request per keystroke. The
-    // loading state is set immediately, before the debounce, so the UI reacts
-    // to the keystroke even though the request has not left yet.
+    // Debounced, and the loading state is set immediately — before the
+    // debounce — so the results panel reacts to the change even though the
+    // request has not left yet.
     setLoading(true);
     setError(null);
 
@@ -139,19 +164,16 @@ export function CustomerCatalogue() {
         const r = await fetch(`/api/account/catalogue?${qs}`, { signal: controller.signal });
         const j = await r.json();
         if (!r.ok) throw new Error();
-        // Facets always apply; results only once the server actually ran the
-        // catalogue read. `awaitingDimensions` says which of the two this was.
-        //
-        // Replaced only when they actually DIFFER. Handing React a new array of
-        // identical values re-renders every <option> in every selector, and a
-        // browser rebuilding the options of an OPEN dropdown closes it. See the
-        // note in Select: this is half of the "dropdowns reset" fix, and the
-        // cheaper half — a response that changes nothing now disturbs nothing.
-        setFacets((current) => (sameFacets(current, j.facets) ? current : (j.facets ?? EMPTY_FACETS)));
-        setOffers(j.awaitingDimensions ? [] : (j.offers ?? []));
-        setTotal(j.awaitingDimensions ? 0 : (j.total ?? 0));
-        setRefused(j.awaitingDimensions ? null : (j.refused ?? null));
+        setOffers(j.offers ?? []);
+        setTotal(j.total ?? 0);
+        setRefused(j.refused ?? null);
         setTiersConfigured(j.tiersConfigured === true);
+        // Kept as the SAME array when the values match, so an identical
+        // response cannot re-create the options of a brand list the customer
+        // may have open. See sameValues.
+        setBrands((current) =>
+          sameValues(current, j.facets?.brands) ? current : (j.facets?.brands ?? NO_BRANDS)
+        );
         if (typeof j.fulfilment?.maxDays === "number") setDeliveryDays(j.fulfilment.maxDays);
         setLoading(false);
       } catch (e) {
@@ -167,7 +189,7 @@ export function CustomerCatalogue() {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [filters, page]);
+  }, [filters, page, canQuery]);
 
   const view = catalogueViewState({
     ...dimensions,
@@ -217,6 +239,7 @@ export function CustomerCatalogue() {
     [tr]
   );
 
+  /** Clears every selection, including the size, and empties the results. */
   function reset() {
     setWidth("");
     setAspect("");
@@ -224,11 +247,21 @@ export function CustomerCatalogue() {
     setSeason("");
     setBrand("");
     setTier("");
+    setBrands(NO_BRANDS);
+    setError(null);
   }
 
-  const hasFilters = Boolean(width || aspect || rim || season || brand || tier);
+  /** Clears only the secondary filters, keeping the size. */
+  function resetExtraFilters() {
+    setSeason("");
+    setBrand("");
+    setTier("");
+  }
+
+  const hasSelection = Boolean(width || aspect || rim || season || brand || tier);
+  const hasExtraFilters = Boolean(season || brand || tier);
   // Both literals appear in the source, so Tailwind's scanner emits both.
-  const columns = tiersConfigured ? "lg:grid-cols-7" : "lg:grid-cols-6";
+  const columns = tiersConfigured ? "lg:grid-cols-8" : "lg:grid-cols-7";
 
   return (
     <div>
@@ -256,7 +289,7 @@ export function CustomerCatalogue() {
               required
               value={width}
               set={setWidth}
-              facetValues={facets.widths}
+              facetValues={widths}
               placeholder={tr("Scegli")}
             />
             <Select
@@ -264,7 +297,7 @@ export function CustomerCatalogue() {
               required
               value={aspect}
               set={setAspect}
-              facetValues={facets.aspectRatios}
+              facetValues={aspectRatios}
               placeholder={tr("Scegli")}
             />
             <Select
@@ -272,7 +305,7 @@ export function CustomerCatalogue() {
               required
               value={rim}
               set={setRim}
-              facetValues={facets.rims}
+              facetValues={rims}
               placeholder={tr("Scegli")}
             />
 
@@ -286,16 +319,16 @@ export function CustomerCatalogue() {
             </Field>
 
             {/*
-              A selection, not free text. The brands come from the same
-              dependent facet query as the sizes, so every option here is a
-              brand that actually exists in the current selection — a typed
-              name never matched anything and simply emptied the results.
+              The one list still read from a response, and the only one worth
+              narrowing: "which brands exist in 205/55 R16" is a useful
+              question. Empty until a size is chosen, because a brand list over
+              the whole catalogue is the scan this screen was rebuilt to avoid.
             */}
             <Select
               label={tr("Marca")}
               value={brand}
               set={setBrand}
-              facetValues={facets.brands}
+              facetValues={brands}
               placeholder={tr("Tutte")}
             />
 
@@ -323,19 +356,27 @@ export function CustomerCatalogue() {
                 </select>
               </Field>
             )}
-          </div>
 
-          {hasFilters && (
-            <div className="mt-2 flex justify-end">
+            {/*
+              Always in the bar, in its own column, so the row does not reflow
+              the moment something is selected and the button is where the
+              customer last saw it. Disabled rather than hidden when there is
+              nothing to clear.
+            */}
+            <div className="flex flex-col justify-end">
+              <span className="block text-[11px] font-bold uppercase tracking-wide text-transparent" aria-hidden="true">
+                .
+              </span>
               <button
                 type="button"
                 onClick={reset}
-                className="text-xs font-semibold text-ink-soft underline hover:text-ink"
+                disabled={!hasSelection}
+                className="mt-1 h-11 w-full rounded-xl border border-ink/15 px-2 text-sm font-bold text-ink-soft transition-colors hover:border-ink/30 hover:text-ink disabled:cursor-not-allowed disabled:border-ink/10 disabled:text-ink/30"
               >
-                {tr("Azzera i filtri")}
+                {tr("Azzera")}
               </button>
             </div>
-          )}
+          </div>
         </div>
       </div>
 
@@ -345,6 +386,11 @@ export function CustomerCatalogue() {
         </p>
       )}
 
+      {/*
+        THE RESULTS REGION. Every state of the search renders here and nowhere
+        else, so the panel the customer is reading is always the answer to the
+        selection currently in the bar above it.
+      */}
       <div className="mt-6" aria-live="polite" aria-busy={loading}>
         {view === "awaiting_dimensions" ? (
           <PromptForSize tr={tr} />
@@ -357,10 +403,17 @@ export function CustomerCatalogue() {
             {tr("La selezione è troppo ampia per essere ordinata correttamente.")}{" "}
             {refused?.matched} {tr("pneumatici")}. {tr("Aggiungi un filtro per restringere la ricerca.")}
           </p>
+        ) : offers.length === 0 ? (
+          <NoResults
+            tr={tr}
+            hasExtraFilters={hasExtraFilters}
+            onClearExtraFilters={resetExtraFilters}
+            onReset={reset}
+          />
         ) : (
           <>
             <p className="text-sm text-ink-soft">
-              {total === 0 ? tr("Nessun risultato") : `${total} ${tr("pneumatici disponibili")}`}
+              {`${total} ${tr("pneumatici disponibili")}`}
             </p>
 
             <div className="mt-3 space-y-3">
@@ -408,6 +461,75 @@ type Tr = (text: string) => string;
 /** Shared control styling, so every field in the bar is the same object. */
 const CONTROL =
   "mt-1 h-11 w-full rounded-xl border border-ink/15 bg-white px-2.5 text-sm font-normal text-ink";
+
+/**
+ * A tyre, for the empty result.
+ *
+ * Carcass, rim and hub. An empty panel of text reads as a page that failed;
+ * a drawing of the thing that is missing reads as an answer to the question
+ * that was asked.
+ */
+function TyreIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 48 48"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      className={className}
+      aria-hidden="true"
+      focusable="false"
+    >
+      <circle cx="24" cy="24" r="19" />
+      <circle cx="24" cy="24" r="10.5" />
+      <circle cx="24" cy="24" r="3.5" />
+      <path d="M24 5v8.5M24 34.5V43M5 24h8.5M34.5 24H43" />
+    </svg>
+  );
+}
+
+/**
+ * No tyre in this size.
+ *
+ * A real answer, not a failure. The size lists are the whole catalogue and do
+ * not narrow, so a combination with nothing behind it IS selectable — this is
+ * the screen that makes that honest, and it offers the two ways out: drop the
+ * extra filters, or start the size again.
+ */
+function NoResults({
+  tr,
+  hasExtraFilters,
+  onClearExtraFilters,
+  onReset,
+}: {
+  tr: Tr;
+  hasExtraFilters: boolean;
+  onClearExtraFilters: () => void;
+  onReset: () => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-dashed border-ink/20 bg-white/60 p-10 text-center">
+      <TyreIcon className="mx-auto h-14 w-14 text-ink/25" />
+      <p className="mt-4 font-bold text-ink">{tr("Nessun pneumatico per questa misura")}</p>
+      <p className="mx-auto mt-2 max-w-sm text-sm text-ink-soft">
+        {hasExtraFilters
+          ? tr("Prova a rimuovere stagione, marca o fascia, oppure scegli un'altra misura.")
+          : tr("Prova un'altra misura. Se ti serve questa, contattaci e la cerchiamo per te.")}
+      </p>
+      <div className="mt-5 flex flex-wrap justify-center gap-3">
+        {hasExtraFilters && (
+          <Button size="md" variant="secondary" onClick={onClearExtraFilters}>
+            {tr("Rimuovi i filtri")}
+          </Button>
+        )}
+        <Button size="md" variant="secondary" onClick={onReset}>
+          {tr("Azzera")}
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 /**
  * Confirms an add where the customer is already looking, then gets out of the
@@ -585,11 +707,17 @@ function PromptForSize({ tr }: { tr: Tr }) {
   );
 }
 
-/** Placeholders of the same shape as the cards they replace. */
+/**
+ * Placeholders of the same shape as the cards they replace.
+ *
+ * Inside the results region, never over the filter bar: the controls stay
+ * usable while tyres load, and the customer can see exactly which part of the
+ * screen is waiting.
+ */
 function ResultsSkeleton({ tr }: { tr: Tr }) {
   return (
     <div>
-      <div className="h-5 w-40 animate-pulse rounded bg-ink/10" />
+      <p className="text-sm font-semibold text-ink-soft">{tr("Ricerca pneumatici in corso…")}</p>
       <div className="mt-3 space-y-3">
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className="rounded-2xl bg-white p-5 shadow-card">
@@ -611,7 +739,6 @@ function ResultsSkeleton({ tr }: { tr: Tr }) {
           </div>
         ))}
       </div>
-      <span className="sr-only">{tr("Ricerca in corso…")}</span>
     </div>
   );
 }
@@ -663,19 +790,19 @@ function Select({
 
     REGRESSION: "the dropdowns reset as I browse through them."
 
-    Every keystroke or selection starts a debounced request, and its response
-    rewrites all four facet lists. If that response lands while a dropdown is
-    OPEN, the browser is rebuilding the options of a live popup — and Chrome,
-    Safari and Firefox all close it. From the customer's side the list they
-    were scrolling vanishes and the field looks like it reset.
+    A response landing while a dropdown is OPEN rewrites its options, and every
+    browser closes a popup whose options are rebuilt underneath it. The list
+    being scrolled vanished and the field looked like it had reset.
 
-    So the list is frozen for as long as the control has focus: whatever was
-    on screen when it was opened stays on screen until the customer picks
-    something or leaves. Released on change and on blur, so the next
-    interaction gets the current, correctly narrowed facets.
+    The three size lists can no longer do this at all: they are props, fixed
+    for the life of the page. This freeze is what protects the one list that is
+    still fetched — the brands in the chosen size — and it costs nothing for
+    the constant ones.
 
-    This is a display freeze only. `facetValues` keeps arriving and the applied
-    filter is untouched — nothing here can change what is being searched for.
+    Frozen for as long as the control has focus; released on change and on
+    blur, so the next interaction gets the current list. A display freeze only:
+    `facetValues` keeps arriving and the applied filter is untouched, so
+    nothing here can change what is being searched for.
   */
   const [frozen, setFrozen] = useState<(number | string)[] | null>(null);
   const values = frozen ?? facetValues;
@@ -683,15 +810,11 @@ function Select({
   /*
     THE APPLIED VALUE IS ALWAYS AN OPTION.
 
-    These lists are DEPENDENT facets: each one is computed with the other
-    filters applied. So a chosen width can legitimately disappear from the
-    width list once a season or a rim narrows the catalogue past it — and a
-    <select> whose value matches no <option> renders BLANK while the filter is
-    still in force. The control said "nothing selected" and the results said
-    otherwise, which is what "filters randomly reset" looked like.
-
-    Keeping the value in the list means the control always shows what is
-    actually being filtered on, and the customer can see it to clear it.
+    A <select> whose value matches no <option> renders BLANK while the filter
+    is still in force: the control says "nothing selected" and the results
+    disagree. That cannot arise from narrowing any more, but it still can from
+    a brand that leaves the list when the size changes, and from a value
+    restored before its list has arrived.
   */
   const options = values.map(String);
   const missing = value !== "" && !options.includes(value);
