@@ -5,6 +5,7 @@ import { Button } from "@/components/Button";
 import {
   CommerceCartIcon,
   CommerceLocationIcon,
+  CommerceRefreshIcon,
   CommerceTruckIcon,
   CommerceWarningIcon,
 } from "@/components/customer/CommerceIcons";
@@ -100,6 +101,16 @@ const ORDER_ERRORS: Record<string, string> = {
   CUSTOMER_NOT_FOUND: "Account non abilitato. Contatta GommaRush.",
 };
 
+/**
+ * The one refusal that is NOT the customer's fault and NOT about stock.
+ *
+ * Kept out of ORDER_ERRORS on purpose: those render as a red failure banner,
+ * and this must never read as "out of stock" or as something the customer did
+ * wrong. It gets its own amber panel with a retry, because retrying is the
+ * correct response.
+ */
+const VERIFICATION_UNAVAILABLE = "LIVE_VERIFICATION_UNAVAILABLE";
+
 const money = (c: number | null) =>
   c === null ? "—" : new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(c / 100);
 
@@ -137,6 +148,8 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
    */
   const [acceptedTotalCents, setAcceptedTotal] = useState<number | null>(null);
   const [priceChange, setPriceChange] = useState<{ from: number; to: number | null } | null>(null);
+  /** Set when the order gate could not confirm current figures. Retryable. */
+  const [verificationUnavailable, setVerificationUnavailable] = useState(false);
 
   const verify = useCallback(
     async (lines?: StoredBasketLine[], touched: string[] = []) => {
@@ -245,6 +258,7 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
     if (acceptedTotalCents === null) return;
     setBusy(true);
     setError(null);
+    setVerificationUnavailable(false);
     const submittedTotal = acceptedTotalCents;
     try {
       const r = await fetch("/api/account/orders", {
@@ -269,6 +283,7 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
           in that payload are the result of the live check that just ran, and
           they are newer than anything this screen currently shows.
         */
+        if (j.code === VERIFICATION_UNAVAILABLE) setVerificationUnavailable(true);
         if (j.basket) {
           setBasket(j.basket);
           if (j.code === "PRICE_CHANGED") {
@@ -290,7 +305,11 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
       // PRICE_CHANGED and BASKET_NOT_ORDERABLE are explained by the panels
       // below, which now carry the new figures. A second banner repeating it
       // in worse words would only compete with them.
-      if (code !== "PRICE_CHANGED" && code !== "BASKET_NOT_ORDERABLE") {
+      if (
+        code !== "PRICE_CHANGED" &&
+        code !== "BASKET_NOT_ORDERABLE" &&
+        code !== VERIFICATION_UNAVAILABLE
+      ) {
         setError(tr(ORDER_ERRORS[code] ?? "Ordine non inviato. Riprova."));
       }
       setBusy(false);
@@ -510,6 +529,31 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
             {tr("Il prezzo aggiornato è")} <strong>{money(priceChange.to)}</strong>.{" "}
             {tr("Nessun ordine è stato creato. Conferma di nuovo per procedere al nuovo importo.")}
           </p>
+        </div>
+      )}
+
+      {/* ---- CURRENT FIGURES COULD NOT BE CONFIRMED ---------------------
+          Amber, not red, and explicitly NOT out-of-stock. The order was not
+          created and nothing is wrong with it; the confirmation simply could
+          not be completed, and pressing again is the right thing to do.
+      */}
+      {verificationUnavailable && (
+        <div
+          role="alert"
+          className="mt-4 rounded-2xl border-2 border-state-warning/50 bg-state-warning-soft p-4"
+        >
+          <p className="flex items-center gap-2 font-bold text-ink">
+            <CommerceRefreshIcon className="h-4 w-4 flex-none text-state-warning" />
+            {tr("Verifica non riuscita")}
+          </p>
+          <p className="mt-1 text-sm text-ink">
+            {tr(
+              "Non siamo riusciti a confermare disponibilità e prezzo aggiornati. Nessun ordine è stato creato. Riprova tra poco."
+            )}
+          </p>
+          <Button className="mt-3" size="md" variant="secondary" disabled={busy} onClick={submit}>
+            {tr("Riprova")}
+          </Button>
         </div>
       )}
 

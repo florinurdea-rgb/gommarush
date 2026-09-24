@@ -40,11 +40,12 @@ import type {
  * cannot create an order. Protocol 104 is not referenced anywhere in this
  * file, in any form, including its test=1 validation mode.
  *
- * WHAT IT DOES NOT COVER. Only listings on the Inter-Sprint lane have a live
- * API. The `isb` lane — 3,289 active listings in production — has none, and
- * there is no honest way to invent one. Those lines keep their feed
- * observation and say so, which is the owner's recorded decision and better
- * than implying a check that cannot happen.
+ * WHAT IT DOES NOT COVER. Only the Inter-Sprint lane has a live lookup today.
+ * Both production adapters — `intersprint-feed` and the legacy `isb` workbook
+ * — attribute to that one lane, so every active production listing is
+ * verifiable. Deldo and Carlini are registered lanes with no implemented
+ * lookup; a line on one of those keeps its stored observation and says so,
+ * because there is no honest way to invent a check that does not exist.
  *
  * FAILS OPEN, NEVER SILENTLY. Owner decision, 2026-09-24: a gateway that does
  * not answer must not stop GommaRush selling. The stored observation stands,
@@ -59,6 +60,30 @@ const LIVE_BUDGET_MS = 6_000;
 
 /** Lanes with a documented, implemented live stock lookup. */
 const LIVE_LANES = new Set(["intersprint"]);
+
+/**
+ * Whether this line COULD be verified live at all.
+ *
+ * The distinction the order gate turns on. A line on a lane with no live
+ * lookup was never going to be asked; a line on a lane that HAS one and did
+ * not answer is a different thing entirely.
+ *
+ * NOTE ON `isb`. Both the legacy workbook adapter (`isb`) and the live FTP
+ * feed (`intersprint-feed`) attribute to the SAME `intersprint` lane — see
+ * SUPPLIER_LANES — because they are one commercial relationship imported two
+ * ways. So `isb` listings DO have a live lookup and are verified like any
+ * other. Nothing in production currently sits on a lane without one; the
+ * branch exists for Deldo and Carlini, which are registered and not yet live.
+ */
+function hasLiveLane(line: BasketResolvedLine): boolean {
+  const lane = line.internal?.laneCode ?? null;
+  return line.internal !== null && lane !== null && LIVE_LANES.has(lane);
+}
+
+/** True when a line needed a live answer and did not get one. */
+export function liveVerificationMissing(lines: readonly BasketResolvedLine[]): boolean {
+  return lines.some((line) => line.provenance.source === "feed_after_live_failure");
+}
 
 /**
  * How long one EAN's live answer is reused.
@@ -258,9 +283,27 @@ function applyLiveAnswer(line: BasketResolvedLine, answer: LiveAnswer): BasketRe
  * because the caller is about to create an order and an exception here would
  * turn a supplier hiccup into a lost sale.
  */
+export interface VerifyOptions {
+  /**
+   * Ignore the per-EAN cache and ask the supplier again.
+   *
+   * THE ORDER PATH ALWAYS SETS THIS. The cache exists so a burst of quantity
+   * edits is one lookup rather than several, which is right for a screen the
+   * customer is still deciding on. It is wrong for the moment they commit: a
+   * cached answer from a basket preview seconds earlier would then stand in
+   * for the authoritative final check, and the whole point of that check is
+   * that it happens now.
+   *
+   * The fresh answer still refreshes the cache, so a retry after a price
+   * change does not pay for a third lookup.
+   */
+  readonly forceFresh?: boolean;
+}
+
 export async function verifyBasketLive(
   lines: readonly BasketResolvedLine[],
-  now: () => number = Date.now
+  now: () => number = Date.now,
+  options: VerifyOptions = {}
 ): Promise<LiveVerificationOutcome> {
   const deadline = now() + LIVE_BUDGET_MS;
 
@@ -273,17 +316,35 @@ export async function verifyBasketLive(
     },
   });
 
-  // Configuration is checked ONCE, before any call. An unconfigured gateway is
-  // not a failure of this order — it is a deployment that has never had
-  // credentials — so those lines stay plain `feed` rather than being marked as
-  // a live lane that let us down.
+  /*
+    Configuration is checked ONCE, before any call.
+
+    MISSING CREDENTIALS ARE A VERIFICATION FAILURE, not a quiet pass. They
+    used to leave every line on plain `feed`, which was indistinguishable from
+    a lane that genuinely has no live lookup — so an unconfigured deployment
+    looked exactly like a correctly-configured one and orders flowed through
+    the live gate having never been near it. A line that HAS a live lane and
+    did not get a live answer says so, whatever the reason.
+
+    A line with no live lane at all is untouched: nothing was attempted, so
+    nothing failed. See the `feed` / `feed_after_live_failure` split.
+  */
   let configured = false;
   try {
     configured = describeGatewayConfig("intersprint").configured;
   } catch {
     configured = false;
   }
-  if (!configured) return { lines: [...lines], anyLive: false, anyLiveFailure: false };
+  if (!configured) {
+    const marked = lines.map((line) =>
+      hasLiveLane(line) ? fallback(line, "not_configured") : line
+    );
+    return {
+      lines: marked,
+      anyLive: false,
+      anyLiveFailure: marked.some((l) => l.provenance.source === "feed_after_live_failure"),
+    };
+  }
 
   const client = getGatewayClient("intersprint");
 
@@ -292,13 +353,23 @@ export async function verifyBasketLive(
   let anyLiveFailure = false;
 
   for (const line of lines) {
-    const lane = line.internal?.laneCode ?? null;
     const ean = line.internal?.ean ?? null;
 
-    // No live lane, no EAN to address it with, or nothing priced to check:
-    // the feed answer is the only answer there is, and it is already correct.
-    if (line.internal === null || !lane || !LIVE_LANES.has(lane) || !ean) {
+    // No live lane at all: the stored answer is the only answer there is, and
+    // it is already correct. Nothing was attempted, so nothing failed.
+    if (!hasLiveLane(line)) {
       verified.push(line);
+      continue;
+    }
+
+    /*
+      A live lane with no EAN to address it with. This IS a failure: the lane
+      can be asked, we simply cannot form the question, and treating it as a
+      quiet pass would let the order gate believe it had been verified.
+    */
+    if (!ean) {
+      anyLiveFailure = true;
+      verified.push(fallback(line, "no_identifier"));
       continue;
     }
 
@@ -310,7 +381,7 @@ export async function verifyBasketLive(
 
     // The supplier's answer for this EAN, reused within a short window so a
     // burst of quantity edits on one tyre is one lookup rather than several.
-    const cached = liveCache.get(ean);
+    const cached = options.forceFresh ? undefined : liveCache.get(ean);
     if (cached && cached.expiresAt > now()) {
       anyLive = true;
       verified.push(applyLiveAnswer(line, cached.value));

@@ -27,6 +27,9 @@ const CLIENT_SAFE: Record<string, number> = {
   BASKET_QUANTITY_UNAVAILABLE: 409,
   BASKET_NOT_ORDERABLE: 409,
   PRICE_CHANGED: 409,
+  // 503, not 409: nothing about the request is wrong and retrying is the
+  // correct response. The customer is not told a tyre is out of stock.
+  LIVE_VERIFICATION_UNAVAILABLE: 503,
   DELIVERY_ADDRESS_INVALID: 400,
   CUSTOMER_NOT_FOUND: 404,
 };

@@ -589,6 +589,21 @@ export const EN_STRINGS: Record<string, string> = {
   "articoli nel carrello": "items in the basket",
   "Aggiunto al carrello": "Added to basket",
 
+  // --- live verification states (M21) -----------------------------------
+  "Riprova": "Try again",
+  "Non siamo riusciti a confermare disponibilit\u00e0 e prezzo aggiornati. Nessun ordine \u00e8 stato creato. Riprova tra poco.":
+    "We could not confirm current availability and price. No order was created. Please try again shortly.",
+  "Verifica disponibilit\u00e0 in tempo reale": "Real-time availability check",
+  "Configurata \u2014 gli ordini possono essere verificati.":
+    "Configured \u2014 orders can be verified.",
+  "NON configurata \u2014 nessun ordine cliente pu\u00f2 essere completato.":
+    "NOT configured \u2014 no customer order can be completed.",
+  "Endpoint": "Endpoint",
+  "Trasporto in chiaro (http). Le credenziali viaggiano non cifrate: vedi docs/SECURITY_FINDINGS.md n. 1.":
+    "Cleartext transport (http). Credentials travel unencrypted: see docs/SECURITY_FINDINGS.md no. 1.",
+  "Ambiente di test: le risposte non sono dati commerciali reali.":
+    "Test environment: responses are not real commercial data.",
+
   // --- customer commerce reskin (M21) -----------------------------------
   "pneumatico": "tyre",
   "Non disponibile": "Unavailable",

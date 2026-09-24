@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * The order path: what it refuses, whose data it can reach, and what it writes.
@@ -23,6 +23,28 @@ interface Capture {
   filters: [string, unknown][];
 }
 let captured: Capture[] = [];
+
+/*
+  THE GATEWAY IS MOCKED AS CONFIGURED AND ANSWERING.
+
+  The order gate now fails closed on live verification, so without this every
+  test below would stop at LIVE_VERIFICATION_UNAVAILABLE and none of them
+  would reach the behaviour it is actually about. The fixture lane is
+  `intersprint-feed`, which HAS a live lookup.
+
+  The fail-closed behaviour itself is asserted separately, at the end of this
+  file, by turning the gateway off.
+*/
+const stockByEan = vi.fn();
+const gatewayConfigured = vi.fn();
+
+vi.mock("@/lib/server/supplier-gateway", () => ({
+  getGatewayClient: () => ({ stockByEan: (...a: unknown[]) => stockByEan(...a) }),
+}));
+
+vi.mock("@/lib/suppliers/gateway/config", () => ({
+  describeGatewayConfig: () => gatewayConfigured(),
+}));
 
 vi.mock("@/lib/supabase/server-admin", () => ({
   createSupabaseAdminClient: () => ({
@@ -62,19 +84,23 @@ function product() {
     run_flat: false,
     old_dot: false,
     eprel_id: null,
+    // The identifier the live check addresses the supplier by. Without one the
+    // line is a live lane we cannot form a question for, which the order gate
+    // now treats as an unverified line.
+    ean: "1234567890123",
     weight_kg: 8.5,
     active: true,
   };
 }
 
-function listing(id: string, price: string, stock: number) {
+function listing(id: string, price: string, stock: number, adapter = "intersprint-feed") {
   return {
     id,
     supplier_article_id: `ART-${id}`,
     old_dot: false,
     catalogue_products: product(),
     suppliers: { name: "asdas" },
-    catalogue_import_runs: { adapter: "intersprint-feed" },
+    catalogue_import_runs: { adapter },
     supplier_listing_prices: [
       {
         purchase_price: price,
@@ -123,6 +149,8 @@ function builder(table: string, data: unknown, count = 0) {
 
 interface Scenario {
   listings?: unknown[];
+  /** The lane that wrote the default listing. `isb` has no live lookup. */
+  adapter?: string;
   customer?: unknown;
   location?: unknown;
   existingOrder?: unknown;
@@ -137,7 +165,7 @@ function mockAll(scenario: Scenario = {}) {
   });
   from.mockImplementation((table: string) => {
     if (table === "supplier_product_listings") {
-      return builder(table, scenario.listings ?? [listing("l-1", "100.00", 20)]);
+      return builder(table, scenario.listings ?? [listing("l-1", "100.00", 20, scenario.adapter)]);
     }
     if (table === "customers") {
       return builder(table, scenario.customer ?? { id: CUSTOMER, name: "Cliente", active: true });
@@ -170,6 +198,21 @@ function orderInput(overrides: Record<string, unknown> = {}) {
   };
 }
 
+beforeEach(async () => {
+  gatewayConfigured.mockReturnValue({ configured: true });
+  // Plenty in stock, at the same 100.00 cost the fixture listing carries, so
+  // the live check confirms rather than re-prices.
+  stockByEan.mockResolvedValue({
+    outcome: {
+      status: "data",
+      rows: [["SYS", "1234567890123", "TEST", "G", "205/55 R16", "EUR", "100.00", "125.00", "99"]],
+      truncated: false,
+    },
+  });
+  const { resetLiveAvailabilityCache } = await import("@/lib/server/live-availability");
+  resetLiveAvailabilityCache();
+});
+
 afterEach(() => vi.clearAllMocks());
 
 describe("basket resolution against supplier data", () => {
@@ -194,6 +237,16 @@ describe("basket resolution against supplier data", () => {
   it("still refuses to CREATE an order for a quantity the supplier cannot evidence", async () => {
     const { createPortalSalesOrder } = await import("@/lib/server/sales-orders");
     mockAll({ listings: [listing("l-1", "100.00", 6)] });
+    // The live check agrees with the stored figure. (When it disagrees the
+    // live answer wins — that is what the live check is for, and it is
+    // asserted in tests/live-availability.test.ts.)
+    stockByEan.mockResolvedValue({
+      outcome: {
+        status: "data",
+        rows: [["SYS", "1234567890123", "TEST", "G", "205/55 R16", "EUR", "100.00", "125.00", "6"]],
+        truncated: false,
+      },
+    });
 
     await expect(
       createPortalSalesOrder(
@@ -308,12 +361,13 @@ describe("the order is created at the price the customer accepted", () => {
 
 describe("what was actually verified is recorded on the order", () => {
   /**
-   * The gateway is unconfigured in this environment, so no live call is made
-   * and every line keeps its feed observation. That is the honest answer and
-   * the order must say so rather than implying a supplier confirmation it
-   * never had.
+   * PREMISE CHANGED DELIBERATELY. These used to assert "feed", because the
+   * gateway was unconfigured in the test environment and the order path
+   * accepted that. It no longer does: an order that reaches the database has
+   * been confirmed live, and the snapshot records that rather than implying
+   * it.
    */
-  it("records the feed as the source when no live lane answered", async () => {
+  it("records that the figures were confirmed live", async () => {
     const { createPortalSalesOrder } = await import("@/lib/server/sales-orders");
     mockAll();
 
@@ -321,13 +375,13 @@ describe("what was actually verified is recorded on the order", () => {
     const [, args] = rpc.mock.calls[0] as [string, Record<string, unknown>];
     const snapshot = args.p_pricing_snapshot as Record<string, unknown>;
 
-    expect(snapshot.availability_verified).toBe("feed");
-    expect(snapshot.availability_live_lines).toBe(false);
+    expect(snapshot.availability_verified).toBe("live");
+    expect(snapshot.availability_live_lines).toBe(true);
     expect(snapshot.availability_live_failure).toBe(false);
     expect(snapshot.availability_lines).toHaveLength(1);
   });
 
-  it("names the observation each line rested on", async () => {
+  it("names the moment each line was confirmed", async () => {
     const { createPortalSalesOrder } = await import("@/lib/server/sales-orders");
     mockAll();
 
@@ -336,9 +390,67 @@ describe("what was actually verified is recorded on the order", () => {
     const lines = (args.p_pricing_snapshot as Record<string, unknown>)
       .availability_lines as Record<string, unknown>[];
 
-    expect(lines[0].source).toBe("feed");
+    expect(lines[0].source).toBe("live");
     expect(lines[0].observed_at, "a figure with no time is not a promise").toBeTruthy();
     expect(lines[0].live_failure_reason).toBeNull();
+  });
+
+  /**
+   * THE FAIL-CLOSED GATE, asserted directly.
+   *
+   * No live confirmation, no order — whatever the stored figure says. The
+   * alternative is presenting imported catalogue data as though the supplier
+   * had confirmed it, and letting an order through the live-validation gate
+   * precisely because the gate could not run.
+   */
+  it("refuses to create an order when live verification did not run", async () => {
+    const { createPortalSalesOrder } = await import("@/lib/server/sales-orders");
+    mockAll();
+
+    for (const outage of [
+      () => gatewayConfigured.mockReturnValue({ configured: false }),
+      () => stockByEan.mockRejectedValue(new Error("timeout")),
+      () =>
+        stockByEan.mockResolvedValue({
+          outcome: { status: "error", code: "90", description: "not authorised" },
+        }),
+      () => stockByEan.mockResolvedValue({ outcome: { status: "malformed", reason: "NO_END" } }),
+    ]) {
+      rpc.mockClear();
+      const { resetLiveAvailabilityCache } = await import("@/lib/server/live-availability");
+      resetLiveAvailabilityCache();
+      gatewayConfigured.mockReturnValue({ configured: true });
+      stockByEan.mockReset();
+      outage();
+
+      await expect(createPortalSalesOrder(orderInput())).rejects.toMatchObject({
+        code: "LIVE_VERIFICATION_UNAVAILABLE",
+      });
+      expect(rpc, "no order may be written").not.toHaveBeenCalled();
+    }
+  });
+
+  /**
+   * A lane with NO live lookup is a different case and still orderable (D24):
+   * nothing was attempted, so nothing failed.
+   *
+   * `deldo-feed`, not `isb`. The legacy workbook adapter attributes to the
+   * SAME `intersprint` lane as the live feed — one commercial relationship
+   * imported two ways — so `isb` listings are verified like any other, and a
+   * test using them here would assert the opposite of what happens.
+   */
+  it("still creates an order for a lane that has no live lookup", async () => {
+    const { createPortalSalesOrder } = await import("@/lib/server/sales-orders");
+    mockAll({ adapter: "deldo-feed" });
+    gatewayConfigured.mockReturnValue({ configured: false });
+
+    const order = await createPortalSalesOrder(orderInput());
+    expect(order.order_number).toBe(1000);
+    expect(stockByEan).not.toHaveBeenCalled();
+
+    const [, args] = rpc.mock.calls[0] as [string, Record<string, unknown>];
+    const snapshot = args.p_pricing_snapshot as Record<string, unknown>;
+    expect(snapshot.availability_verified).toBe("feed");
   });
 });
 

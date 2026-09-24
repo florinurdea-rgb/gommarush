@@ -893,9 +893,9 @@ describe("what gets checked live, and when", () => {
     );
   });
 
-  it("uses the same two stages at order creation", () => {
+  it("uses the same two stages at order creation, but never from cache", () => {
     const orders = read("src/lib/server/sales-orders.ts");
-    expect(orders).toContain("verifyBasketLive(resolved)");
+    expect(orders).toContain("verifyBasketLive(resolved, Date.now, { forceFresh: true })");
   });
 
   /** One implementation, called from both places. */
@@ -921,7 +921,7 @@ describe("what gets checked live, and when", () => {
   it("answers a repeated submit from the existing order, before verifying", () => {
     const source = read("src/lib/server/sales-orders.ts");
     expect(source.indexOf("findByIdempotencyKey")).toBeLessThan(
-      source.indexOf("verifyBasketLive(resolved)")
+      source.indexOf("verifyBasketLive(resolved,")
     );
   });
 
