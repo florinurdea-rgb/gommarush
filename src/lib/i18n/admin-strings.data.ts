@@ -587,6 +587,10 @@ export const EN_STRINGS: Record<string, string> = {
   // --- customer portal (M12+): customer-facing, not operational ----------
   "Aggiunto": "Added",
   "articoli nel carrello": "items in the basket",
+  "Aggiunto al carrello": "Added to basket",
+  "Vai al carrello": "Go to basket",
+  "Larghezza, spalla e cerchio sono obbligatori per vedere i risultati.":
+    "Width, aspect ratio and rim are required to see results.",
   "Impossibile salvare il carrello: il browser blocca l'archiviazione locale.":
     "Could not save the basket: your browser is blocking local storage.",
 

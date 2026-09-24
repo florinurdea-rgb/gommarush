@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   catalogueViewState,
   hasCompleteDimensions,
+  sameFacets,
   shouldQueryCatalogue,
 } from "@/lib/customer/catalogue-view";
 import { formatSalesOrderNumber, parseSalesOrderNumber } from "@/lib/commerce/order-number";
@@ -352,6 +353,111 @@ describe("an applied filter is never blanked out of its own control", () => {
   });
 });
 
+describe("a dropdown is not yanked out from under the customer", () => {
+  const read = (path: string) => require("node:fs").readFileSync(path, "utf8") as string;
+  const CATALOGUE = "src/components/customer/CustomerCatalogue.tsx";
+
+  /**
+   * REGRESSION: "the dropdowns reset as I browse through them."
+   *
+   * Distinct from the blanking bug above. Picking a width starts a debounced
+   * request; its response lands several hundred milliseconds later, by which
+   * time the customer has already opened the NEXT dropdown. Rewriting the
+   * options of a live popup closes it in every browser, so the list being
+   * scrolled simply disappeared.
+   */
+  it("freezes a facet list for as long as its control has focus", () => {
+    const source = read(CATALOGUE);
+    expect(source).toContain("const values = frozen ?? facetValues;");
+    expect(source).toContain("onFocus={() => setFrozen(facetValues)}");
+  });
+
+  it("releases the freeze on change and on blur, so the next open is current", () => {
+    const source = read(CATALOGUE);
+    expect(source).toContain("onBlur={() => setFrozen(null)}");
+    expect(source).toContain("setFrozen(null);");
+  });
+
+  /** The freeze is cosmetic. It must never touch what is being searched for. */
+  it("freezes only what is displayed, never the applied filter", () => {
+    const source = read(CATALOGUE);
+    const select = source.slice(source.indexOf("function Select({"));
+    expect(select).toContain("set(e.target.value)");
+    // `frozen` is read for the option list and nowhere near the value or the
+    // query string.
+    expect(select).not.toContain("value={frozen");
+  });
+
+  it("keeps the previous facet object when the response changed nothing", () => {
+    const source = read(CATALOGUE);
+    expect(source).toContain("sameFacets(current, j.facets)");
+  });
+});
+
+describe("facet equality", () => {
+  const facets = {
+    widths: [195, 205],
+    aspectRatios: [55, 60],
+    rims: [16, 17],
+    brands: ["MICHELIN", "SUNNY"],
+  };
+
+  it("recognises an identical payload, so nothing re-renders", () => {
+    expect(sameFacets(facets, { ...facets, widths: [195, 205] })).toBe(true);
+  });
+
+  it("recognises a genuinely changed list", () => {
+    expect(sameFacets(facets, { ...facets, widths: [195] })).toBe(false);
+    expect(sameFacets(facets, { ...facets, brands: ["MICHELIN"] })).toBe(false);
+  });
+
+  /** The server sorts these, so a different order is a different answer. */
+  it("treats a reordered list as different", () => {
+    expect(sameFacets(facets, { ...facets, rims: [17, 16] })).toBe(false);
+  });
+
+  it("never claims equality with a missing payload", () => {
+    expect(sameFacets(facets, undefined)).toBe(false);
+    expect(sameFacets(facets, null)).toBe(false);
+  });
+});
+
+describe("the filter bar is one sticky row of labelled selections", () => {
+  const read = (path: string) => require("node:fs").readFileSync(path, "utf8") as string;
+  const CATALOGUE = "src/components/customer/CustomerCatalogue.tsx";
+
+  /**
+   * A customer comparing tyres scrolls. A filter bar that scrolls away turns
+   * every adjustment into a trip back to the top of the page.
+   */
+  it("pins the bar to the top of the viewport", () => {
+    expect(read(CATALOGUE)).toContain("sticky top-0 z-30");
+  });
+
+  it("puts a small label above each field rather than beside it", () => {
+    const source = read(CATALOGUE);
+    expect(source).toContain("function Field({");
+    expect(source).toContain('className="block text-[11px] font-bold uppercase tracking-wide text-ink-soft"');
+  });
+
+  it("lays the controls out as a single row at full width", () => {
+    const source = read(CATALOGUE);
+    // Seven columns when the tier filter is configured, six when it is not.
+    expect(source).toContain('tiersConfigured ? "lg:grid-cols-7" : "lg:grid-cols-6"');
+  });
+
+  /**
+   * Brand was a free-text input against a datalist, so a typed name that
+   * matched no brand silently emptied the results. It is a selection now,
+   * built from the same dependent facet query as the sizes.
+   */
+  it("makes brand a selection too", () => {
+    const source = read(CATALOGUE);
+    expect(source).toContain("facetValues={facets.brands}");
+    expect(source, "the datalist is gone").not.toContain("<datalist");
+  });
+});
+
 describe("adding to the basket is visible", () => {
   const read = (path: string) => require("node:fs").readFileSync(path, "utf8") as string;
 
@@ -380,6 +486,87 @@ describe("adding to the basket is visible", () => {
     expect(link).toContain("BASKET_CHANGED_EVENT");
     // ...and cross-tab, so two open tabs cannot show two different baskets.
     expect(link).toContain('addEventListener("storage"');
+  });
+});
+
+describe("the confirmation a customer cannot miss", () => {
+  const read = (path: string) => require("node:fs").readFileSync(path, "utf8") as string;
+  const CATALOGUE = "src/components/customer/CustomerCatalogue.tsx";
+
+  /**
+   * The first fix flipped the button to the SECONDARY variant, which on a
+   * white card is close enough to its resting state to be missed — which is
+   * how "I added it and nothing happened" survived it.
+   */
+  it("confirms on the card with a changed colour, word and icon", () => {
+    const source = read(CATALOGUE);
+    expect(source).toContain('"bg-state-success text-white"');
+    expect(source).toContain("<CheckIcon");
+    expect(source).toContain("ring-2 ring-state-success");
+  });
+
+  it("raises a toast naming what was added and where it went", () => {
+    const source = read(CATALOGUE);
+    expect(source).toContain("function AddedToast(");
+    expect(source).toContain('tr("Aggiunto al carrello")');
+    expect(source).toContain('href="/account/basket"');
+  });
+
+  /** A confirmation, not a problem: announced after the current phrase. */
+  it("announces the toast politely rather than interrupting", () => {
+    const source = read(CATALOGUE);
+    const toast = source.slice(source.indexOf("function AddedToast("));
+    expect(toast).toContain('role="status"');
+    expect(toast).toContain('aria-live="polite"');
+    expect(toast, "an alert would interrupt the screen reader").not.toContain('role="alert"');
+  });
+
+  /** Nothing may accumulate in the corner of a long browse. */
+  it("removes the toast on a timer, and only its own", () => {
+    const source = read(CATALOGUE);
+    expect(source).toContain("setToast((current) => (current?.id === id ? null : current))");
+  });
+
+  it("motion is decoration: the toast still says its piece without it", () => {
+    const css = read("app/globals.css");
+    expect(css).toContain(".gr-toast");
+    const reduced = css.slice(css.indexOf(".gr-toast"));
+    expect(reduced).toContain("prefers-reduced-motion: reduce");
+    expect(reduced, "reduced motion must not hide the confirmation").not.toContain("display: none");
+  });
+});
+
+describe("the basket in the top bar", () => {
+  const read = (path: string) => require("node:fs").readFileSync(path, "utf8") as string;
+  const LINK = "src/components/customer/CustomerBasketLink.tsx";
+
+  it("carries an ordinary cart icon before the count", () => {
+    const source = read(LINK);
+    expect(source).toContain("<CartIcon");
+    // Icon first, then the label, then the badge.
+    expect(source.indexOf("<CartIcon")).toBeLessThan(source.indexOf('tr("Carrello")'));
+    expect(source.indexOf('tr("Carrello")')).toBeLessThan(source.indexOf("aria-label="));
+  });
+
+  it("uses one cart mark everywhere, not a second drawing of the same thing", () => {
+    const icon = read("src/components/customer/CartIcon.tsx");
+    expect(icon).toContain("export function CartIcon");
+    expect(read(LINK)).toContain('from "@/components/customer/CartIcon"');
+    expect(read("src/components/customer/CustomerCatalogue.tsx")).toContain(
+      'from "@/components/customer/CartIcon"'
+    );
+  });
+
+  /** Decorative: the count beside it already carries the meaning. */
+  it("hides the icon from assistive technology", () => {
+    expect(read("src/components/customer/CartIcon.tsx")).toContain('aria-hidden="true"');
+  });
+
+  /** Growing on a REMOVAL would celebrate the wrong event. */
+  it("draws the eye only when the count goes up", () => {
+    const source = read(LINK);
+    expect(source).toContain("next > previous.current");
+    expect(source).toContain("scale-125");
   });
 });
 

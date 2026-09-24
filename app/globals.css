@@ -91,4 +91,34 @@
       display: none;
     }
   }
+
+  /* ---------------------------------------------------------------------
+     Add-to-basket toast (src/components/customer/CustomerCatalogue.tsx)
+     ------------------------------------------------------------------ */
+
+  /* Rises into place rather than appearing. A confirmation that simply blinks
+     into existence at the bottom of a long list is easy to read as a page
+     artefact; the movement is what draws the eye to it. */
+  .gr-toast {
+    animation: gr-toast-in 180ms ease-out both;
+  }
+
+  @keyframes gr-toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* The toast is a message, not an animation. With motion reduced it is simply
+     there — never removed, because it is the confirmation that the add worked. */
+  @media (prefers-reduced-motion: reduce) {
+    .gr-toast {
+      animation: none;
+    }
+  }
 }
