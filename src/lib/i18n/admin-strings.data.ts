@@ -588,6 +588,45 @@ export const EN_STRINGS: Record<string, string> = {
   "Aggiunto": "Added",
   "articoli nel carrello": "items in the basket",
   "Aggiunto al carrello": "Added to basket",
+
+  // --- availability verification (M20) ----------------------------------
+  "Verificato ora con il fornitore": "Checked now with the supplier",
+  "Fornitore non raggiungibile \u2014 dato del": "Supplier unreachable \u2014 figure from",
+  "Fornitore non raggiungibile \u2014 dato archiviato":
+    "Supplier unreachable \u2014 stored figure",
+  "Disponibilit\u00e0 rilevata alle": "Availability recorded at",
+  "Disponibilit\u00e0 da rilevare": "Availability not yet recorded",
+  "Non disponibile in stock": "Out of stock",
+  "Questo articolo non \u00e8 pi\u00f9 a catalogo.": "This item is no longer in the catalogue.",
+  "Questo pneumatico non \u00e8 al momento acquistabile.":
+    "This tyre cannot be bought at the moment.",
+  "Vedi alternative": "See alternatives",
+  "Disponibili solo": "Only",
+  "su": "of",
+  "pz": "pcs",
+  "Porta a": "Set to",
+  "Articolo non disponibile": "Item unavailable",
+  "Il prezzo \u00e8 cambiato": "The price has changed",
+  "Al momento della conferma il totale era": "When you confirmed, the total was",
+  "Il prezzo aggiornato dal fornitore \u00e8": "The updated supplier price is",
+  "Nessun ordine \u00e8 stato creato. Conferma di nuovo per procedere al nuovo importo.":
+    "No order was created. Confirm again to proceed at the new amount.",
+  "Un articolo non \u00e8 disponibile nella quantit\u00e0 richiesta.":
+    "One item is not available in the quantity requested.",
+  "articoli non sono disponibili nella quantit\u00e0 richiesta.":
+    "items are not available in the quantity requested.",
+  "Un articolo del carrello non \u00e8 disponibile nella quantit\u00e0 richiesta.":
+    "One basket item is not available in the quantity requested.",
+  "articoli del carrello non sono disponibili nella quantit\u00e0 richiesta.":
+    "basket items are not available in the quantity requested.",
+  "Aggiorna o rimuovi gli articoli segnalati per continuare.":
+    "Update or remove the flagged items to continue.",
+  "Torna al carrello per aggiornare le quantit\u00e0 o scegliere un'alternativa.":
+    "Go back to the basket to change quantities or pick an alternative.",
+  "Torna al carrello": "Back to basket",
+  "Verifica con il fornitore\u2026": "Checking with the supplier\u2026",
+  "Disponibilit\u00e0 e prezzo vengono verificati con il fornitore alla conferma.":
+    "Availability and price are checked with the supplier on confirmation.",
   "Azzera": "Clear",
   "Rimuovi i filtri": "Remove filters",
   "Ricerca pneumatici in corso\u2026": "Searching for tyres\u2026",

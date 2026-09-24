@@ -1,7 +1,13 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/server-admin";
 import type { CustomerSession } from "@/lib/auth/customer-session";
-import { customerBasketPayload, resolveBasket, type BasketLineInput } from "@/lib/server/customer-basket";
+import {
+  basketIsOrderable,
+  customerBasketPayload,
+  resolveBasket,
+  type BasketLineInput,
+} from "@/lib/server/customer-basket";
+import { verifyBasketLive } from "@/lib/server/live-availability";
 import { isDeliverableLocation } from "@/lib/commerce/delivery-address";
 import { fulfilmentPromise, type FulfilmentClass } from "@/lib/commerce/fulfilment";
 import { DEFAULT_PRICING_SETTINGS } from "@/lib/pricing/settings";
@@ -54,6 +60,40 @@ interface CreateInput {
   fulfilmentClass: FulfilmentClass;
   note: string | null;
   idempotencyKey: string;
+  /**
+   * The grand total the customer was shown and agreed to, in cents.
+   *
+   * THE PRICE GATE, and it is enforced here rather than in the browser. The
+   * live check at confirm can move a price — a supplier changed it, or the
+   * feed landed between adding the tyre and paying for it — and the customer
+   * must not be able to press a button that creates an order at a number they
+   * never saw. The server recomputes the total after verification and refuses
+   * if it does not match what was accepted.
+   *
+   * Owner decision, 2026-09-24: the NEW price wins, and the change is shown
+   * before the confirm re-enables. This field is what makes "shown" real.
+   */
+  acceptedTotalCents: number;
+}
+
+/**
+ * A refusal the customer is allowed to read, carrying the state that caused it.
+ *
+ * A bare Error cannot hand back the recomputed basket, and without it the
+ * checkout screen can only say "something changed" — which is exactly the
+ * message that makes a customer abandon rather than adjust.
+ */
+export class OrderRefusal extends Error {
+  constructor(
+    readonly code:
+      | "PRICING_NOT_FINAL"
+      | "BASKET_NOT_ORDERABLE"
+      | "PRICE_CHANGED",
+    readonly basket: ReturnType<typeof customerBasketPayload>
+  ) {
+    super(code);
+    this.name = "OrderRefusal";
+  }
 }
 
 async function findByIdempotencyKey(
@@ -114,16 +154,52 @@ export async function createPortalSalesOrder(input: CreateInput): Promise<Create
   if (!customer || !customer.active) throw new Error("CUSTOMER_NOT_FOUND");
   if (!isDeliverableLocation(location)) throw new Error("DELIVERY_ADDRESS_INVALID");
 
+  /*
+    IDEMPOTENCY IS CHECKED BEFORE ANYTHING ELSE.
+
+    It used to run after the basket was resolved and priced. A double-click
+    therefore re-resolved the whole basket — and now would also make a second
+    round of live supplier calls — before discovering that the first click had
+    already created the order. The answer to a retry is the order that already
+    exists, and nothing needs to be recomputed to give it.
+  */
+  const existing = await findByIdempotencyKey(input.session.customerId, input.idempotencyKey);
+  if (existing) return existing;
+
   const resolved = await resolveBasket(input.lines);
-  const basket = customerBasketPayload(resolved);
+
+  /*
+    THE LIVE CHECK, at the last possible moment.
+
+    Read-only protocol 103, Inter-Sprint lane only, failing back to the stored
+    observation rather than blocking the sale. See live-availability.ts for the
+    owner decisions behind each of those three constraints.
+  */
+  const verification = await verifyBasketLive(resolved);
+  const orderLines = [...verification.lines];
+  const basket = customerBasketPayload(orderLines);
+
+  /*
+    Availability first, price second, and both before the monetary gate.
+
+    Order matters for the message the customer gets: a basket holding a tyre
+    that just went out of stock should say so, not report a pricing problem
+    caused by that line having no price to contribute.
+  */
+  if (!basketIsOrderable(orderLines)) {
+    throw new OrderRefusal("BASKET_NOT_ORDERABLE", basket);
+  }
 
   // Commercial safety gate: never label or persist an incomplete amount as a
   // final order total. While PFU and its VAT treatment are unresolved this
   // refuses every order, which is the intended behaviour and not a bug.
-  if (basket.monetaryStatus !== "complete") throw new Error("PRICING_NOT_FINAL");
+  if (basket.monetaryStatus !== "complete") {
+    throw new OrderRefusal("PRICING_NOT_FINAL", basket);
+  }
 
-  const existing = await findByIdempotencyKey(input.session.customerId, input.idempotencyKey);
-  if (existing) return existing;
+  if (basket.grandTotalCents !== input.acceptedTotalCents) {
+    throw new OrderRefusal("PRICE_CHANGED", basket);
+  }
 
   const now = new Date().toISOString();
 
@@ -159,6 +235,26 @@ export async function createPortalSalesOrder(input: CreateInput): Promise<Create
       pfu_estimated: basket.pfuEstimated,
       delivery_promise_max_days: fulfilmentPromise(input.fulfilmentClass).maxDays,
       snapshotted_at: now,
+
+      /*
+        WHAT WAS ACTUALLY CHECKED, recorded per order.
+
+        Not decoration. When a customer disputes an availability promise, or
+        an operator wonders why a confirmed order could not be sourced, the
+        answer turns on whether the supplier was asked at the moment of sale
+        or whether a stored observation stood in. `availability_verified`
+        is the weakest claim any line could make, so it never overstates.
+      */
+      availability_verified: basket.verifiedSource,
+      availability_live_lines: verification.anyLive,
+      availability_live_failure: verification.anyLiveFailure,
+      availability_lines: orderLines.map((line) => ({
+        product_id: line.input.productId,
+        source: line.provenance.source,
+        observed_at: line.provenance.observedAt,
+        live_failure_reason: line.provenance.liveFailureReason ?? null,
+      })),
+      accepted_total_cents: input.acceptedTotalCents,
     },
     p_fulfilment_class: input.fulfilmentClass,
     p_payment_method: input.paymentMethod,
@@ -182,23 +278,29 @@ export async function createPortalSalesOrder(input: CreateInput): Promise<Create
     p_vat_rate_percent: DEFAULT_PRICING_SETTINGS.vatRatePercent,
     p_delivery_promise_max_days: fulfilmentPromise(input.fulfilmentClass).maxDays,
 
-    p_items: resolved.map((line, index) => ({
+    /*
+      Every line here is `available` — basketIsOrderable refused above
+      otherwise — so `customer` and `internal` are both present. The
+      non-null assertions record that fact rather than inventing a fallback
+      amount, which is the one thing that must never happen on an order line.
+    */
+    p_items: orderLines.map((line, index) => ({
       line_number: index + 1,
       catalogue_product_id: line.input.productId,
       // Internal sourcing reproducibility. Never reaches a customer payload.
-      source_listing_id: line.internal.supplierListingId,
+      source_listing_id: line.internal!.supplierListingId,
       quantity: line.input.quantity,
-      tyre_snapshot: line.customer.tyre,
+      tyre_snapshot: line.customer!.tyre,
       condition_snapshot: line.input.oldDot ? "older_dot" : "normal",
-      unit_tyre_net_cents: line.customer.tyreSaleNetCents,
-      unit_pfu_cents: line.customer.pfuAmountCents,
-      unit_vat_cents: line.customer.vatAmountCents,
-      unit_total_cents: line.customer.customerTotalCents,
+      unit_tyre_net_cents: line.customer!.tyreSaleNetCents,
+      unit_pfu_cents: line.customer!.pfuAmountCents,
+      unit_vat_cents: line.customer!.vatAmountCents,
+      unit_total_cents: line.customer!.customerTotalCents,
       pricing_status: basket.monetaryStatus,
-      pfu_status: line.customer.pfuStatus,
-      pfu_estimate_version: line.customer.pfuEstimateVersion,
+      pfu_status: line.customer!.pfuStatus,
+      pfu_estimate_version: line.customer!.pfuEstimateVersion,
       vat_rate_percent: DEFAULT_PRICING_SETTINGS.vatRatePercent,
-      price_observed_at: line.internal.costObservedAt,
+      price_observed_at: line.internal!.costObservedAt,
     })),
   };
 

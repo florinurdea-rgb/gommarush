@@ -164,20 +164,43 @@ function orderInput(overrides: Record<string, unknown> = {}) {
     fulfilmentClass: "standard" as const,
     note: null,
     idempotencyKey: "idem-key-0001",
+    // 4 x 150.06 (120.00 net + 3.00 estimated PFU + 27.06 VAT).
+    acceptedTotalCents: 60_024,
     ...overrides,
   };
 }
 
 afterEach(() => vi.clearAllMocks());
 
-describe("basket resolution against live supplier data", () => {
-  it("refuses a quantity the supplier cannot evidence", async () => {
+describe("basket resolution against supplier data", () => {
+  /**
+   * THESE TWO USED TO ASSERT A THROW, and the change is the point.
+   *
+   * resolveBasket rejected the WHOLE basket the moment one line ran short, so
+   * a customer with four tyres in the basket got one banner naming none of
+   * them. The refusal has not been weakened — an order for 20 when 6 exist is
+   * still impossible, and the tests below prove it at the point where it
+   * matters, which is order creation. What changed is that the basket can now
+   * say WHICH line and BY HOW MUCH, which is the whole of the fix.
+   */
+  it("reports how short a line is rather than failing the basket", async () => {
     const { resolveBasket } = await import("@/lib/server/customer-basket");
     mockAll({ listings: [listing("l-1", "100.00", 6)] });
 
+    const resolved = await resolveBasket([{ productId: PRODUCT, oldDot: false, quantity: 20 }]);
+    expect(resolved[0].availability).toEqual({ state: "limited", availableQuantity: 6 });
+  });
+
+  it("still refuses to CREATE an order for a quantity the supplier cannot evidence", async () => {
+    const { createPortalSalesOrder } = await import("@/lib/server/sales-orders");
+    mockAll({ listings: [listing("l-1", "100.00", 6)] });
+
     await expect(
-      resolveBasket([{ productId: PRODUCT, oldDot: false, quantity: 20 }])
-    ).rejects.toThrow("BASKET_QUANTITY_UNAVAILABLE");
+      createPortalSalesOrder(
+        orderInput({ lines: [{ productId: PRODUCT, oldDot: false, quantity: 20 }] })
+      )
+    ).rejects.toMatchObject({ code: "BASKET_NOT_ORDERABLE" });
+    expect(rpc, "no order may be written").not.toHaveBeenCalled();
   });
 
   it("sources from a dearer listing that can actually fill the order", async () => {
@@ -186,7 +209,8 @@ describe("basket resolution against live supplier data", () => {
     mockAll({ listings: [listing("cheap-but-short", "100.00", 6), listing("dearer", "150.00", 40)] });
 
     const resolved = await resolveBasket([{ productId: PRODUCT, oldDot: false, quantity: 20 }]);
-    expect(resolved[0].internal.supplierListingId).toBe("dearer");
+    expect(resolved[0].internal?.supplierListingId).toBe("dearer");
+    expect(resolved[0].availability.state).toBe("available");
   });
 
   it("prefers the cheapest listing that can fill the order", async () => {
@@ -194,17 +218,32 @@ describe("basket resolution against live supplier data", () => {
     mockAll({ listings: [listing("dearer", "150.00", 40), listing("cheaper", "100.00", 40)] });
 
     const resolved = await resolveBasket([{ productId: PRODUCT, oldDot: false, quantity: 4 }]);
-    expect(resolved[0].internal.supplierListingId).toBe("cheaper");
-    expect(resolved[0].customer.tyreSaleNetCents).toBe(12_000);
+    expect(resolved[0].internal?.supplierListingId).toBe("cheaper");
+    expect(resolved[0].customer?.tyreSaleNetCents).toBe(12_000);
   });
 
-  it("refuses a product below the minimum offer quantity", async () => {
+  it("marks a product below the minimum offer quantity unavailable", async () => {
     const { resolveBasket } = await import("@/lib/server/customer-basket");
     mockAll({ listings: [listing("l-1", "100.00", 3)] });
 
+    const resolved = await resolveBasket([{ productId: PRODUCT, oldDot: false, quantity: 1 }]);
+    expect(resolved[0].availability).toEqual({ state: "unavailable", reason: "not_stocked" });
+    // The tyre survives the verdict, so the line can still name itself and
+    // offer alternatives in its own size.
+    expect(resolved[0].tyre?.sizeDisplay).toBe("205/55 R16");
+    expect(resolved[0].customer, "nothing unsellable may carry a price").toBeNull();
+  });
+
+  it("still refuses to CREATE an order below the minimum offer quantity", async () => {
+    const { createPortalSalesOrder } = await import("@/lib/server/sales-orders");
+    mockAll({ listings: [listing("l-1", "100.00", 3)] });
+
     await expect(
-      resolveBasket([{ productId: PRODUCT, oldDot: false, quantity: 1 }])
-    ).rejects.toThrow("BASKET_ITEM_UNAVAILABLE");
+      createPortalSalesOrder(
+        orderInput({ lines: [{ productId: PRODUCT, oldDot: false, quantity: 1 }] })
+      )
+    ).rejects.toMatchObject({ code: "BASKET_NOT_ORDERABLE" });
+    expect(rpc).not.toHaveBeenCalled();
   });
 
   it("pairs the customer line with the listing it actually sourced", async () => {
@@ -214,8 +253,92 @@ describe("basket resolution against live supplier data", () => {
     mockAll({ listings: [listing("l-a", "100.00", 40), listing("l-b", "100.00", 40)] });
 
     const resolved = await resolveBasket([{ productId: PRODUCT, oldDot: false, quantity: 4 }]);
-    expect(resolved[0].internal.supplierListingId).toBe("l-a");
-    expect(resolved[0].customer.tyreSaleNetCents).toBe(resolved[0].internal.tyreSaleNetCents);
+    expect(resolved[0].internal?.supplierListingId).toBe("l-a");
+    expect(resolved[0].customer?.tyreSaleNetCents).toBe(resolved[0].internal?.tyreSaleNetCents);
+  });
+});
+
+describe("the order is created at the price the customer accepted", () => {
+  /**
+   * The gate that makes "the new price wins, shown before confirm" real. A UI
+   * convention cannot guarantee it — the customer's browser is not trusted —
+   * so the accepted figure travels with the request and the server refuses
+   * anything else.
+   */
+  it("refuses when the recomputed total is not the one that was accepted", async () => {
+    const { createPortalSalesOrder } = await import("@/lib/server/sales-orders");
+    mockAll();
+
+    await expect(
+      createPortalSalesOrder(orderInput({ acceptedTotalCents: 59_000 }))
+    ).rejects.toMatchObject({ code: "PRICE_CHANGED" });
+    expect(rpc, "no order at a price nobody agreed to").not.toHaveBeenCalled();
+  });
+
+  it("hands the recomputed basket back with the refusal", async () => {
+    const { createPortalSalesOrder } = await import("@/lib/server/sales-orders");
+    mockAll();
+
+    await createPortalSalesOrder(orderInput({ acceptedTotalCents: 59_000 })).catch(
+      (error: { code: string; basket: { grandTotalCents: number | null } }) => {
+        // Without this the checkout can only say "something changed".
+        expect(error.basket.grandTotalCents).toBe(60_024);
+      }
+    );
+  });
+
+  it("creates the order when the accepted total matches", async () => {
+    const { createPortalSalesOrder } = await import("@/lib/server/sales-orders");
+    mockAll();
+
+    const order = await createPortalSalesOrder(orderInput());
+    expect(order.order_number).toBe(1000);
+  });
+
+  it("records the accepted total on the order, not just checks it", async () => {
+    const { createPortalSalesOrder } = await import("@/lib/server/sales-orders");
+    mockAll();
+
+    await createPortalSalesOrder(orderInput());
+    const [, args] = rpc.mock.calls[0] as [string, Record<string, unknown>];
+    const snapshot = args.p_pricing_snapshot as Record<string, unknown>;
+    expect(snapshot.accepted_total_cents).toBe(60_024);
+  });
+});
+
+describe("what was actually verified is recorded on the order", () => {
+  /**
+   * The gateway is unconfigured in this environment, so no live call is made
+   * and every line keeps its feed observation. That is the honest answer and
+   * the order must say so rather than implying a supplier confirmation it
+   * never had.
+   */
+  it("records the feed as the source when no live lane answered", async () => {
+    const { createPortalSalesOrder } = await import("@/lib/server/sales-orders");
+    mockAll();
+
+    await createPortalSalesOrder(orderInput());
+    const [, args] = rpc.mock.calls[0] as [string, Record<string, unknown>];
+    const snapshot = args.p_pricing_snapshot as Record<string, unknown>;
+
+    expect(snapshot.availability_verified).toBe("feed");
+    expect(snapshot.availability_live_lines).toBe(false);
+    expect(snapshot.availability_live_failure).toBe(false);
+    expect(snapshot.availability_lines).toHaveLength(1);
+  });
+
+  it("names the observation each line rested on", async () => {
+    const { createPortalSalesOrder } = await import("@/lib/server/sales-orders");
+    mockAll();
+
+    await createPortalSalesOrder(orderInput());
+    const [, args] = rpc.mock.calls[0] as [string, Record<string, unknown>];
+    const lines = (args.p_pricing_snapshot as Record<string, unknown>)
+      .availability_lines as Record<string, unknown>[];
+
+    expect(lines[0].source).toBe("feed");
+    expect(lines[0].observed_at, "a figure with no time is not a promise").toBeTruthy();
+    expect(lines[0].live_failure_reason).toBeNull();
   });
 });
 
@@ -273,7 +396,9 @@ describe("order creation records how its money was arrived at", () => {
       .mockReturnValue({ ...settings.DEFAULT_PRICING_SETTINGS, pfuVatBase: "unresolved" });
 
     try {
-      await expect(createPortalSalesOrder(orderInput())).rejects.toThrow("PRICING_NOT_FINAL");
+      await expect(createPortalSalesOrder(orderInput())).rejects.toMatchObject({
+        code: "PRICING_NOT_FINAL",
+      });
       expect(rpc).not.toHaveBeenCalled();
     } finally {
       spy.mockRestore();

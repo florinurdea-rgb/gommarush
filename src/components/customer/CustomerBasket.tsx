@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/Button";
+import { LineAvailability, type LineState, type VerifiedSource } from "@/components/customer/LineAvailability";
 import { readBasket, writeBasket, type StoredBasketLine } from "@/lib/customer/basket";
 import { useTr } from "@/lib/i18n/tr";
 
@@ -36,8 +37,17 @@ type PreviewLine = {
     sizeDisplay: string | null;
     loadSpeedRaw: string | null;
     season: string | null;
-  };
+    widthMm: number | null;
+    aspectRatio: number | null;
+    rimInch: number | null;
+  } | null;
   availability: string;
+  /** The per-line verdict. See src/lib/server/customer-basket.ts. */
+  state: LineState;
+  availableQuantity: number | null;
+  unavailableReason: string | null;
+  verifiedSource: VerifiedSource;
+  verifiedAt: string | null;
   unitTyreNetCents: number | null;
   pfuStatus: string;
   unitVatCents: number | null;
@@ -56,6 +66,9 @@ type Preview = {
   pfuInVatBase: boolean;
   pfuEstimated: boolean;
   pfuEstimateVersion: string | null;
+  /** False when any line is unavailable or short. The single checkout gate. */
+  orderable: boolean;
+  verifiedSource: VerifiedSource;
   fulfilment: { class: string; maxDays: number };
 };
 
@@ -68,12 +81,6 @@ const SEASON_LABELS: Record<string, string> = {
   summer: "Estive",
   winter: "Invernali",
   all_season: "4 stagioni",
-};
-
-const LOAD_ERRORS: Record<string, string> = {
-  BASKET_ITEM_UNAVAILABLE: "Uno o più articoli non sono più disponibili. Aggiorna il carrello.",
-  BASKET_QUANTITY_UNAVAILABLE:
-    "La quantità richiesta non è più disponibile. Riduci la quantità di uno o più articoli.",
 };
 
 export function CustomerBasket() {
@@ -101,11 +108,11 @@ export function CustomerBasket() {
       const j = await r.json();
       if (!r.ok) throw new Error(j.code);
       setPreview(j.basket);
-    } catch (e) {
-      setError(
-        (LOAD_ERRORS[e instanceof Error ? e.message : ""] ?? "") ||
-          tr("Impossibile aggiornare il carrello. Riprova.")
-      );
+    } catch {
+      // A line running short is no longer an error — the server reports it on
+      // the line itself. Anything that reaches here is a genuine failure of
+      // the request, so the basket stays exactly as the customer left it.
+      setError(tr("Impossibile aggiornare il carrello. Riprova."));
     } finally {
       setBusy(false);
     }
@@ -151,6 +158,16 @@ export function CustomerBasket() {
   }
 
   const complete = preview?.monetaryStatus === "complete";
+  /*
+    TWO SEPARATE CONDITIONS, deliberately not merged.
+
+    `complete` is about MONEY — can a final total be produced at all.
+    `orderable` is about STOCK — can every line actually be supplied as asked.
+    A basket can be one without the other, and the customer needs to be told
+    which of the two is stopping them.
+  */
+  const orderable = preview?.orderable === true;
+  const blockedLines = preview?.lines.filter((l) => l.state !== "available") ?? [];
 
   return (
     <div aria-busy={busy}>
@@ -175,12 +192,12 @@ export function CustomerBasket() {
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
                     <div className="font-bold text-ink">
-                      {line.tyre.brand} {line.tyre.modelPattern}
+                      {line.tyre?.brand ?? tr("Articolo non disponibile")} {line.tyre?.modelPattern ?? ""}
                     </div>
                     <div className="mt-1 text-sm text-ink-soft">
-                      {line.tyre.sizeDisplay}
-                      {line.tyre.loadSpeedRaw ? ` · ${line.tyre.loadSpeedRaw}` : ""}
-                      {line.tyre.season && SEASON_LABELS[line.tyre.season]
+                      {line.tyre?.sizeDisplay ?? ""}
+                      {line.tyre?.loadSpeedRaw ? ` · ${line.tyre.loadSpeedRaw}` : ""}
+                      {line.tyre?.season && SEASON_LABELS[line.tyre.season]
                         ? ` · ${SEASON_LABELS[line.tyre.season]}`
                         : ""}
                       {line.oldDot ? ` · ${tr("DOT precedente")}` : ""}
@@ -227,6 +244,25 @@ export function CustomerBasket() {
                     </button>
                   </div>
                 </div>
+
+                {/*
+                  THE PER-LINE VERDICT. Previously a short line failed the
+                  whole request and the customer got a banner naming no tyre;
+                  now the tyre that is short says so itself, next to the
+                  quantity box that caused it.
+                */}
+                <LineAvailability
+                  state={line.state}
+                  availableQuantity={line.availableQuantity}
+                  unavailableReason={line.unavailableReason}
+                  requestedQuantity={s.quantity}
+                  verifiedSource={line.verifiedSource}
+                  verifiedAt={line.verifiedAt}
+                  tyre={line.tyre}
+                  onAcceptAvailable={(q) => setQuantity(s, q)}
+                  busy={busy}
+                  tr={tr}
+                />
               </div>
             );
           })}
@@ -322,9 +358,18 @@ export function CustomerBasket() {
               )}
             </div>
 
+            {blockedLines.length > 0 && (
+              <p className="mt-5 rounded-xl border border-state-danger/30 bg-state-danger-soft p-3 text-xs text-ink">
+                {blockedLines.length === 1
+                  ? tr("Un articolo del carrello non è disponibile nella quantità richiesta.")
+                  : `${blockedLines.length} ${tr("articoli del carrello non sono disponibili nella quantità richiesta.")}`}{" "}
+                {tr("Aggiorna o rimuovi gli articoli segnalati per continuare.")}
+              </p>
+            )}
+
             <Button
               className="mt-5 w-full"
-              disabled={!complete || busy}
+              disabled={!complete || !orderable || busy}
               onClick={() => {
                 window.location.href = "/account/checkout";
               }}

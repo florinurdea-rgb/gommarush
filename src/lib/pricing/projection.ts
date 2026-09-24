@@ -120,6 +120,21 @@ export interface InternalTyreOffer {
   supplierName: string | null;
   supplierArticleId: string | null;
 
+  /**
+   * Which supplier lane wrote this listing, and the EAN that identifies the
+   * tyre to that lane's live API.
+   *
+   * `laneCode` IS SOURCING and is on FORBIDDEN_CUSTOMER_FIELDS: which
+   * wholesaler a tyre would be bought from must never reach a customer.
+   *
+   * `ean` is not confidential — it is printed on the tyre's own label, and the
+   * customer catalogue's tyre spec has always carried it. It is duplicated
+   * here because the live availability check addresses Inter-Sprint by EAN and
+   * should not have to reach back into the product row to find one.
+   */
+  laneCode: string | null;
+  ean: string | null;
+
   resolution: PriceResolution;
   supplierCostCents: Cents | null;
   markupPercentApplied: number | null;
@@ -148,6 +163,9 @@ export interface PricedListing {
   supplierListingId: string;
   supplierName: string | null;
   supplierArticleId: string | null;
+  /** The lane that wrote this listing, and the tyre's EAN. Internal only. */
+  laneCode?: string | null;
+  ean?: string | null;
   costObservedAt: string | null;
   breakdown: PriceBreakdown;
   /** The supplier's stock, verbatim. */
@@ -195,6 +213,8 @@ export function toInternalOffer(listing: PricedListing): InternalTyreOffer {
     supplierListingId: listing.supplierListingId,
     supplierName: listing.supplierName,
     supplierArticleId: listing.supplierArticleId,
+    laneCode: listing.laneCode ?? null,
+    ean: listing.ean ?? null,
     resolution: breakdown.resolution,
     supplierCostCents: breakdown.supplierCostCents,
     markupPercentApplied: breakdown.markupPercentApplied,
@@ -231,6 +251,18 @@ export const FORBIDDEN_CUSTOMER_FIELDS: readonly string[] = [
   "supplierName",
   "supplierArticleId",
   "supplierListingId",
+  /*
+    Sourcing. Which wholesaler a tyre would be bought from is the single most
+    commercially sensitive thing in this system, and it must never be inferable
+    from a customer payload.
+
+    `ean` is deliberately NOT on this list. It is carried on the internal offer
+    because that is what addresses Inter-Sprint protocol 103, but it is a public
+    identifier printed on the tyre's own label — forbidding it would be
+    security theatre, and the customer catalogue has in fact always included it
+    in its tyre spec.
+  */
+  "laneCode",
   "markupPercentApplied",
   "markupAmountCents",
   "grossProfitCents",

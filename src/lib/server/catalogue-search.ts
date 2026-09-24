@@ -91,6 +91,7 @@ const PRODUCT_COLUMNS = [
   "run_flat",
   "old_dot",
   "eprel_id",
+  "ean",
   "weight_kg",
   "active",
 ].join(", ");
@@ -316,6 +317,8 @@ export async function searchCatalogue(
       supplierListingId: row.id,
       supplierName: row.suppliers?.name ?? null,
       supplierArticleId: row.supplier_article_id ?? null,
+      laneCode,
+      ean: (product.ean as string | null) ?? null,
       costObservedAt: price?.observed_at ?? null,
       breakdown: calculateTyrePrice({ supplierCostCents, pfu }, settings),
       supplierStockExact: stockExact,
