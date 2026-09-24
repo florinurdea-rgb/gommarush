@@ -96,46 +96,30 @@ export function shouldQueryCatalogue(input: {
 }
 
 /**
- * The four dependent facet lists the size and brand selectors are built from.
- */
-export interface CatalogueFacets {
-  readonly widths: readonly number[];
-  readonly aspectRatios: readonly number[];
-  readonly rims: readonly number[];
-  readonly brands: readonly string[];
-}
-
-/**
- * Whether a freshly fetched facet payload carries the same values as the one
- * already on screen.
+ * Whether a freshly fetched list carries the same values as the one on screen.
  *
  * REGRESSION: "the dropdowns reset as I browse through them."
  *
- * Every filter change starts a request, and its response rewrote all four
- * lists unconditionally. Handing React a new array of IDENTICAL values still
- * re-creates every <option>, and a browser rebuilding the options of an OPEN
- * dropdown closes it — so a response that changed nothing at all could still
- * shut the list the customer was scrolling.
+ * Handing React a new array of IDENTICAL values still re-creates every
+ * <option>, and a browser rebuilding the options of an OPEN dropdown closes
+ * it — so a response that changed nothing at all could still shut the list the
+ * customer was scrolling.
  *
- * Keeping the previous object when nothing changed makes that class of
- * disturbance impossible. The component's other half — freezing a list while
- * its control has focus — covers the case where the values genuinely did
- * change mid-interaction.
+ * The size lists no longer come from a response at all (see
+ * src/lib/server/catalogue-dimensions.ts), so this now guards the one list
+ * that does: the brands available in the chosen size. Keeping the previous
+ * array when nothing changed makes that disturbance impossible.
  *
  * Order-sensitive on purpose: the server returns these sorted, so a different
- * order IS a different payload and the customer should see it.
+ * order IS a different answer and the customer should see it.
  */
-export function sameFacets(
-  current: CatalogueFacets,
-  incoming: CatalogueFacets | null | undefined
+export function sameValues(
+  current: readonly (number | string)[],
+  incoming: readonly (number | string)[] | null | undefined
 ): boolean {
-  if (!incoming) return false;
-  const same = (a: readonly (number | string)[], b: readonly (number | string)[] | undefined) =>
-    Array.isArray(b) && a.length === b.length && a.every((value, i) => value === b[i]);
   return (
-    same(current.widths, incoming.widths) &&
-    same(current.aspectRatios, incoming.aspectRatios) &&
-    same(current.rims, incoming.rims) &&
-    same(current.brands, incoming.brands)
+    Array.isArray(incoming) &&
+    current.length === incoming.length &&
+    current.every((value, i) => value === incoming[i])
   );
 }

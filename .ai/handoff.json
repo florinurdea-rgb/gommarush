@@ -4,7 +4,7 @@
   "mission_title": "Customer portal deployed to production; migrations pending a writable connection",
   "status": "DEPLOYED_AWAITING_MIGRATIONS",
   "phase": "Code is LIVE on production (main, via PR #5 and PR #6; Vercel Production deployments succeeded). 0005 and 0006 are NOT applied: the production Supabase connector is read-only and refuses DDL. Production data verified byte-identical before and after the deploy. Portal degrades to 'module not activated' until the SQL runs.",
-  "last_updated": "2026-09-23",
+  "last_updated": "2026-09-24",
   "canonical_branch": "main",
   "working_branch": "chatgpt/m12-customer-portal",
   "entry_points": {
@@ -125,6 +125,7 @@
     "Deldo persistence remains gated; untouched."
   ],
   "risks": [
+    "Catalogue dimension dropdowns are now UNFILTERED (src/lib/server/catalogue-dimensions.ts): they list every distinct width_mm / aspect_ratio / rim_inch in catalogue_products, so the catalogue's own data-quality problems are now VISIBLE to customers. Production currently holds rim_inch values 175, 195 and 225 - almost certainly 17.5, 19.5 and 22.5 truck rims lost to an integer parse - and widths 10, 11, 12, 13 alongside 750, 825, 950, 1050, 1150, 1250, which are industrial/agricultural sizes or parse artefacts. These were previously hidden by the dependent facet query, which never offered a value with no tyre behind it. They are NOT filtered out here: silently hiding them would resolve a data-quality conflict by concealing it, and would also hide genuinely buyable truck stock. Two separate follow-ups: (1) investigate whether rim_inch needs a decimal type and a re-parse of the affected listings, (2) decide whether the customer portal should scope to passenger-car sizes at all - that is a commercial decision, not an engineering one.",
     "The PFU estimate magnitudes (EUR 3 / 6 / 12 / 25 by weight band) are placeholders chosen for order-flow testing. They are not sourced from any published tariff, because no PFU evidence exists anywhere in GommaRush's data. They are deliberately round and conservative, they are disclosed to the customer, and every order records that it used them - but a real customer charged on them would be charged an unverified amount. Confirm or replace before opening the portal beyond controlled testing.",
     "The customer portal is Italian-only. The root layout already provides LocaleProvider and the operational string map (useTr) reaches /account, so the mechanism exists and is unused there - an English visitor follows an English 'Customer account' CTA into an Italian portal. Not in Mission 1's scope and deliberately not half-done; it is a contained follow-up (convert the five customer components to useTr and add the strings to admin-strings.data.ts).",
     "Customer catalogue sorting and totals require materialising the filtered selection, bounded at 1,000 products (OFFER_SORT_MAX_PRODUCTS). An unfiltered browse of the whole catalogue is REFUSED with a message asking for a size, rather than silently truncated. This is correct but means a customer must pick at least one dimension before seeing ordered results. Removing the bound needs a current-offer view or materialised column, not a larger cap.",

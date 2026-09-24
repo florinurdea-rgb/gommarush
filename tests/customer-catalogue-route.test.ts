@@ -16,6 +16,7 @@ import { FORBIDDEN_CUSTOMER_FIELDS } from "@/lib/pricing/projection";
 
 const searchCustomerCatalogue = vi.fn();
 const getCatalogueFacets = vi.fn();
+const getTyreDimensions = vi.fn();
 const requireCustomerSession = vi.fn();
 
 vi.mock("@/lib/server/customer-catalogue", async (importOriginal) => {
@@ -28,6 +29,11 @@ vi.mock("@/lib/server/catalogue-browse", async (importOriginal) => {
   return { ...actual, getCatalogueFacets: (...a: unknown[]) => getCatalogueFacets(...a) };
 });
 
+vi.mock("@/lib/server/catalogue-dimensions", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/server/catalogue-dimensions")>();
+  return { ...actual, getTyreDimensions: (...a: unknown[]) => getTyreDimensions(...a) };
+});
+
 vi.mock("@/lib/auth/customer-session", () => ({
   requireCustomerSession: () => requireCustomerSession(),
 }));
@@ -38,6 +44,14 @@ const FACETS = {
   rims: [16, 17],
   seasons: ["summer"],
   brands: ["ALPHA"],
+  schemaAvailable: true,
+};
+
+/** The whole, unfiltered size list — the same answer for every selection. */
+const DIMENSIONS = {
+  widths: [195, 205, 225],
+  aspectRatios: [45, 55, 60],
+  rims: [16, 17, 18],
   schemaAvailable: true,
 };
 
@@ -86,6 +100,7 @@ beforeEach(() => {
     email: "cliente@example.com",
   });
   getCatalogueFacets.mockResolvedValue(FACETS);
+  getTyreDimensions.mockResolvedValue(DIMENSIONS);
   searchCustomerCatalogue.mockResolvedValue({
     offers: [OFFER],
     total: 1,
@@ -119,38 +134,69 @@ describe("the catalogue is not queried before a complete size", () => {
     });
   }
 
-  it("still returns facets so the customer has something to choose from", async () => {
-    const { body } = await call("?width=205");
+  /**
+   * THE SIZE LISTS NO LONGER NARROW, and this is where that is pinned.
+   *
+   * It used to assert the opposite — that choosing a width narrowed the rim
+   * list — because the selectors were filled from these dependent facets.
+   * That narrowing was the slow half of the screen (a scan per keystroke) and
+   * the unstable half (a list that moves under an open dropdown closes it, a
+   * list that drops the chosen value blanks its own control).
+   *
+   * They now come from getTyreDimensions: the whole catalogue, unfiltered,
+   * cached, the same answer whatever is selected. A size with no tyres behind
+   * it becomes selectable, and the results panel says so.
+   */
+  it("serves the whole size list, unnarrowed, whatever has been chosen", async () => {
+    const none = await call("");
+    const partial = await call("?width=205&aspect=55");
 
-    expect(getCatalogueFacets).toHaveBeenCalledTimes(1);
-    expect(body.facets.aspectRatios).toEqual([55, 60]);
-    expect(body.facets.rims).toEqual([16, 17]);
+    for (const { body } of [none, partial]) {
+      expect(body.awaitingDimensions).toBe(true);
+      expect(body.facets.widths).toEqual([195, 205, 225]);
+      expect(body.facets.aspectRatios).toEqual([45, 55, 60]);
+      expect(body.facets.rims).toEqual([16, 17, 18]);
+    }
+  });
+
+  it("reads them from the cached source, never from the dependent facet scan", async () => {
+    await call("?width=205");
+
+    expect(getTyreDimensions).toHaveBeenCalled();
+    expect(
+      getCatalogueFacets,
+      "the scan this path exists to avoid must not run"
+    ).not.toHaveBeenCalled();
   });
 
   /**
-   * REGRESSION — the deadlock this route must never be party to.
-   *
-   * The selectors are filled from this endpoint's `facets`. A client that
-   * waits for a complete size before calling it can never obtain a width, so
-   * the size can never be completed and the catalogue is unusable. With
-   * NOTHING chosen the route must still hand back a populated width list.
+   * The first selector must always have options. Previously guaranteed by
+   * always running the facet scan; now guaranteed by the lists not depending
+   * on the selection at all, which is strictly stronger.
    */
-  it("serves the width list when nothing at all has been chosen", async () => {
+  it("offers widths when nothing at all has been chosen", async () => {
     const { body } = await call("");
 
-    expect(getCatalogueFacets, "facets must be read even with no filters").toHaveBeenCalledTimes(1);
-    expect(body.awaitingDimensions).toBe(true);
-    expect(body.facets.widths, "the first selector must have options to offer").toEqual([195, 205]);
     expect(body.facets.widths.length).toBeGreaterThan(0);
-    // ...and it is cheap: the catalogue read is still not run.
     expect(searchCustomerCatalogue).not.toHaveBeenCalled();
   });
 
-  it("narrows the facets by what has been chosen so far", async () => {
-    await call("?width=205&aspect=55");
+  /**
+   * A brand list over the whole catalogue is exactly the scan that made the
+   * screen slow, and it is meaningless before a size narrows it.
+   */
+  it("does not compute a brand list before a size is chosen", async () => {
+    const { body } = await call("?width=205");
+    expect(body.facets.brands).toEqual([]);
+  });
 
-    const [facetQuery] = getCatalogueFacets.mock.calls[0];
-    expect(facetQuery).toMatchObject({ widthMm: 205, aspectRatio: 55, rimInch: null });
+  it("asks only for the brand facet once the size is complete", async () => {
+    await call("?width=205&aspect=55&rim=16");
+
+    expect(getCatalogueFacets).toHaveBeenCalledTimes(1);
+    const [facetQuery, , fields] = getCatalogueFacets.mock.calls[0];
+    expect(facetQuery).toMatchObject({ widthMm: 205, aspectRatio: 55, rimInch: 16 });
+    expect(fields, "four discarded scans per keystroke is what this removes").toEqual(["brands"]);
   });
 
   it("reads the catalogue once all three dimensions are present", async () => {

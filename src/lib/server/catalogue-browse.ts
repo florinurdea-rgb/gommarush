@@ -912,10 +912,29 @@ export async function selectCatalogueRows(
  * actually exist in 205, and a combination that would return nothing is not
  * offered in the first place.
  */
+export type CatalogueFacetField = keyof CatalogueFacets;
+
+const ALL_FACET_FIELDS: readonly CatalogueFacetField[] = [
+  "widths",
+  "aspectRatios",
+  "rims",
+  "seasons",
+  "brands",
+];
+
 export async function getCatalogueFacets(
   query: CatalogueBrowseQuery = {},
-  runIndex?: RunIndex
+  runIndex?: RunIndex,
+  /**
+   * Which facets to actually read. Each one is its own scan, so a caller that
+   * needs only the brand list should say so rather than paying for four
+   * others it will discard — the customer catalogue fills its size selectors
+   * from getTyreDimensions and wants exactly that. A field left out comes back
+   * empty, never stale.
+   */
+  fields: readonly CatalogueFacetField[] = ALL_FACET_FIELDS
 ): Promise<CatalogueFacets & { schemaAvailable: boolean }> {
+  const wanted = new Set(fields);
   const supabase = createSupabaseAdminClient();
   const index = runIndex ?? (await loadRunIndex());
   // Lane and vehicle constrain the facets too, through the same run-id join
@@ -955,13 +974,15 @@ export async function getCatalogueFacets(
     );
   }
 
+  const skip = Promise.resolve([] as unknown[]);
+
   try {
     const [widths, aspects, rims, seasons, brands] = await Promise.all([
-      distinct("width_mm", "widthMm"),
-      distinct("aspect_ratio", "aspectRatio"),
-      distinct("rim_inch", "rimInch"),
-      distinct("season", "season"),
-      distinct("brand", "brand"),
+      wanted.has("widths") ? distinct("width_mm", "widthMm") : skip,
+      wanted.has("aspectRatios") ? distinct("aspect_ratio", "aspectRatio") : skip,
+      wanted.has("rims") ? distinct("rim_inch", "rimInch") : skip,
+      wanted.has("seasons") ? distinct("season", "season") : skip,
+      wanted.has("brands") ? distinct("brand", "brand") : skip,
     ]);
 
     const numbers = (values: unknown[]) =>
