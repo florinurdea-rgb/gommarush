@@ -1,10 +1,10 @@
 {
   "project": "GommaRush",
   "mission_id": "M21-CUSTOMER-COMMERCE-RESKIN",
-  "mission_title": "Customer commerce UI reskin: shell, catalogue, basket, checkout, orders, account",
+  "mission_title": "Customer commerce UI reskin + UI/UX completion pass (PR #15)",
   "status": "IMPLEMENTED_AWAITING_REVIEW",
   "phase": "Code is LIVE on production (main, via PR #5 and PR #6; Vercel Production deployments succeeded). 0005 and 0006 are NOT applied: the production Supabase connector is read-only and refuses DDL. Production data verified byte-identical before and after the deploy. Portal degrades to 'module not activated' until the SQL runs.",
-  "last_updated": "2026-09-24",
+  "last_updated": "2026-09-25",
   "canonical_branch": "main",
   "working_branch": "design/m21-customer-commerce-reskin",
   "entry_points": {
@@ -76,6 +76,7 @@
     "m10_production_verification": "READ-ONLY inspection of the production database on 2026-09-22, after two real Inter-Sprint feeds were processed by the deployed worker. Run ef834c00-3326-4c47-916e-4f18561e03aa (PCR, vrd-001-21185-107.csv, 3,060,504 B, checksum 04fa0b3c6a25) and run 77b811d4-5b0f-41ed-89ca-ec67b67fd060 (truck, vrd-001-21185.csv, 46,527 B, checksum 70a5d9196b13). Both status='committed', both supplier_id=4ce0b557-9575-4784-aa80-99e78af4da2f, both adapter='intersprint-feed', both import_mode='partial', both deactivated_listings=0, both rejected_rows=0."
   },
   "completed": [
+    "M21 UI/UX completion (2026-09-25, commit 25fd00b on PR #15): mobile catalogue search band folded (secondary filters behind 'Filtri aggiuntivi' on phones, ~140px vs ~290px sticky), compact result grid, sticky-basket spacer, 320px pager overflow fixed, catalogue retry; fixed-height shell header matching the sticky offset; checkout single status region + lg two-column sticky summary + full Pneumatici/PFU/IVA/Totale chain + preview price-move notice + retry that never submits; amber retryable line state for feed_after_live_failure; order detail no longer renders raw fulfilment_class; stale 'verification only on submit' / 'fails open' comments corrected.",
     "M21 production-readiness: order gate fails closed on live verification (D27), forceFresh so a cached basket answer cannot serve the final check, unconfigured/unaddressable live lanes marked as failures rather than silent passes, admin Sistema screen reports gateway config PRESENT/MISSING without exposing values.",
     "M21 final: live verification moved onto every basket preview (supersedes D21), live PRICE read and re-priced through the approved engine, 20s per-EAN call-rate cache; public primary CTA flattened to match the commerce primary and lift shadows removed from public cards.",
     "M18 (PR #12): catalogue filter bar rebuilt as one sticky labelled row; dropdown freeze-on-focus; basket toast and cart icon.",
@@ -445,7 +446,7 @@
     "Deldo: unchanged and untouched. Jan has NOT replied."
   ],
   "next_recommended_mission": "Owner review of M11B and its amendment, then the prepared-but-unexecuted items: 0004 indexes (lowest risk, biggest immediate benefit), 0003 rename, the RESET manifest, the F1 mapping decision, and now D18 the brand-tier mapping. Consider also a current-offer view or denormalised current_price_cents so price/freshness/stock sorting becomes database-native and loses its 1,000-product cap. M12 (customer catalogue -> basket -> order request) follows and should build on toCustomerOffer plus the shared brand taxonomy, not on the browse read, which is deliberately internal. Do not start M12 until it is frozen.",
-  "head_at_completion": "see commits[0]",
+  "head_at_completion": "see m21_ux_completion.code_commit plus the handoff commit on top",
   "owner_decisions_confirmed_m9": {
     "provenance": "POLICY_OWNER - GommaRush business decisions recorded 2026-09-22. NOT Inter-Sprint statements. Never cite these as supplier-documented.",
     "nett_price_is_net_purchase_cost": true,
@@ -585,5 +586,77 @@
       "conclusion": "The retention problem is STAGING, not price history - roughly 20x - and staging is the part whose value expires once a run is committed and triaged.",
       "proposal": "Designed in docs/PRODUCTION_RECONCILIATION.md section 5. Drop normalized_payload on committed runs past N days and keep raw_payload only for conflict/rejected rows; thin price observations to one per listing per day past N days, always keeping the latest; retire conflicts on status transition, never on age. NOTHING executed."
     }
+  },
+  "m21_ux_completion": {
+    "date": "2026-09-25",
+    "pr": "https://github.com/florinurdea-rgb/gommarush/pull/15",
+    "branch": "design/m21-customer-commerce-reskin",
+    "reconciled_before_work": {
+      "pr_head": "39fc1a558f03a1ff1a7e2b62cab004dba0808953",
+      "main": "b1a28c9ee62e5f197f1e55e6938d89b03673ddd0",
+      "behind_main": 0,
+      "ahead_of_main": 5,
+      "mergeable": "clean"
+    },
+    "code_commit": "25fd00bac2407e9f5cdbed7bf660c687b8807928",
+    "ux_issues_found": [
+      "Phone catalogue: sticky search band ~290px of a 667px screen (header 57 + nav 56 + basket bar 60 also fixed), so results started below the fold.",
+      "Shell header was 65px on phones (logo mark 44px + Esci button), not the 57px the sticky bar assumed; the size bar slid 8px under it.",
+      "Sticky basket bar covered the last result/pager on phones (no reserved space).",
+      "Pager overflowed horizontally by 18px at 320px.",
+      "Mobile result card ~240px tall (1.5 results per screen).",
+      "Checkout: up to five stacked status panels, some simultaneously; 'Riprova' in the verification panel submitted the order (a second order CTA); PFU disclosure printed twice in one panel; summary showed only a grand total while line amounts were VAT-inclusive (basket shows net).",
+      "A line whose live check failed rendered green 'Disponibile' with a grey note; the amber semantics only existed after a failed submit.",
+      "A unit price moved by a preview re-check silently replaced the total the customer was reading.",
+      "Order detail rendered order.fulfilment_class raw ('standard'/'express').",
+      "Inputs at 14-15px triggered iOS zoom on focus; stepper buttons and Rimuovi below 44px; stepper buttons had no visible keyboard focus.",
+      "Stale comments claimed live verification happens only on submit (CustomerCheckout) and that the order path fails open (sales-orders.ts, live-availability.ts, tests/live-availability.test.ts header)."
+    ],
+    "decisions": [
+      "Checkout status is ONE region chosen in priority order: validating > load_failed > unavailable (red) > price_changed (amber, re-confirm) > verification (amber, retry) > pricing pending > ready.",
+      "A preview-level verification failure does NOT disable the final button: the submit makes a fresh forceFresh check that may succeed; if it cannot, the server refuses with LIVE_VERIFICATION_UNAVAILABLE (D27 unchanged). The basket 'Procedi' likewise stays enabled.",
+      "Price change on preview is detected by UNIT price (quantity edits ignored); the accepted total always equals the total on screen, and the server's accepted-total gate is unchanged.",
+      "Checkout line amounts switched to net x qty so lines sum to 'Pneumatici', matching the basket. Presentation only.",
+      "Desktop checkout sticky summary is safe because both required choices are in the left column in view; phone keeps the button in normal flow, not sticky.",
+      "Express option left as-is: it pre-exists in fulfilment.ts / docs 04 with its approved label; no new semantics added."
+    ],
+    "copy_changes": [
+      "Removed the duplicated second PFU sentence at checkout ('Il PFU indicato è una stima...') - the same disclosure was printed twice in one panel; kept the basket's exact wording as a footnote.",
+      "Reused existing strings only: 'Filtri aggiuntivi', 'Riprova', 'Il prezzo aggiornato è', 'Pneumatici', 'PFU', 'IVA'. No new customer copy."
+    ],
+    "files_changed": [
+      "app/account/(secure)/layout.tsx",
+      "app/account/(secure)/orders/[id]/page.tsx",
+      "app/account/login/page.tsx",
+      "src/components/customer/CustomerBasket.tsx",
+      "src/components/customer/CustomerCatalogue.tsx",
+      "src/components/customer/CustomerCheckout.tsx",
+      "src/components/customer/CustomerLoginForm.tsx",
+      "src/components/customer/CustomerShellNav.tsx",
+      "src/components/customer/LineAvailability.tsx",
+      "src/components/customer/QuantityStepper.tsx",
+      "src/lib/commerce/fulfilment.ts",
+      "src/lib/server/live-availability.ts (comment only)",
+      "src/lib/server/sales-orders.ts (comment only)",
+      "tests/live-availability.test.ts",
+      "tests/customer-commerce-completion.test.ts (new)",
+      ".ai/handoff.json"
+    ],
+    "unchanged_on_purpose": [
+      "pricing engine, PFU/VAT, order gate order, forceFresh, D27 fail-closed, idempotency, GR numbering, customer scoping, logistics/sales separation, catalogue query gating, M19 unfiltered size lists, alternatives deep link, Inter-Sprint feed, supplier ordering disabled",
+      "GommaRush Logo component",
+      "customer copy except the one duplicate removed"
+    ],
+    "tests": {
+      "vitest": "1316 passed | 6 skipped (76 files); +31 tests (30 new suite, 1 live-availability)",
+      "tsc": "clean",
+      "lint": "0 errors, 8 warnings (all pre-existing)",
+      "build": "next build compiled successfully"
+    },
+    "visual_verification": "Rendered catalogue/basket/checkout/login in a throwaway harness with mocked APIs (not committed) and checked 320/375/390/768/1024/1440: no horizontal overflow, sticky band pinned exactly at 57/65px, amber vs red states distinct, price-move and submit-verification-failure states shown.",
+    "blockers": [
+      "Inter-Sprint Gateway username/password still external: with INTERSPRINT_GATEWAY_* unset every line reads 'Verifica non riuscita' and the final submit refuses (LIVE_VERIFICATION_UNAVAILABLE), by design.",
+      "0005/0006 still unapplied on production (read-only connector) - unchanged from previous entry."
+    ]
   }
 }
