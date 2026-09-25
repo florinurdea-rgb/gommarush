@@ -3,10 +3,10 @@
   "mission_id": "M21-CUSTOMER-COMMERCE-RESKIN",
   "mission_title": "Customer commerce UI reskin + UI/UX completion pass (PR #15)",
   "status": "IMPLEMENTED_AWAITING_REVIEW",
-  "phase": "Code is LIVE on production (main, via PR #5 and PR #6; Vercel Production deployments succeeded). 0005 and 0006 are NOT applied: the production Supabase connector is read-only and refuses DDL. Production data verified byte-identical before and after the deploy. Portal degrades to 'module not activated' until the SQL runs.",
+  "phase": "PR #15 (customer-commerce UI) is the current work, open and unmerged; main is b1a28c9. PRODUCTION (read-only inspection 2026-09-25): 0005 and 0006 ARE APPLIED and byte-identical to the reviewed files (applied via the SQL Editor, so absent from supabase_migrations). Production business data has been reset: 1 supplier (Inter-Sprint, 4ce0b557-9575-4784-aa80-99e78af4da2f), 0 customers, 0 customer_locations, 0 logistics orders, 0 sales orders, 0 customer_accounts. The live Inter-Sprint catalogue is preserved and still ingesting. Optional hardening 0007 (revoke browser-role grants on the 0005/0006 tables) is prepared, dry-run verified, NOT applied. Gateway credentials still pending.",
   "last_updated": "2026-09-25",
   "canonical_branch": "main",
-  "working_branch": "design/m21-customer-commerce-reskin",
+  "working_branch": "design/m21-customer-commerce-reskin (PR #15, open, not merged)",
   "entry_points": {
     "working_rules": "CLAUDE.md",
     "authority_model": "docs/AI_WORKFLOW.md",
@@ -102,7 +102,8 @@
     "Added Deldo activation question 8 (what does the Demo column mean), noting explicitly that no DOT-encoding question is needed because the feed already supplies the year."
   ],
   "in_progress": [
-    "Apply 0005 and 0006 to production. Requires either the owner running them in the Supabase SQL editor, or write access on the production Supabase connector."
+    "OPTIONAL: owner runs supabase/pending-approval/0007_verify_and_harden_0005_0006.sql in the production SQL Editor (verify + revoke browser-role grants on the portal tables).",
+    "Owner review of PR #15 (not merged)."
   ],
   "tests": {
     "npm test": "1072 passed / 6 skipped (69 files). Up from 1048.",
@@ -112,26 +113,22 @@
     "0005+0006 verified": "Applied to a disposable PostgreSQL 16. Proven: order created with PFU provenance recorded; ESTIMATED without a version refused; a version without ESTIMATED refused; pos_on_delivery refused; item FK failure leaves 0 orphan headers; idempotent replay creates no duplicate; estimated orders are findable by WHERE.",
     "production migration assessment": "SAFE. No object collisions, all FK targets present with uuid PKs, gen_random_uuid available, additive only, RLS on new tables only, idempotent. Critically: no DEPLOYED production code references any of these objects, so applying them changes nothing observable until the branch ships."
   },
-  "production_changes": "CODE: deployed to production (main = PR #5 + PR #6 merges, Vercel Production SUCCESS). DATABASE: NONE - verified byte-identical before and after. No supplier action, no migration applied.",
-  "database_changes": "NONE APPLIED. 0005 and 0006 remain pending, now blocked on a writable production connection rather than on approval.",
-  "external_actions": "NONE.",
+  "production_changes": "CODE: main = b1a28c9 (PR #14 era) deployed; PR #15 NOT merged. DATABASE: 0005/0006 present (applied by the owner via SQL Editor, verified 2026-09-25); business data reset by the owner. Nothing written by any agent session.",
+  "database_changes": "None by this session. 0005+0006 verified applied. 0007 prepared, not applied. 0004 not applied.",
+  "external_actions": "NONE. No supplier order sent; live ordering remains disabled.",
   "blockers": [
-    "0005 and 0006 CANNOT BE APPLIED FROM THIS ENVIRONMENT. The production Supabase connector is read-only: no apply_migration tool, and execute_sql runs in a read-only transaction that refuses DDL. Remedy: run the two files in the Supabase SQL editor, or grant the connector's migration tool at claude.ai Settings -> Connectors. Both files are idempotent. This is the ONLY thing between the current state and a working end-to-end customer order.",
-    "The production site could not be smoke-tested over HTTP from this sandbox: the outbound proxy denies gommarush.com and the vercel.app deployment host (CONNECT tunnel 403). Vercel's own Production deployment status (success) is the evidence for the deploy; the live pages have not been fetched by an agent.",
-    "D3 - the real PFU tariff - remains open. The estimate is a placeholder standing in for it. The magnitudes have NOT been verified against any published scheme and should be confirmed or replaced before the portal is opened to customers other than a controlled test.",
-    "D18: no approved brand-tier mapping, so the tier filters match nothing. Mechanism is ready; only the commercial decision is missing.",
-    "M11B: 0004 indexes unapplied - product_class and season-alone filters scan until they are.",
-    "M11A: the RESET manifest (Furnizor Demo supplier + its 7 seeded orders) needs a backup and owner confirmation. NOT executed.",
-    "M11A: the Inter-Sprint rename (0003) needs a backup and approval. Verified locally, NOT applied. The supplier still shows as 'asdas' in the workspace, which is honest rather than relabelled in the UI.",
-    "M11A: the F1 group-description mapping needs owner sign-off, and the ALL-SEASON 4X4/SUV legacy inconsistency (469 rows, two seasons in one group) must be resolved first. No automatic enrichment was implemented, per mission.",
-    "D14 snapshot-vs-delta unresolved. 1,841 legacy listings show as NO_CURRENT_PRICE and stay visible; absence still deactivates nothing.",
-    "PFU unresolved (D3) and the PFU/VAT base unresolved (D11). The workspace shows the net selling price and '+ PFU da confermare', never a customer-payable total.",
-    "D2 supplier duplicates remain owner decisions.",
-    "Plain FTP (security finding 2) with a live daily feed.",
-    "Branch carries 3 unmerged commits (M10 verification, M11A, M11B); main is 1aa7064.",
+    "Inter-Sprint Gateway USERNAME and PASSWORD still pending (customer number 21185 and environment production are configured per owner). Until they are set, every live check fails and the final order submit refuses with LIVE_VERIFICATION_UNAVAILABLE (D27, by design). Browsing and baskets work.",
+    "No customer exists in production after the reset (0 customers, 0 locations, 0 customer_accounts). A first real customer, a deliverable location and an admin-created portal account are needed before any end-to-end order.",
+    "D3 - the real PFU tariff - remains open; the EUR 3/6/12/25 estimate is a placeholder and should be confirmed before the portal opens beyond a controlled test.",
+    "D18: no approved brand-tier mapping, so tier filters stay hidden.",
+    "M11B: 0004 indexes still unapplied (verified absent 2026-09-25).",
+    "The production site cannot be HTTP smoke-tested from this sandbox (proxy denies gommarush.com and vercel.app).",
+    "D14 snapshot-vs-delta unresolved; ingestion stays partial and absence deactivates nothing.",
+    "Plain HTTP gateway / plain FTP (security findings 1 and 2).",
     "Deldo persistence remains gated; untouched."
   ],
   "risks": [
+    "UPDATED 2026-09-25: entries below that mention supplier 'asdas', duplicate ZUIN/FINTYRE/CARLINI/Demo suppliers, or 0005/0006 being unapplied describe production BEFORE the owner's reset. Current state is in production_state_verified.",
     "CORRECTION to an earlier entry in this file: the `isb` adapter does NOT lack a live lane. SUPPLIER_LANES maps BOTH `intersprint-feed` and `isb` to the single `intersprint` lane - one commercial relationship imported two ways - so all 13,422 active listings are live-verifiable. The earlier claim that 3,289 isb listings had no live lookup was wrong. Lanes genuinely without an implemented lookup are Deldo and Carlini, neither of which has active production listings.",
     "24 active production listings (of 13,422 on the Inter-Sprint lane) have NO EAN. Under D27 a live lane with no identifier is an unverifiable line, so those 24 are now unorderable and will refuse at checkout with the retryable verification message. They are browsable and can be added to a basket. Either backfill the EAN or accept that they cannot be sold through the portal.",
     "FAIL-CLOSED ORDERING MAKES THE GATEWAY A HARD DEPENDENCY (D27). With INTERSPRINT_GATEWAY_* unset, or the gateway unreachable, NO customer order can be completed - the portal browses and baskets normally and refuses at the final step with a retryable message. Whether those variables are set in Vercel Production could NOT be determined from the build environment (no Vercel credential; api.vercel.com unreachable through the sandbox proxy). The admin Sistema screen now reports PRESENT/MISSING per variable without exposing values - read it there before merging.",
@@ -441,12 +438,12 @@
     "That nett-price is Go Rush's cost by SUPPLIER evidence. It is an owner decision (POLICY_OWNER), not an Inter-Sprint statement.",
     "Currency by supplier evidence. EUR is an owner decision for V1 (D15).",
     "Any PFU tariff value. Inter-Sprint confirmed PFU is NOT in their feed. Still unresolved (D3), and pfuVatBase is still 'unresolved' (D11), so no customer total is produced.",
-    "That the supplier row named 'asdas' has been renamed. It has NOT - last changed 2026-09-15. Identity must be re-verified before a replacement rename is designed (F5).",
     "Conflict behaviour on a feed-to-feed import. All 1,555 current conflicts are legacy-vs-feed; the expectation that they fall after M11A is reasoned, not measured.",
-    "Deldo: unchanged and untouched. Jan has NOT replied."
+    "Deldo: unchanged and untouched. Jan has NOT replied.",
+    "Vercel env: gateway customer number 21185 / environment production configured is an OWNER STATEMENT, not observed by an agent (no Vercel access)."
   ],
   "next_recommended_mission": "Owner review of M11B and its amendment, then the prepared-but-unexecuted items: 0004 indexes (lowest risk, biggest immediate benefit), 0003 rename, the RESET manifest, the F1 mapping decision, and now D18 the brand-tier mapping. Consider also a current-offer view or denormalised current_price_cents so price/freshness/stock sorting becomes database-native and loses its 1,000-product cap. M12 (customer catalogue -> basket -> order request) follows and should build on toCustomerOffer plus the shared brand taxonomy, not on the browse read, which is deliberately internal. Do not start M12 until it is frozen.",
-  "head_at_completion": "see m21_ux_completion.code_commit plus the handoff commit on top",
+  "head_at_completion": "see commits on design/m21-customer-commerce-reskin after 5295b9f",
   "owner_decisions_confirmed_m9": {
     "provenance": "POLICY_OWNER - GommaRush business decisions recorded 2026-09-22. NOT Inter-Sprint statements. Never cite these as supplier-documented.",
     "nett_price_is_net_purchase_cost": true,
@@ -547,7 +544,7 @@
     "reset_proposed_not_executed": {
       "records": "supplier 'Furnizor Demo (test)' 6edece30-cd25-4ae8-9ad0-160e13ad4ebe; its 7 orders numbered 83-89; their 7 order_items, ~26 inventory_units and order_status_history children.",
       "proof": "Name states both Demo and (test). All 7 orders have customer_id NULL, status 'expected', identical 2026-08-18 creation, sequential numbering, zero documents and uniform shape. A real transport order has a customer.",
-      "status": "NOT EXECUTED. Deleting production business data needs a backup this session cannot take, and the manifest should be owner-confirmed first."
+      "status": "SUPERSEDED 2026-09-25: production now holds 1 supplier and 0 logistics orders, so the reset was carried out by the owner outside this repo. Kept for provenance."
     },
     "explicitly_not_reset": [
       "Supplier 'Name' 0b31299b: placeholder name BUT its order #222 is DELIVERED to a real customer. A rename/merge, never a deletion.",
@@ -658,5 +655,71 @@
       "Inter-Sprint Gateway username/password still external: with INTERSPRINT_GATEWAY_* unset every line reads 'Verifica non riuscita' and the final submit refuses (LIVE_VERIFICATION_UNAVAILABLE), by design.",
       "0005/0006 still unapplied on production (read-only connector) - unchanged from previous entry."
     ]
+  },
+  "production_state_verified": {
+    "verified_at": "2026-09-25T08:19Z",
+    "method": "READ-ONLY queries through the production Supabase connector (current_user supabase_read_only_user). Nothing was written.",
+    "supplier": {
+      "id": "4ce0b557-9575-4784-aa80-99e78af4da2f",
+      "name": "Inter-Sprint",
+      "note": "The only supplier row. The 0003 rename is effectively done; 'asdas' is gone. Furnizor Demo and the duplicate supplier rows no longer exist."
+    },
+    "catalogue": {
+      "catalogue_products": 13438,
+      "supplier_product_listings": 13461,
+      "active_listings": 13461,
+      "listings_not_on_intersprint": 0,
+      "supplier_listing_prices": 99018,
+      "catalogue_import_runs": 15,
+      "last_import_run": "2026-09-25T06:31:49Z",
+      "note": "This IS the live production Inter-Sprint catalogue; the feed worker is still committing runs."
+    },
+    "business_data": {
+      "customers": 0,
+      "customer_locations": 0,
+      "orders (logistics)": 0,
+      "order_items": 0,
+      "order_documents": 0,
+      "customer_accounts": 0,
+      "sales_orders": 0,
+      "sales_order_items": 0,
+      "auth.users": 6,
+      "note": "Reset by the owner outside this repo. The M11A RESET manifest below is therefore historical, not pending."
+    },
+    "migrations_0005_0006": {
+      "state": "APPLIED",
+      "evidence": [
+        "customer_accounts, sales_orders, sales_order_items, sales_order_number_seq all present; every column, type, nullability and default equals the files.",
+        "All 26 constraints present with identical definitions (auth_user_id unique, customer-scoped idempotency unique, order_number unique, POS excluded, complete-has-totals, PFU estimate/version pair, FKs to customers/customer_locations/catalogue_products/supplier_product_listings).",
+        "All 12 indexes (including the unique ones) present with identical definitions.",
+        "RLS enabled on all three tables, no policies.",
+        "create_portal_sales_order: prosrc md5 2115c7c3a028d01192425767089b053c (2878 chars) == the body in 0006; SECURITY DEFINER, search_path=public; EXECUTE held by postgres and service_role only.",
+        "sales_order_number_seq start 1000, is_called=true, last_value=1000: one number was drawn and its order no longer exists (reset). The next order will be GR-001001. Gaps are expected and harmless; uniqueness holds.",
+        "Not recorded in supabase_migrations (the ledger stops at 20260908142622 catalogue_commit_batch): applied through the SQL Editor."
+      ],
+      "residual_finding": "anon and authenticated hold Supabase's default SELECT/INSERT/UPDATE/DELETE grants on the three tables and USAGE on the sequence. RLS with no policy denies every row today, so this is defence in depth, not an open hole. 0007 removes them."
+    },
+    "migration_0004": "NOT applied (catalogue_products_class_idx and catalogue_products_season_brand_idx absent).",
+    "not_verifiable_from_here": [
+      "Vercel environment variables. Owner states INTERSPRINT_GATEWAY customer number 21185 and environment production are configured; username and password are NOT. INTERSPRINT_LIVE_ORDERING_ENABLED must stay unset/false.",
+      "Live HTTP smoke test of gommarush.com (proxy denies it)."
+    ]
+  },
+  "migrations_review_2026_09_25": {
+    "conclusion": "0005 and 0006 are SAFE and ALREADY APPLIED. Do not re-run them. The only SQL to run is the optional 0007 verify-and-harden package.",
+    "checked": {
+      "existing_table_conflicts": "None possible: the objects are the 0005/0006 objects themselves, verified identical.",
+      "foreign_keys": "customer_accounts.customer_id -> customers ON DELETE CASCADE; sales_orders -> customers, customer_locations (no cascade, so a customer with orders cannot be deleted - intended); items -> sales_orders CASCADE, catalogue_products, supplier_product_listings. Targets exist and hold only reset/live data.",
+      "auth_mapping": "auth_user_id UNIQUE, explicit admin-created binding, no email inference; no FK to auth.users by design (auth schema not referenced). Read only via the service role in customer-session.ts.",
+      "atomicity": "create_portal_sales_order inserts header and all items in one function transaction; SALES_ORDER_NO_ITEMS raised on empty.",
+      "idempotency": "UNIQUE(customer_id, idempotency_key) plus an early lookup that returns the existing order; verified: a replay with the same key returned the same order number.",
+      "numbering": "bigint sequence from 1000, UNIQUE(order_number); formatted GR-000000 by order-number.ts.",
+      "customer_isolation": "RLS on, no policies; all app reads filter by the session customer id through the service role; browser roles cannot EXECUTE the RPC.",
+      "app_compatibility": "All 20 RPC parameters the app sends match the function signature; every column the app selects exists.",
+      "dummy_data_assumptions": "None. Neither migration inserts, reads or depends on any row. The reset leaves them fully valid.",
+      "catalogue_and_logistics_impact": "Neither migration touches catalogue, supplier, price, import, logistics orders or documents. 0007 asserts equal before/after counts on all of those plus auth.users."
+    },
+    "package": "supabase/pending-approval/0007_verify_and_harden_0005_0006.sql",
+    "package_dry_run": "PostgreSQL 16 with a production-shaped mock (anon/authenticated/service_role, Supabase default grants, 0005+0006 applied from the files): pass; re-run pass (idempotent); after it, service_role still creates an order through the RPC, replay returns the same number, anon gets 'permission denied'; a tampered function body and a missing Inter-Sprint supplier each abort in PREFLIGHT and leave the grants unchanged."
   }
 }
