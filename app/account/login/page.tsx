@@ -47,7 +47,11 @@ export default async function CustomerLoginPage() {
             <CustomerLoginForm />
           </div>
 
-          <div className="mt-3 rounded-2xl border border-ink/10 bg-white p-5">
+          {/*
+            Secondary, and drawn as such: no second card competing with the
+            sign-in one, just a quiet section underneath it.
+          */}
+          <div className="mt-6 px-1">
             <h2 className="text-sm font-bold text-ink">{tr("Non hai un account?")}</h2>
             <p className="mt-1 text-sm text-ink-soft">
               {tr("La registrazione online non è ancora attiva. Gli accessi vengono creati da GommaRush: contattaci e attiviamo il tuo account.")}

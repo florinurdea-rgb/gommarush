@@ -50,7 +50,7 @@ export function CustomerLoginForm() {
   }
 
   const field =
-    "h-12 w-full rounded-xl border border-ink/15 px-3 text-[15px] text-ink outline-none transition-colors focus:border-accent";
+    "h-12 w-full rounded-xl border border-ink/15 px-3 text-base text-ink outline-none transition-colors focus:border-accent focus-visible:ring-2 focus-visible:ring-accent/30";
 
   return (
     <form onSubmit={submit} className="mt-5 space-y-3">
@@ -61,7 +61,10 @@ export function CustomerLoginForm() {
         <input
           id="customer-email"
           type="email"
+          inputMode="email"
           autoComplete="email"
+          autoCapitalize="none"
+          spellCheck={false}
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -86,11 +89,11 @@ export function CustomerLoginForm() {
         />
       </div>
       {error && (
-        <p role="alert" className="rounded-xl border border-state-danger/30 bg-state-danger-soft p-3 text-sm text-state-danger">
+        <p role="alert" aria-live="assertive" className="rounded-xl border border-state-danger/30 bg-state-danger-soft p-3 text-sm text-state-danger">
           {error}
         </p>
       )}
-      <Button type="submit" size="lg" disabled={busy} className="w-full">
+      <Button type="submit" size="lg" disabled={busy} aria-busy={busy} className="w-full">
         {busy ? tr("Accesso…") : tr("Accedi")}
       </Button>
     </form>

@@ -55,3 +55,28 @@ export const DEFAULT_FULFILMENT_CLASS: FulfilmentClass = "standard";
 export function fulfilmentPromise(fulfilmentClass: FulfilmentClass): FulfilmentPromise {
   return FULFILMENT_PROMISES[fulfilmentClass];
 }
+
+/**
+ * The customer-facing name of each service class — the Italian source text,
+ * passed through `tr()` by the screen that draws it.
+ *
+ * ONE SOURCE for the checkout choice and the order record, so the words a
+ * customer picked are the words the order shows back. The stored value
+ * (`standard`, `express`) is a column value, not customer copy, and must never
+ * be rendered as-is.
+ */
+export const FULFILMENT_LABELS: Readonly<Record<FulfilmentClass, string>> = {
+  standard: "Standard · consegna entro 7 giorni",
+  express: "Express · 24–48h, su verifica",
+};
+
+/**
+ * The label for a stored class, or null for anything unrecognised.
+ *
+ * Null rather than the raw value: an unknown class is a data problem for an
+ * operator, and echoing the column value would put backend vocabulary on a
+ * customer screen.
+ */
+export function fulfilmentLabel(value: unknown): string | null {
+  return isFulfilmentClass(value) ? FULFILMENT_LABELS[value] : null;
+}

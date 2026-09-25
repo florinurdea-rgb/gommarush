@@ -149,10 +149,14 @@ export function CustomerMobileNav() {
               <Link
                 href={href}
                 aria-current={active ? "page" : undefined}
-                className={`flex min-h-[56px] flex-col items-center justify-center gap-1 px-1 text-[11px] font-bold transition-colors ${
+                className={`relative flex min-h-[56px] flex-col items-center justify-center gap-1 px-1 text-[11px] font-bold transition-colors focus:outline-none focus-visible:bg-accent-light ${
                   active ? "text-accent" : "text-ink-soft"
                 }`}
               >
+                {/* A thin rule over the current tab: obvious, not heavy, and not colour alone. */}
+                {active && (
+                  <span className="absolute inset-x-5 top-0 h-0.5 rounded-b bg-accent" aria-hidden="true" />
+                )}
                 <span className="relative">
                   <Icon className="h-[22px] w-[22px]" />
                   {badge && count !== null && count > 0 && (

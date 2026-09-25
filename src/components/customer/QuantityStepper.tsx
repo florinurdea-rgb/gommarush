@@ -55,7 +55,7 @@ export function QuantityStepper({
   // 44px on touch: the brief's floor, and the reason the buttons are not
   // icon-sized squares.
   const button =
-    "flex w-11 flex-none items-center justify-center text-ink-soft transition-colors hover:bg-surface-soft active:bg-surface-soft disabled:text-ink/25 disabled:hover:bg-transparent";
+    "flex w-11 flex-none items-center justify-center text-ink-soft transition-colors hover:bg-surface-soft active:bg-surface-soft focus:outline-none focus-visible:bg-accent-light focus-visible:text-accent disabled:text-ink/25 disabled:hover:bg-transparent";
 
   const step = (delta: number) => {
     const next = clampQuantity((parseQuantity(draft) ?? value) + delta);
@@ -66,7 +66,7 @@ export function QuantityStepper({
 
   return (
     <div
-      className={`inline-flex ${height} items-stretch overflow-hidden rounded-xl border border-ink/15 bg-white focus-within:border-accent`}
+      className={`inline-flex ${height} items-stretch overflow-hidden rounded-xl border border-ink/15 bg-white focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20`}
     >
       <button
         type="button"
@@ -81,7 +81,7 @@ export function QuantityStepper({
         type="text"
         inputMode="numeric"
         aria-label={label}
-        className="w-12 border-x border-ink/10 bg-transparent text-center text-[15px] font-bold text-ink outline-none disabled:text-ink/40"
+        className="w-12 border-x border-ink/10 bg-transparent text-center text-base font-bold text-ink outline-none disabled:text-ink/40"
         disabled={disabled}
         value={draft}
         onChange={(e) => {

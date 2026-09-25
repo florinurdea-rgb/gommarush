@@ -231,9 +231,13 @@ export function CustomerBasket() {
       <h1 className="text-xl font-extrabold tracking-tight text-ink sm:text-2xl">{tr("Carrello")}</h1>
 
       {error && (
-        <p role="alert" className="mt-4 rounded-xl border border-state-danger/30 bg-state-danger-soft p-4 text-sm text-state-danger">
-          {error}
-        </p>
+        <div role="alert" className="mt-4 rounded-xl border border-state-danger/30 bg-state-danger-soft p-4">
+          <p className="text-sm font-semibold text-state-danger">{error}</p>
+          {/* The basket itself is safe in the browser; only the check failed. */}
+          <Button className="mt-3" size="md" variant="secondary" disabled={busy} onClick={() => void load(stored)}>
+            {tr("Riprova")}
+          </Button>
+        </div>
       )}
 
       <div className="mt-5 grid gap-4 lg:grid-cols-[1.7fr_1fr] lg:items-start">
@@ -276,7 +280,6 @@ export function CustomerBasket() {
                   <QuantityStepper
                     value={s.quantity}
                     label={`${tr("Quantità")} ${name}`.trim()}
-                    size="sm"
                     /* Typing: debounced. +/-: immediate — the customer has
                        finished expressing the change. */
                     onChange={(q) => changeQuantity(s, q, false)}
@@ -284,7 +287,7 @@ export function CustomerBasket() {
                   />
                   <button
                     type="button"
-                    className="min-h-[40px] px-2 text-sm font-semibold text-ink-soft underline underline-offset-2 hover:text-ink"
+                    className="min-h-[44px] px-2 text-sm font-semibold text-ink-soft underline underline-offset-2 hover:text-ink"
                     onClick={() => remove(s)}
                   >
                     {tr("Rimuovi")}
@@ -301,6 +304,7 @@ export function CustomerBasket() {
                   tyre={line.tyre}
                   validating={validating.has(key)}
                   onAcceptAvailable={(q) => changeQuantity(s, q, true)}
+                  onRetry={() => void load(stored, [key])}
                   busy={busy}
                   tr={tr}
                 />

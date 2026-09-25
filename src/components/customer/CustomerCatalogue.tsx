@@ -7,6 +7,8 @@ import {
   CommerceAllSeasonIcon,
   CommerceCartIcon,
   CommerceCheckIcon,
+  CommerceMinusIcon,
+  CommercePlusIcon,
   CommerceSnowflakeIcon,
   CommerceSunIcon,
   CommerceTruckIcon,
@@ -160,6 +162,8 @@ export function CustomerCatalogue({
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Bumped by "Riprova" to re-run the same search after a failed request. */
+  const [attempt, setAttempt] = useState(0);
 
   const dimensions = { widthMm: width, aspectRatio: aspect, rimInch: rim };
   const canQuery = shouldQueryCatalogue(dimensions);
@@ -238,7 +242,7 @@ export function CustomerCatalogue({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [filters, page, canQuery]);
+  }, [filters, page, canQuery, attempt]);
 
   const view = catalogueViewState({
     ...dimensions,
@@ -326,6 +330,9 @@ export function CustomerCatalogue({
 
   const hasSelection = Boolean(width || aspect || rim || season || brand || tier);
   const hasExtraFilters = Boolean(season || brand || tier);
+  const extraFilterCount = [season, brand, tier].filter(Boolean).length;
+  /** Phone only: whether season/brand/sort are unfolded. Always shown from `sm`. */
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const basketCount = useBasketCount();
 
@@ -358,102 +365,148 @@ export function CustomerCatalogue({
         that scrolls away turns every adjustment into a trip back to the top.
         It sits below the shell header, which is itself sticky at `top-0`.
       */}
-      <div className="sticky top-[57px] z-30 -mx-4 mt-4 border-b border-ink/10 bg-surface-soft/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:top-[65px] sm:px-6">
-        <div className="rounded-2xl border border-ink/10 bg-white p-3 shadow-sm">
-          <p className="sr-only">
-            {tr("Larghezza, spalla e cerchio sono obbligatori per vedere i risultati.")}
-          </p>
+      <div className="sticky top-[57px] z-30 -mx-4 mt-4 border-b border-ink/10 bg-white/95 px-4 py-3 backdrop-blur sm:top-[65px] sm:mx-0 sm:rounded-b-2xl sm:border-x sm:px-4">
+        <p className="sr-only">
+          {tr("Larghezza, spalla e cerchio sono obbligatori per vedere i risultati.")}
+        </p>
 
-          {/* PRIMARY — the size. Three equal columns at every width. */}
-          <div className="grid grid-cols-3 gap-2">
-            <Select
-              label={tr("Larghezza")}
-              required
-              value={width}
-              set={setWidth}
-              facetValues={widths}
-              placeholder={tr("Scegli")}
-            />
-            <Select
-              label={tr("Spalla")}
-              required
-              value={aspect}
-              set={setAspect}
-              facetValues={aspectRatios}
-              placeholder={tr("Scegli")}
-            />
-            <Select
-              label={tr("Cerchio")}
-              required
-              value={rim}
-              set={setRim}
-              facetValues={rims}
-              placeholder={tr("Scegli")}
-            />
-          </div>
+        {/* PRIMARY — the size. Three equal columns at every width. */}
+        <div className="grid grid-cols-3 gap-2">
+          <Select
+            label={tr("Larghezza")}
+            required
+            value={width}
+            set={setWidth}
+            facetValues={widths}
+            placeholder={tr("Scegli")}
+          />
+          <Select
+            label={tr("Spalla")}
+            required
+            value={aspect}
+            set={setAspect}
+            facetValues={aspectRatios}
+            placeholder={tr("Scegli")}
+          />
+          <Select
+            label={tr("Cerchio")}
+            required
+            value={rim}
+            set={setRim}
+            facetValues={rims}
+            placeholder={tr("Scegli")}
+          />
+        </div>
 
-          {/* SECONDARY — season, brand, sort. Quieter, and on their own row. */}
-          <div className="mt-2 grid grid-cols-2 gap-2 border-t border-ink/10 pt-2 sm:grid-cols-3">
-            <Field label={tr("Stagione")}>
-              <select value={season} onChange={(e) => setSeason(e.target.value)} className={CONTROL}>
+        {/*
+          ON A PHONE THE SECONDARY FILTERS FOLD AWAY.
+
+          This band is sticky, and on a 375px screen the full two-row version
+          took roughly half of what was left between the header and the bottom
+          navigation — once a size was chosen, the results it existed to serve
+          started below the fold. The size stays visible and one tap away at
+          all times; season, brand and sort sit behind one clearly labelled
+          toggle that says how many of them are in force. From `sm` there is
+          room, and they are always shown.
+        */}
+        <div className="mt-2 flex items-center justify-between gap-2 sm:hidden">
+          <button
+            type="button"
+            aria-expanded={filtersOpen}
+            aria-controls="catalogue-secondary-filters"
+            onClick={() => setFiltersOpen((open) => !open)}
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-ink/15 bg-white px-3 text-sm font-bold text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            {filtersOpen ? (
+              <CommerceMinusIcon className="h-4 w-4" />
+            ) : (
+              <CommercePlusIcon className="h-4 w-4" />
+            )}
+            {tr("Filtri aggiuntivi")}
+            {extraFilterCount > 0 && (
+              <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-accent px-1.5 py-0.5 text-[11px] font-bold leading-none text-white">
+                {extraFilterCount}
+              </span>
+            )}
+          </button>
+          {hasSelection && (
+            <button
+              type="button"
+              onClick={reset}
+              className="min-h-[44px] px-2 text-xs font-bold text-ink-soft underline underline-offset-2 hover:text-ink"
+            >
+              {tr("Azzera")}
+            </button>
+          )}
+        </div>
+
+        {/* SECONDARY — season, brand, sort. Quieter, and on their own row. */}
+        <div
+          id="catalogue-secondary-filters"
+          className={`mt-2 grid-cols-2 gap-2 border-t border-ink/10 pt-2 sm:grid sm:grid-cols-4 ${
+            filtersOpen ? "grid" : "hidden"
+          }`}
+        >
+          <Field label={tr("Stagione")}>
+            <select value={season} onChange={(e) => setSeason(e.target.value)} className={CONTROL}>
+              <option value="">{tr("Tutte")}</option>
+              <option value="summer">{tr("Estive")}</option>
+              <option value="winter">{tr("Invernali")}</option>
+              <option value="all_season">{tr("4 stagioni")}</option>
+            </select>
+          </Field>
+
+          {/*
+            Filled from the same request as the results, so every option is a
+            brand that exists in the chosen size. Empty until a size is
+            picked, because a brand list over the whole catalogue is a scan
+            this screen was rebuilt to avoid.
+          */}
+          <Select
+            label={tr("Marca")}
+            value={brand}
+            set={setBrand}
+            facetValues={brands}
+            placeholder={tr("Tutte")}
+          />
+
+          <Field label={tr("Ordina per")}>
+            <select value={sort} onChange={(e) => setSort(e.target.value)} className={CONTROL}>
+              <option value="price_asc">{tr("Prezzo più basso")}</option>
+              <option value="brand_asc">{tr("Marca A–Z")}</option>
+            </select>
+          </Field>
+
+          {/*
+            Premium / Fascia media / Economiche appear only once an APPROVED
+            brand classification exists. Three filters that all return nothing
+            would read as an empty catalogue instead of an unset business rule.
+          */}
+          {tiersConfigured && (
+            <Field label={tr("Fascia")}>
+              <select value={tier} onChange={(e) => setTier(e.target.value)} className={CONTROL}>
                 <option value="">{tr("Tutte")}</option>
-                <option value="summer">{tr("Estive")}</option>
-                <option value="winter">{tr("Invernali")}</option>
-                <option value="all_season">{tr("4 stagioni")}</option>
+                {BRAND_TIER_LABELS.map((x) => (
+                  <option key={x.tier} value={x.tier}>
+                    {x.label}
+                  </option>
+                ))}
               </select>
             </Field>
+          )}
 
-            {/*
-              Filled from the same request as the results, so every option is a
-              brand that exists in the chosen size. Empty until a size is
-              picked, because a brand list over the whole catalogue is a scan
-              this screen was rebuilt to avoid.
-            */}
-            <Select
-              label={tr("Marca")}
-              value={brand}
-              set={setBrand}
-              facetValues={brands}
-              placeholder={tr("Tutte")}
-            />
-
-            <Field label={tr("Ordina per")}>
-              <select value={sort} onChange={(e) => setSort(e.target.value)} className={CONTROL}>
-                <option value="price_asc">{tr("Prezzo più basso")}</option>
-                <option value="brand_asc">{tr("Marca A–Z")}</option>
-              </select>
-            </Field>
-
-            {/*
-              Premium / Fascia media / Economiche appear only once an APPROVED
-              brand classification exists. Three filters that all return nothing
-              would read as an empty catalogue instead of an unset business rule.
-            */}
-            {tiersConfigured && (
-              <Field label={tr("Fascia")}>
-                <select value={tier} onChange={(e) => setTier(e.target.value)} className={CONTROL}>
-                  <option value="">{tr("Tutte")}</option>
-                  {BRAND_TIER_LABELS.map((x) => (
-                    <option key={x.tier} value={x.tier}>
-                      {x.label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            )}
-
-            {hasSelection && (
-              <div className="col-span-2 flex justify-end sm:col-span-3">
-                <button
-                  type="button"
-                  onClick={reset}
-                  className="min-h-[36px] text-xs font-bold text-ink-soft underline underline-offset-2 hover:text-ink"
-                >
-                  {tr("Azzera")}
-                </button>
-              </div>
-            )}
-          </div>
+          {/* From `sm` the reset sits at the end of the secondary row. */}
+          {hasSelection && (
+            <div className="hidden items-end justify-end sm:flex">
+              <button
+                type="button"
+                onClick={reset}
+                className="min-h-[44px] px-2 text-xs font-bold text-ink-soft underline underline-offset-2 hover:text-ink"
+              >
+                {tr("Azzera")}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -474,9 +527,12 @@ export function CustomerCatalogue({
         ) : view === "loading" ? (
           <ResultsSkeleton tr={tr} />
         ) : view === "error" ? (
-          <p className="rounded-2xl border border-state-danger/30 bg-state-danger-soft p-4 text-state-danger">
-            {error}
-          </p>
+          <div role="alert" className="rounded-2xl border border-state-danger/30 bg-state-danger-soft p-4">
+            <p className="text-sm font-semibold text-state-danger">{error}</p>
+            <Button className="mt-3" size="md" variant="secondary" onClick={() => setAttempt((n) => n + 1)}>
+              {tr("Riprova")}
+            </Button>
+          </div>
         ) : view === "refused" ? (
           <p className="rounded-2xl border border-ink/10 bg-white p-5 text-sm text-ink-soft">
             {tr("La selezione è troppo ampia per essere ordinata correttamente.")}{" "}
@@ -510,11 +566,15 @@ export function CustomerCatalogue({
             </div>
 
             {total > PAGE_SIZE && (
-              <nav className="mt-5 flex items-center justify-between gap-4" aria-label={tr("Paginazione")}>
+              <nav
+                className="mt-5 grid grid-cols-2 items-center gap-3 sm:flex sm:justify-between sm:gap-4"
+                aria-label={tr("Paginazione")}
+              >
                 <Button size="md" variant="secondary" disabled={page === 0} onClick={() => setPage((x) => Math.max(x - 1, 0))}>
                   {tr("Precedente")}
                 </Button>
-                <span className="text-sm text-ink-soft">
+                {/* Its own line on a phone, where three items do not fit across 320px. */}
+                <span className="order-first col-span-2 text-center text-sm text-ink-soft sm:order-none">
                   {tr("Pagina")} {page + 1} {tr("di")} {lastPage + 1}
                 </span>
                 <Button
@@ -532,7 +592,13 @@ export function CustomerCatalogue({
       </div>
 
       {toast && <AddedToast key={toast.id} tyre={toast.tyre} quantity={toast.quantity} tr={tr} />}
-      {basketCount > 0 && <StickyBasketBar count={basketCount} tr={tr} />}
+      {basketCount > 0 && (
+        <>
+          {/* Reserves the sticky bar's height, so it never covers the last result or the pager. */}
+          <div className="h-[60px] md:hidden" aria-hidden="true" />
+          <StickyBasketBar count={basketCount} tr={tr} />
+        </>
+      )}
     </div>
   );
 }
@@ -541,7 +607,7 @@ type Tr = (text: string) => string;
 
 /** Shared control styling, so every field in the bar is the same object. */
 const CONTROL =
-  "mt-1 h-11 w-full rounded-xl border border-ink/15 bg-white px-2.5 text-sm font-semibold text-ink";
+  "mt-1 h-11 w-full rounded-xl border border-ink/15 bg-white px-2.5 text-base font-semibold text-ink sm:text-sm";
 
 /**
  * The basket count, live, for the sticky bar.
@@ -712,9 +778,9 @@ const SEASON_ICONS: Record<string, (props: { className?: string }) => JSX.Elemen
 /**
  * One result.
  *
- * MOBILE IS NOT THE DESKTOP ROW SQUEEZED. Under `sm` the card stacks: identity
- * first, then the price block, then a full-width action row with the stepper
- * and Aggiungi side by side and both at 44px. From `sm` it becomes a single
+ * MOBILE IS NOT THE DESKTOP ROW SQUEEZED. Under `sm` identity and price share
+ * the first row and a full-width action row follows, with the stepper and
+ * Aggiungi side by side and both at 44px. From `sm` it becomes a single
  * scanning row — identity left, price right, action right — so a shop can run
  * down fifty of them and add from several without the eye leaving one column.
  *
@@ -752,9 +818,17 @@ function OfferCard({
         added ? "border-state-success" : "border-ink/10"
       }`}
     >
-      <div className="sm:flex sm:items-center sm:gap-4">
+      {/*
+        ONE GRID, TWO SHAPES. Phone: identity and price share the first row,
+        the stepper and Aggiungi take the full second row. From `sm`: one
+        scanning row — identity, price, action. The eye runs brand/model →
+        size → attributes → availability and delivery → price → quantity + add,
+        and a phone shows roughly twice as many results per screen as the
+        stacked card did.
+      */}
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center sm:gap-x-4 sm:gap-y-2">
         {/* ---- IDENTITY ------------------------------------------------ */}
-        <div className="min-w-0 sm:flex-1">
+        <div className="min-w-0">
           <div className="truncate text-[15px] font-extrabold text-ink">
             {name || tr("Marca non indicata")}
           </div>
@@ -762,19 +836,24 @@ function OfferCard({
             {t.sizeDisplay ?? tr("Misura non indicata")}
             {loadSpeed ? ` · ${loadSpeed}` : ""}
           </div>
+        </div>
 
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            {t.season && SEASON_LABELS[t.season] && (
-              <Tag>
-                {SeasonIcon && <SeasonIcon className="h-3.5 w-3.5" />}
-                {tr(SEASON_LABELS[t.season])}
-              </Tag>
-            )}
-            {t.xl && <Tag>XL</Tag>}
-            {t.runFlat && <Tag>Run-flat</Tag>}
-            {t.oldDot && <Tag>{tr("DOT precedente")}</Tag>}
-            <Tag>{tr(AVAILABILITY_LABELS[offer.availability])}</Tag>
-          </div>
+        {/* Attributes, availability, delivery: full width on a phone, under the name from `sm`. */}
+        <div className="col-span-2 -mt-1 flex flex-wrap items-center gap-1.5 sm:col-span-1 sm:col-start-1 sm:row-start-2 sm:mt-0">
+          {t.season && SEASON_LABELS[t.season] && (
+            <Tag>
+              {SeasonIcon && <SeasonIcon className="h-3.5 w-3.5" />}
+              {tr(SEASON_LABELS[t.season])}
+            </Tag>
+          )}
+          {t.xl && <Tag>XL</Tag>}
+          {t.runFlat && <Tag>Run-flat</Tag>}
+          {t.oldDot && <Tag>{tr("DOT precedente")}</Tag>}
+          <Tag>{tr(AVAILABILITY_LABELS[offer.availability])}</Tag>
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-state-success">
+            <CommerceTruckIcon className="h-3.5 w-3.5" />
+            {tr("Consegna entro")} {deliveryDays} {tr("giorni")}
+          </span>
         </div>
 
         {/* ---- PRICE ---------------------------------------------------
@@ -782,24 +861,18 @@ function OfferCard({
             owner decision, recorded at the top of this file. Nothing about
             PFU provenance changes — this is what is drawn, not what is held.
         */}
-        <div className="mt-3 flex items-end justify-between gap-4 border-t border-ink/10 pt-3 sm:mt-0 sm:block sm:w-auto sm:flex-none sm:border-0 sm:pt-0 sm:text-right">
-          <div>
-            <div className="text-lg font-extrabold leading-none text-ink">
-              {money(offer.tyreSaleNetCents)}{" "}
-              <span className="text-xs font-semibold text-ink-soft">{tr("netto")}</span>
-            </div>
-            <div className="mt-1 text-xs font-semibold text-ink-soft">
-              {tr("PFU")} {money(offer.pfuAmountCents)}
-            </div>
-            <div className="mt-1 flex items-center gap-1 text-xs font-semibold text-state-success sm:justify-end">
-              <CommerceTruckIcon className="h-3.5 w-3.5" />
-              {tr("Consegna entro")} {deliveryDays} {tr("giorni")}
-            </div>
+        <div className="col-start-2 row-start-1 text-right sm:row-span-2">
+          <div className="whitespace-nowrap text-lg font-extrabold leading-none text-ink">
+            {money(offer.tyreSaleNetCents)}{" "}
+            <span className="text-xs font-semibold text-ink-soft">{tr("netto")}</span>
+          </div>
+          <div className="mt-1 whitespace-nowrap text-xs font-semibold text-ink-soft">
+            {tr("PFU")} {money(offer.pfuAmountCents)}
           </div>
         </div>
 
         {/* ---- ACTION --------------------------------------------------- */}
-        <div className="mt-3 flex items-center gap-2 sm:mt-0 sm:flex-none">
+        <div className="col-span-2 flex items-center gap-2 sm:col-span-1 sm:col-start-3 sm:row-span-2 sm:row-start-1">
           <QuantityStepper
             value={quantity}
             onChange={onQuantityChange}
@@ -810,7 +883,7 @@ function OfferCard({
             type="button"
             disabled={!offer.priceAvailable}
             onClick={() => onAdd(offer, quantity)}
-            className={`inline-flex h-11 min-w-[7rem] flex-1 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-bold transition-colors disabled:cursor-not-allowed disabled:bg-ink/10 disabled:text-ink/40 sm:flex-none ${
+            className={`inline-flex h-11 min-w-[7rem] flex-1 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-ink/10 disabled:text-ink/40 sm:flex-none ${
               added ? "bg-state-success text-white" : "bg-accent text-white hover:bg-accent-dark"
             }`}
           >

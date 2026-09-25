@@ -21,8 +21,10 @@ import { alternativesHref, type AlternativesTyre } from "@/lib/customer/alternat
  *
  * A VERIFICATION FAILURE IS NOT OUT OF STOCK, and the two must never look
  * alike. Out of stock is red and blocks the order; "temporarily unable to
- * confirm" is amber, carries the time of the figure being used, and does not
- * block anything.
+ * confirm" is amber, carries the time of the figure being used, and offers a
+ * retry. It does not stop the customer reaching checkout, but the order
+ * itself is only created after a fresh check succeeds (D27): the final submit
+ * fails closed with LIVE_VERIFICATION_UNAVAILABLE, never with out-of-stock.
  */
 
 export type LineState = "available" | "limited" | "unavailable";
@@ -41,6 +43,8 @@ export interface LineStatusProps {
   busy?: boolean;
   /** True while a line-level validation is in flight. */
   validating?: boolean;
+  /** Re-asks for this line after a check that did not complete. */
+  onRetry?: (() => void) | null;
   tr: (text: string) => string;
 }
 
@@ -87,6 +91,7 @@ export function LineAvailability({
   onAcceptAvailable,
   busy,
   validating,
+  onRetry,
   tr,
 }: LineStatusProps) {
   const href = alternativesHref(tyre);
@@ -100,8 +105,8 @@ export function LineAvailability({
   */
   if (validating) {
     return (
-      <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-ink-soft">
-        <CommerceRefreshIcon className="h-3.5 w-3.5 animate-spin" />
+      <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-ink-soft" role="status">
+        <CommerceRefreshIcon className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
         {tr("Verifica in corso…")}
       </p>
     );
@@ -172,6 +177,38 @@ export function LineAvailability({
             </Link>
           )}
         </div>
+      </div>
+    );
+  }
+
+  /*
+    The check did not complete. AMBER, with the time of the figure in use and
+    a retry — never green, because nothing was confirmed, and never red,
+    because nothing is known to be missing. The order step makes its own fresh
+    check and refuses to proceed on a line it cannot confirm, so this is the
+    place to try again rather than a verdict.
+  */
+  if (verifiedSource === "feed_after_live_failure") {
+    return (
+      <div
+        role="status"
+        className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-state-warning/40 bg-state-warning-soft px-3 py-1.5"
+      >
+        <p className="flex items-center gap-1.5 text-xs font-bold text-ink">
+          <CommerceRefreshIcon className="h-3.5 w-3.5 flex-none text-state-warning" />
+          {observed}
+        </p>
+        {/* Compact on purpose: when every line failed at once, a panel per line was a wall of amber. */}
+        {onRetry && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onRetry}
+            className="min-h-[44px] px-1 text-xs font-bold text-ink underline underline-offset-2 disabled:opacity-50"
+          >
+            {tr("Riprova")}
+          </button>
+        )}
       </div>
     );
   }

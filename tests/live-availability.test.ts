@@ -2,16 +2,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BasketResolvedLine } from "@/lib/server/customer-basket";
 
 /**
- * The live supplier check that runs at the final confirm.
+ * The live supplier check, run on every basket preview and again, fresh, at
+ * the final confirm.
  *
- * Three owner decisions, 2026-09-24, and each one is a property here rather
- * than a comment:
+ * Owner decisions, 2026-09-24, and each one is a property here rather than a
+ * comment:
  *
- *   * The lookup happens at confirm and nowhere else. That is enforced by
- *     who calls this module, and asserted in the checkout/preview tests.
- *   * It FAILS OPEN — a gateway that does not answer must not stop GommaRush
- *     selling — but never silently: the line is marked so the screen and the
- *     order snapshot both know a live answer was not obtained.
+ *   * The lookup runs on basket previews (D26, superseding the confirm-only
+ *     D21) and at confirm with `forceFresh`, bypassing the short cache.
+ *   * This module never throws and never blocks on its own: a gateway that
+ *     does not answer leaves the line MARKED `feed_after_live_failure`. The
+ *     ORDER gate then fails closed on any such line (D27,
+ *     LIVE_VERIFICATION_UNAVAILABLE); the preview shows it as a retryable
+ *     state, never as out of stock.
  *   * A lane with no live API keeps its feed observation and says so, rather
  *     than being dressed up as verified.
  *
@@ -110,6 +113,24 @@ describe("when the supplier answers", () => {
 
     const result = await verifyBasketLive([line()]);
     expect(result.lines[0].availability).toEqual({ state: "limited", availableQuantity: 2 });
+  });
+
+  /**
+   * The recovery path the basket offers: "Porta a 2" re-asks at the lower
+   * quantity, and the SAME live answer now covers it. Nothing is reduced for
+   * the customer; the reduction is theirs and the re-check is fresh.
+   */
+  it("makes a limited line available again once the quantity is lowered to what is held", async () => {
+    const { verifyBasketLive } = await import("@/lib/server/live-availability");
+    stockByEan.mockResolvedValue(stockRow("1234567890123", "2"));
+
+    const short = await verifyBasketLive([line({}, 4)]);
+    expect(short.lines[0].availability).toEqual({ state: "limited", availableQuantity: 2 });
+    expect(short.lines[0].input.quantity, "the requested quantity is kept, not reduced").toBe(4);
+
+    const lowered = await verifyBasketLive([line({}, 2)], Date.now, { forceFresh: true });
+    expect(lowered.lines[0].availability).toEqual({ state: "available" });
+    expect(lowered.lines[0].provenance.source).toBe("live");
   });
 
   it("turns a line the supplier no longer holds into an unavailable line", async () => {

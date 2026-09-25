@@ -172,9 +172,11 @@ export async function createPortalSalesOrder(input: CreateInput): Promise<Create
   /*
     THE LIVE CHECK, at the last possible moment.
 
-    Read-only protocol 103, Inter-Sprint lane only, failing back to the stored
-    observation rather than blocking the sale. See live-availability.ts for the
-    owner decisions behind each of those three constraints.
+    Read-only protocol 103, Inter-Sprint lane only. verifyBasketLive itself
+    never throws — a lane that could not answer is MARKED
+    `feed_after_live_failure` — and the gate below then refuses to create the
+    order on any such line (D27, fail closed). See live-availability.ts for
+    the owner decisions behind those constraints.
   */
   /*
     `forceFresh`: the authoritative final check must be made NOW.

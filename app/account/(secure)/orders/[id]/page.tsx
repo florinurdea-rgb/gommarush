@@ -5,6 +5,7 @@ import { OrderStatusTag } from "@/components/customer/OrderStatusTag";
 import { getCustomerSession } from "@/lib/auth/customer-session";
 import { getCustomerSalesOrderDetail } from "@/lib/server/sales-orders";
 import { formatSalesOrderNumber } from "@/lib/commerce/order-number";
+import { fulfilmentLabel } from "@/lib/commerce/fulfilment";
 import { getTr } from "@/lib/i18n/tr-server";
 
 export const dynamic = "force-dynamic";
@@ -50,6 +51,7 @@ export default async function CustomerOrderDetailPage({
           cents / 100
         );
 
+  const service = fulfilmentLabel(order.fulfilment_class);
   const delivery = (order.delivery_snapshot ?? {}) as Record<string, string | null>;
   const addressLine = [delivery.address_line1, delivery.postal_code, delivery.city, delivery.province]
     .filter(Boolean)
@@ -59,7 +61,7 @@ export default async function CustomerOrderDetailPage({
     <div>
       <Link
         href="/account/orders"
-        className="inline-flex min-h-[40px] items-center text-sm font-semibold text-ink-soft underline underline-offset-2 hover:text-ink"
+        className="inline-flex min-h-[44px] items-center text-sm font-semibold text-ink-soft underline underline-offset-2 hover:text-ink"
       >
         {tr("Ordini")}
       </Link>
@@ -146,10 +148,17 @@ export default async function CustomerOrderDetailPage({
               <p className="mt-2 text-sm font-bold text-ink">{delivery.location_name}</p>
             )}
             {addressLine && <p className="mt-1 text-sm text-ink-soft">{addressLine}</p>}
-            <p className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-ink-soft">
-              <CommerceTruckIcon className="h-4 w-4" />
-              {order.fulfilment_class}
-            </p>
+            {/*
+              The service the customer chose, in the words they chose it by.
+              `fulfilment_class` is a column value and is never drawn raw; an
+              unrecognised one draws nothing rather than leaking it.
+            */}
+            {service && (
+              <p className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-ink-soft">
+                <CommerceTruckIcon className="h-4 w-4" />
+                {tr(service)}
+              </p>
+            )}
           </section>
 
           {order.customer_note && (

@@ -31,8 +31,14 @@ export default async function CustomerLayout({ children }: { children: React.Rea
 
   return (
     <div className="min-h-screen bg-surface-soft">
+      {/*
+        FIXED HEIGHT: 56px + hairline on a phone, 64px + hairline from `sm`.
+        The catalogue's sticky size bar pins itself directly underneath at
+        `top-[57px]` / `sm:top-[65px]`; a header that grew with its content
+        (the logo mark alone is 44px, then 56px) slid that bar partly under it.
+      */}
       <header className="sticky top-0 z-40 border-b border-steel-soft bg-white">
-        <div className="mx-auto flex w-full max-w-content items-center justify-between gap-4 px-4 py-3 sm:px-6">
+        <div className="mx-auto flex w-full max-w-content h-14 items-center justify-between gap-4 px-4 sm:h-16 sm:px-6">
           <Link
             href="/account/catalogue"
             aria-label={tr("Area clienti")}

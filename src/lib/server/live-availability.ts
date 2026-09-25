@@ -280,8 +280,13 @@ function applyLiveAnswer(line: BasketResolvedLine, answer: LiveAnswer): BasketRe
  * Verifies a resolved basket against the supplier, line by line.
  *
  * Never throws. Every failure path ends in the feed answer this was given,
- * because the caller is about to create an order and an exception here would
- * turn a supplier hiccup into a lost sale.
+ * MARKED `feed_after_live_failure` with its reason, so each caller decides
+ * what a failure means: the basket preview shows the stored figure with a
+ * distinct retryable "could not confirm" state, while the order path
+ * (createPortalSalesOrder) refuses to create the order on any such line with
+ * LIVE_VERIFICATION_UNAVAILABLE (D27, fail closed). Throwing here would make
+ * the preview unusable whenever the gateway is down, without making the order
+ * path any safer.
  */
 export interface VerifyOptions {
   /**
