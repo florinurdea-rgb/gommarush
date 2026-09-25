@@ -47,12 +47,21 @@ import type {
  * lookup; a line on one of those keeps its stored observation and says so,
  * because there is no honest way to invent a check that does not exist.
  *
- * FAILS OPEN, NEVER SILENTLY. Owner decision, 2026-09-24: a gateway that does
- * not answer must not stop GommaRush selling. The stored observation stands,
- * the line is marked `feed_after_live_failure` with the reason, and both the
- * checkout screen and the order snapshot carry that distinction. What is
- * forbidden is the third option — falling back while still telling the
- * customer the figure was verified live.
+ * NEVER SILENT, AND FAIL-CLOSED WHERE IT COUNTS. This module never throws: a
+ * gateway that does not answer leaves the stored observation on the line,
+ * MARKED `feed_after_live_failure` with the reason. The basket may show that
+ * (as a distinct, retryable state — never as out of stock); the ORDER gate in
+ * sales-orders.ts refuses to create an order on any such line
+ * (LIVE_VERIFICATION_UNAVAILABLE, D27, superseding the fail-open half of
+ * D22). What is forbidden everywhere is presenting a stored figure as a live
+ * one.
+ *
+ * "VERIFIED" MEANS QUANTITY AND PRICE. A live answer whose price could not be
+ * read, or could not be carried through the pricing engine, has not verified
+ * the price the customer is about to accept. The live QUANTITY still decides
+ * availability (it is authoritative), but the line is marked
+ * `feed_after_live_failure` / `price_unverified`, so the final order cannot be
+ * created against a stored price.
  */
 
 /** How long the whole verification may take before the feed answer stands. */
@@ -171,20 +180,21 @@ export function parseNetPriceCents(raw: string): number | null {
  * The customer projection is rebuilt with `toCustomerOffer`, so the live cost
  * has no field to travel in and cannot reach a customer payload.
  */
-function repriceLine(line: BasketResolvedLine, liveCostCents: number): BasketResolvedLine {
+function repriceLine(line: BasketResolvedLine, liveCostCents: number): BasketResolvedLine | null {
   const internal = line.internal;
-  if (!internal) return line;
+  if (!internal) return null;
 
   try {
     return rebuild(line, internal, liveCostCents);
   } catch (error) {
     /*
-      A re-price that cannot be completed must NOT discard an answer the
-      supplier gave us. The quantity was good; only the price could not be
-      re-derived. The line keeps the price it already had and stays live.
+      A re-price that cannot be completed must NOT discard the quantity the
+      supplier gave us, and must NOT pass the stored price off as verified.
+      Null tells the caller to keep the stored price AND mark the line as
+      not price-verified — which the order gate refuses.
     */
     logError("live_reprice_failed", error);
-    return line;
+    return null;
   }
 }
 
@@ -259,16 +269,33 @@ function applyLiveQuantity(
  * common case does no work and a malformed price column cannot disturb a line.
  */
 function applyLiveAnswer(line: BasketResolvedLine, answer: LiveAnswer): BasketResolvedLine {
-  const provenance: AvailabilityProvenance = {
-    source: "live",
-    observedAt: new Date(answer.at).toISOString(),
-  };
+  const observedAt = new Date(answer.at).toISOString();
 
-  const repriced =
-    answer.costCents !== null && answer.costCents !== line.internal?.supplierCostCents
-      ? repriceLine(line, answer.costCents)
-      : line;
+  // The price is verified only if the supplier quoted one we could read AND it
+  // either matches the cost already priced in or was re-priced successfully.
+  let repriced: BasketResolvedLine | null = null;
+  if (answer.costCents !== null) {
+    repriced =
+      answer.costCents === line.internal?.supplierCostCents
+        ? line
+        : repriceLine(line, answer.costCents);
+  }
 
+  if (repriced === null) {
+    // Quantity: live and authoritative. Price: NOT verified. The line keeps
+    // its stored price for display and is marked so the order gate refuses it.
+    return {
+      ...line,
+      availability: applyLiveQuantity(line, answer.quantity),
+      provenance: {
+        source: "feed_after_live_failure",
+        observedAt,
+        liveFailureReason: "price_unverified",
+      },
+    };
+  }
+
+  const provenance: AvailabilityProvenance = { source: "live", observedAt };
   return {
     ...repriced,
     availability: applyLiveQuantity(repriced, answer.quantity),
@@ -388,8 +415,10 @@ export async function verifyBasketLive(
     // burst of quantity edits on one tyre is one lookup rather than several.
     const cached = options.forceFresh ? undefined : liveCache.get(ean);
     if (cached && cached.expiresAt > now()) {
-      anyLive = true;
-      verified.push(applyLiveAnswer(line, cached.value));
+      const applied = applyLiveAnswer(line, cached.value);
+      if (applied.provenance.source === "live") anyLive = true;
+      else anyLiveFailure = true;
+      verified.push(applied);
       continue;
     }
 
@@ -410,25 +439,37 @@ export async function verifyBasketLive(
       }
 
       const rows = result.outcome.rows.map(toStockRow);
-      // The supplier answered about SOMETHING; make sure it was this tyre.
-      // A lookup that returns the wrong article is worse than one that
-      // returns nothing, which is the same rule the live probe applies.
-      const row = rows.find((r) => r.fields.some((f) => f.trim() === ean)) ?? rows[0] ?? null;
+      /*
+        The supplier answered about SOMETHING; make sure it was this tyre.
+
+        A row that carries the EAN is used. Failing that, a SINGLE row is
+        accepted, because the request itself was addressed by that EAN
+        (artc=E=<ean>) and there is nothing else it can be about. Several rows
+        none of which carries the EAN is ambiguous, and picking the first one
+        would apply another article's stock and price to this line — a
+        verification failure, never a guess.
+      */
+      const row =
+        rows.find((r) => r.fields.some((f) => f.trim() === ean)) ??
+        (rows.length === 1 ? rows[0] : null);
       const quantity = row ? parseAvailable(row.available) : null;
 
       if (quantity === null) {
         anyLiveFailure = true;
-        verified.push(fallback(line, row ? "unparseable_quantity" : "no_rows"));
+        verified.push(
+          fallback(
+            line,
+            row ? "unparseable_quantity" : rows.length === 0 ? "no_rows" : "ambiguous_rows"
+          )
+        );
         continue;
       }
 
       /*
-        The price is read but is NOT allowed to fail the check.
-
-        An unparseable price means "we could not re-price", not "this tyre is
-        unavailable" — the quantity answer is still good and refusing the line
-        over a malformed price column would turn a formatting quirk into a lost
-        sale. The line simply keeps the price it already had.
+        An unreadable price does not make the tyre unavailable — the quantity
+        answer still decides that — but it does mean the price was NOT
+        verified. applyLiveAnswer marks such a line `price_unverified`, which
+        the order gate refuses.
       */
       const answer: LiveAnswer = {
         quantity,
@@ -437,8 +478,10 @@ export async function verifyBasketLive(
       };
       liveCache.set(ean, { value: answer, expiresAt: now() + LIVE_CACHE_MS });
 
-      anyLive = true;
-      verified.push(applyLiveAnswer(line, answer));
+      const applied = applyLiveAnswer(line, answer);
+      if (applied.provenance.source === "live") anyLive = true;
+      else anyLiveFailure = true;
+      verified.push(applied);
     } catch (error) {
       // Timeout, DNS, TLS, HTTP 5xx — the client throws GatewayError for all
       // of them. Logged with no credential and no basket content.

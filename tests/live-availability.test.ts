@@ -165,8 +165,12 @@ describe("when the supplier answers", () => {
 });
 
 describe("when the supplier does not answer", () => {
-  /** Owner decision: a supplier outage must not stop GommaRush selling. */
-  it("keeps the feed answer rather than blocking the sale", async () => {
+  /**
+   * An outage is never "out of stock": the stored availability stays on the
+   * line for the basket to show. (The ORDER gate then refuses it — D27 — see
+   * customer-sales-orders.test.ts.)
+   */
+  it("keeps the stored availability rather than reporting out of stock", async () => {
     const { verifyBasketLive } = await import("@/lib/server/live-availability");
     stockByEan.mockRejectedValue(new Error("timeout"));
 
@@ -196,6 +200,52 @@ describe("when the supplier does not answer", () => {
 
     const result = await verifyBasketLive([line()]);
     expect(result.lines[0].provenance.liveFailureReason).toBe("gateway_92");
+  });
+
+  it("treats an authentication rejection as a verification failure, not out of stock", async () => {
+    const { verifyBasketLive } = await import("@/lib/server/live-availability");
+    stockByEan.mockRejectedValue(new Error("gateway returned HTTP 401"));
+
+    const result = await verifyBasketLive([line()]);
+    expect(result.lines[0].provenance.source).toBe("feed_after_live_failure");
+    expect(result.lines[0].availability).not.toEqual({ state: "unavailable", reason: "out_of_stock" });
+  });
+
+  /** Another article's stock and price must never be applied to this line. */
+  it("refuses to guess when several rows come back and none is this EAN", async () => {
+    const { verifyBasketLive } = await import("@/lib/server/live-availability");
+    stockByEan.mockResolvedValue({
+      outcome: {
+        status: "data",
+        rows: [
+          ["S1", "OTHER-1", "X", "G", "205/55 R16", "EUR", "50.00", "", "0"],
+          ["S2", "OTHER-2", "Y", "G", "205/55 R16", "EUR", "60.00", "", "3"],
+        ],
+        truncated: false,
+      },
+    });
+
+    const result = await verifyBasketLive([line()]);
+    expect(result.lines[0].provenance.source).toBe("feed_after_live_failure");
+    expect(result.lines[0].provenance.liveFailureReason).toBe("ambiguous_rows");
+    expect(result.lines[0].availability, "never another article's zero").toEqual({ state: "available" });
+    expect(result.lines[0].customer?.tyreSaleNetCents, "never another article's price").toBe(12_000);
+  });
+
+  /** One row, to a request addressed by this EAN, is about this EAN. */
+  it("accepts a single row even when it does not echo the EAN", async () => {
+    const { verifyBasketLive } = await import("@/lib/server/live-availability");
+    stockByEan.mockResolvedValue({
+      outcome: {
+        status: "data",
+        rows: [["SYS", "ALPHA-CODE", "ALPHA", "G", "205/55 R16", "EUR", "100.00", "125.00", "40"]],
+        truncated: false,
+      },
+    });
+
+    const result = await verifyBasketLive([line()]);
+    expect(result.lines[0].provenance.source).toBe("live");
+    expect(result.lines[0].availability).toEqual({ state: "available" });
   });
 
   it("never throws out of the verification", async () => {
@@ -325,9 +375,15 @@ describe("the live price drives the customer's price", () => {
     expect(result.lines[0].customer?.tyreSaleNetCents).toBe(12_000);
   });
 
-  /** A malformed price column must not cancel a good quantity answer. */
-  it("keeps the line live when the price cannot be read", async () => {
-    const { verifyBasketLive } = await import("@/lib/server/live-availability");
+  /**
+   * CHANGED 2026-09-25 (production gate, final-confirm freshness). This used
+   * to assert the line stayed "live" at its stored price. "Verified" must
+   * cover the PRICE as well as the quantity, so an unreadable price column
+   * keeps the live QUANTITY verdict (never "out of stock") but marks the line
+   * price_unverified — which the order gate refuses.
+   */
+  it("keeps the live quantity but marks an unreadable price as unverified", async () => {
+    const { verifyBasketLive, liveVerificationMissing } = await import("@/lib/server/live-availability");
     stockByEan.mockResolvedValue({
       outcome: {
         status: "data",
@@ -337,9 +393,25 @@ describe("the live price drives the customer's price", () => {
     });
 
     const result = await verifyBasketLive([line()]);
-    expect(result.lines[0].provenance.source).toBe("live");
     expect(result.lines[0].availability).toEqual({ state: "available" });
-    expect(result.lines[0].customer?.tyreSaleNetCents).toBe(12_000);
+    expect(result.lines[0].provenance.source).toBe("feed_after_live_failure");
+    expect(result.lines[0].provenance.liveFailureReason).toBe("price_unverified");
+    expect(result.lines[0].customer?.tyreSaleNetCents, "stored price kept for display").toBe(12_000);
+    expect(liveVerificationMissing(result.lines), "the order gate must refuse it").toBe(true);
+    expect(result.anyLiveFailure).toBe(true);
+  });
+
+  it("still reports an authoritative zero as unavailable when the price is unreadable", async () => {
+    const { verifyBasketLive } = await import("@/lib/server/live-availability");
+    stockByEan.mockResolvedValue({
+      outcome: {
+        status: "data",
+        rows: [["SYS", "1234567890123", "ALPHA", "G", "205/55 R16", "EUR", "", "", "0"]],
+        truncated: false,
+      },
+    });
+    const result = await verifyBasketLive([line()]);
+    expect(result.lines[0].availability).toEqual({ state: "unavailable", reason: "out_of_stock" });
   });
 
   it("reads both decimal conventions and refuses anything else", async () => {

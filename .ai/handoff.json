@@ -117,7 +117,7 @@
   "database_changes": "None by this session. 0005+0006 verified applied. 0007 prepared, not applied. 0004 not applied.",
   "external_actions": "NONE. No supplier order sent; live ordering remains disabled.",
   "blockers": [
-    "Inter-Sprint Gateway USERNAME and PASSWORD still pending (customer number 21185 and environment production are configured per owner). Until they are set, every live check fails and the final order submit refuses with LIVE_VERIFICATION_UNAVAILABLE (D27, by design). Browsing and baskets work.",
+    "Inter-Sprint Gateway USERNAME and PASSWORD still missing in Vercel Production (per owner). Until set, every live check fails and the final submit refuses (LIVE_VERIFICATION_UNAVAILABLE). Also confirm INTERSPRINT_GATEWAY_ENV is exactly 'production'.",
     "No customer exists in production after the reset (0 customers, 0 locations, 0 customer_accounts). A first real customer, a deliverable location and an admin-created portal account are needed before any end-to-end order.",
     "D3 - the real PFU tariff - remains open; the EUR 3/6/12/25 estimate is a placeholder and should be confirmed before the portal opens beyond a controlled test.",
     "D18: no approved brand-tier mapping, so tier filters stay hidden.",
@@ -442,7 +442,7 @@
     "Deldo: unchanged and untouched. Jan has NOT replied.",
     "Vercel env: gateway customer number 21185 / environment production configured is an OWNER STATEMENT, not observed by an agent (no Vercel access)."
   ],
-  "next_recommended_mission": "Owner review of M11B and its amendment, then the prepared-but-unexecuted items: 0004 indexes (lowest risk, biggest immediate benefit), 0003 rename, the RESET manifest, the F1 mapping decision, and now D18 the brand-tier mapping. Consider also a current-offer view or denormalised current_price_cents so price/freshness/stock sorting becomes database-native and loses its 1,000-product cap. M12 (customer catalogue -> basket -> order request) follows and should build on toCustomerOffer plus the shared brand taxonomy, not on the browse read, which is deliberately internal. Do not start M12 until it is frozen.",
+  "next_recommended_mission": "Admin Orders workflow: owner-approved state machine (TO REVIEW=requested -> CONFIRMED -> PENDING PAYMENT -> later fulfilment; REJECTED; CANCELLED; delete policy), migration for the new status + history table, admin transitions with audit, separated from supplier purchasing (which stays disabled).",
   "head_at_completion": "see commits on design/m21-customer-commerce-reskin after 5295b9f",
   "owner_decisions_confirmed_m9": {
     "provenance": "POLICY_OWNER - GommaRush business decisions recorded 2026-09-22. NOT Inter-Sprint statements. Never cite these as supplier-documented.",
@@ -721,5 +721,84 @@
     },
     "package": "supabase/pending-approval/0007_verify_and_harden_0005_0006.sql",
     "package_dry_run": "PostgreSQL 16 with a production-shaped mock (anon/authenticated/service_role, Supabase default grants, 0005+0006 applied from the files): pass; re-run pass (idempotent); after it, service_role still creates an order through the RPC, replay returns the same number, anon gets 'permission denied'; a tampered function body and a missing Inter-Sprint supplier each abort in PREFLIGHT and leave the grants unchanged."
+  },
+  "m21_production_gate": {
+    "date": "2026-09-25",
+    "verified_before_work": {
+      "pr15_head": "81f164efd5ea46ba64853a970d4aba74c5022e84 (the brief's 'f3e677c' was stale)",
+      "main": "b1a28c9ee62e5f197f1e55e6938d89b03673ddd0",
+      "ahead": 8,
+      "behind": 0
+    },
+    "env_required": {
+      "note": "Traced from src/lib/suppliers/gateway/config.ts. Vercel is NOT reachable from this sandbox (egress denies api.vercel.com and gommarush.com) and no Vercel connector exists, so presence could not be observed by an agent. Status below = owner statement; verify on /admin Sistema (reports PRESENT/MISSING without values).",
+      "INTERSPRINT_GATEWAY_CUSTOMER_NUMBER": "PRESENT (owner statement)",
+      "INTERSPRINT_GATEWAY_ENV": "PRESENT (owner statement) - MUST be exactly 'production'; any other value silently selects the TEST endpoint",
+      "INTERSPRINT_GATEWAY_USERNAME": "MISSING (owner statement)",
+      "INTERSPRINT_GATEWAY_PASSWORD": "MISSING (owner statement)",
+      "INTERSPRINT_GATEWAY_BASE_URL": "optional - leave unset (defaults per env)",
+      "INTERSPRINT_GATEWAY_TIMEOUT_MS": "optional (default 20000)",
+      "INTERSPRINT_LIVE_ORDERING_ENABLED": "must stay UNSET/false (only the exact string 'true' enables Protocol 104)"
+    },
+    "live_validation_architecture": {
+      "catalogue": "stored/imported state only; no live call.",
+      "basket_preview": "POST /api/account/basket/preview -> resolveBasket -> verifyBasketLive (Protocol 103 by EAN, 20s per-EAN answer cache, 6s budget, 500ms client typing debounce; +/- immediate).",
+      "final_submit": "createPortalSalesOrder -> idempotency lookup -> resolveBasket -> verifyBasketLive(forceFresh: true) -> liveVerificationMissing? LIVE_VERIFICATION_UNAVAILABLE -> basketIsOrderable? BASKET_NOT_ORDERABLE -> grandTotal !== acceptedTotal? PRICE_CHANGED -> monetary gate -> create_portal_sales_order RPC.",
+      "outcomes": {
+        "sufficient": "live/available",
+        "insufficient": "live/limited (N available) or unavailable at 0 - authoritative",
+        "price_changed": "re-priced via calculateTyrePrice (markup, PFU re-resolved, VAT) -> new total -> PRICE_CHANGED at submit unless re-accepted",
+        "timeout/network": "feed_after_live_failure 'transport'",
+        "auth failure": "HTTP error -> 'transport', or gateway error code -> 'gateway_NN'",
+        "malformed": "'malformed' / 'unparseable_quantity'",
+        "config missing": "'not_configured'",
+        "no EAN": "'no_identifier'",
+        "price unreadable or re-price failed": "NEW: live quantity kept, 'price_unverified'",
+        "several rows, none this EAN": "NEW: 'ambiguous_rows'",
+        "all failures": "never out_of_stock; amber retry in basket/checkout; order refused LIVE_VERIFICATION_UNAVAILABLE"
+      }
+    },
+    "defects_fixed": [
+      "An unreadable live price, or a failed re-price, left the line marked 'live' at its STORED price, so the final order could be created without the current supplier price being verified. Now marked price_unverified -> order gate refuses.",
+      "When a 103 response had rows but none carried the EAN, rows[0] was used - another article's stock and price could be applied. Now: EAN match, else a single row (request is addressed by EAN), else 'ambiguous_rows' failure.",
+      "Stale 'FAILS OPEN' module header in live-availability.ts and stale test titles corrected to D27."
+    ],
+    "final_confirm_freshness": "PROVEN: forceFresh bypasses the per-EAN cache at submit (fresh answer refreshes the cache); a test seeds the preview cache at cost 100.00, moves the supplier cost to 110.00, and shows submit re-asks, re-prices through the engine, refuses the stale accepted total with PRICE_CHANGED and a supplier-free basket, then succeeds once the recomputed total is accepted.",
+    "intersprint_protocol103_security": {
+      "primary_document": "Inter-Sprint Gateway Manual v2.2 (Moerdijk, August 2018) is NOT in this repository and was not available to this session. Every statement below is the repo's TRANSCRIPTION of it (with the manual section it cites), not independently re-verified - see R1/D6.",
+      "production_endpoint": "http://customers.inter-sprint.nl + /scripts/cgirpc32.dll/ww0800?103,... (config.ts / url.ts, cites §1.1)",
+      "test_endpoint": "http://test-001.inter-sprint.nl (cites §1.1)",
+      "https": "Transcription documents http:// only; HTTPS support is UNVERIFIED - do not switch without the manual or Inter-Sprint confirmation.",
+      "auth": "HTTP Basic (username:password) header (cites §1.4) plus customer number as the 'kl' query parameter.",
+      "architecture_assessment": "Respects the constraints: gateway client is server-only (supplier-gateway.ts imports 'server-only'); the browser only calls /api/account/*; Authorization header built per request and never stored or logged; logError writes event+message only (no URL, no headers); redirect:'error'; customer payloads rebuilt via toCustomerOffer (no cost/identity fields); refusals return codes + customer basket only. Residual: credentials and customer number cross the network in clear text on every call (security finding 1) - supplier-side fix."
+    },
+    "e2e_customer_journey": {
+      "result": "PARTIAL - proven in code and automated tests; NOT executed in production.",
+      "why_not_in_production": [
+        "No test customer exists (0 customers / locations / customer_accounts after the reset); creating one is a production mutation and the production connector is read-only.",
+        "Gateway username/password missing, so the final submit correctly refuses with LIVE_VERIFICATION_UNAVAILABLE - no order can be created until they are set.",
+        "gommarush.com is not reachable from this sandbox."
+      ],
+      "owner_manual_test": "After credentials: create a TEST customer + deliverable location in /admin, create its portal account (one-time credentials), log in, add 2+ sizes, change a quantity, checkout (bank transfer), submit; expect GR-001001, visible in /account/orders and /admin/sales-orders, status 'In attesa di conferma' / requested, source portal. Then cancel it in SQL or leave it (no status actions exist yet). No supplier order is possible: Protocol 104 is locked by INTERSPRINT_LIVE_ORDERING_ENABLED and the admin confirm button is disabled."
+    },
+    "admin_orders_gaps": {
+      "exists": [
+        "/admin/sales-orders inbox (status='requested' only, oldest first, 200 cap)",
+        "/admin/sales-orders/[id] read-only detail (lines, snapshots, totals, delivery, payment, status raw)",
+        "'Conferma e invia ordine' button, permanently disabled",
+        "DB: status in (requested, confirmed, rejected, cancelled) + confirmed_at/rejected_at/cancelled_at columns"
+      ],
+      "missing": [
+        "Any status transition: no server action/API to confirm, reject or cancel; timestamps never written",
+        "PENDING PAYMENT (and any downstream fulfilment) status: not in the sales_orders status CHECK - needs a migration + owner-approved state machine",
+        "Rejection reason / operator note field; audit history of who changed what (no sales_order_status_history table)",
+        "Delete: none exists; items cascade but no path, and deleting a numbered GR order vs cancelling it is an owner decision",
+        "Lists beyond 'requested' (confirmed/rejected/cancelled views, search by GR number, filter by customer)",
+        "Customer-visible effect of transitions (customer list already maps the 4 statuses; no notification/email)",
+        "The 'Conferma e invia ordine' label conflates commercial confirmation with supplier purchasing; confirmation must be separate from (disabled) purchasing",
+        "Admin detail renders status raw ('requested') - needs the label map"
+      ]
+    },
+    "next_recommended_mission": "Admin Orders workflow: owner-approved state machine (TO REVIEW=requested -> CONFIRMED -> PENDING PAYMENT -> later fulfilment; REJECTED; CANCELLED; delete policy), migration for the new status + history table, admin transitions with audit, separated from supplier purchasing (which stays disabled)."
   }
 }

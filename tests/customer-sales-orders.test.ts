@@ -183,6 +183,21 @@ function mockAll(scenario: Scenario = {}) {
   });
 }
 
+/** The preview route's two stages, in the same order, without Next's request plumbing. */
+async function loadWithPreview() {
+  const orders = await import("@/lib/server/sales-orders");
+  const { resolveBasket, customerBasketPayload } = await import("@/lib/server/customer-basket");
+  const { verifyBasketLive } = await import("@/lib/server/live-availability");
+  return {
+    createPortalSalesOrder: orders.createPortalSalesOrder,
+    previewBasketForTest: async () => {
+      const resolved = await resolveBasket([{ productId: PRODUCT, oldDot: false, quantity: 4 }]);
+      const verified = await verifyBasketLive(resolved);
+      return customerBasketPayload([...verified.lines]);
+    },
+  };
+}
+
 function orderInput(overrides: Record<string, unknown> = {}) {
   return {
     session: SESSION,
@@ -340,6 +355,52 @@ describe("the order is created at the price the customer accepted", () => {
     );
   });
 
+  /**
+   * FINAL-CONFIRM FRESHNESS. A basket preview seconds earlier cached the
+   * supplier's answer at the old cost. The supplier then moved its price. The
+   * order gate must ask again (forceFresh), re-price through the engine, and
+   * refuse the total the customer accepted from the stale preview — never
+   * create the order from the cached answer.
+   */
+  it("re-asks at submit, re-prices a moved supplier cost, and refuses the stale accepted total", async () => {
+    const { createPortalSalesOrder, previewBasketForTest } = await loadWithPreview();
+    mockAll();
+
+    // Preview: cost 100.00 -> total 600.24, cached.
+    const preview = await previewBasketForTest();
+    expect(preview.grandTotalCents).toBe(60_024);
+    expect(stockByEan).toHaveBeenCalledTimes(1);
+
+    // The supplier's cost moves to 110.00 within the cache window.
+    stockByEan.mockResolvedValue({
+      outcome: {
+        status: "data",
+        rows: [["SYS", "1234567890123", "TEST", "G", "205/55 R16", "EUR", "110.00", "125.00", "99"]],
+        truncated: false,
+      },
+    });
+
+    const refusal = await createPortalSalesOrder(orderInput({ acceptedTotalCents: 60_024 })).catch(
+      (error: { code: string; basket: { grandTotalCents: number | null; lines: Record<string, unknown>[] } }) => error
+    );
+    expect(stockByEan, "the final gate bypassed the preview cache").toHaveBeenCalledTimes(2);
+    expect(refusal).toMatchObject({ code: "PRICE_CHANGED" });
+    const recomputed = (refusal as { basket: { grandTotalCents: number } }).basket.grandTotalCents;
+    expect(recomputed, "the new cost flowed through markup, PFU and VAT").toBeGreaterThan(60_024);
+    expect(rpc, "no order at the stale total").not.toHaveBeenCalled();
+
+    // The refusal the customer receives carries no supplier cost or identity.
+    const json = JSON.stringify((refusal as { basket: unknown }).basket);
+    for (const secret of ["supplierCostCents", "110.00", "asdas", "ART-l-1", "supplierName", "laneCode"]) {
+      expect(json, secret).not.toContain(secret);
+    }
+
+    // Accepting the recomputed total then succeeds, against a fresh answer again.
+    const order = await createPortalSalesOrder(orderInput({ acceptedTotalCents: recomputed }));
+    expect(order.order_number).toBe(1000);
+    expect(stockByEan).toHaveBeenCalledTimes(3);
+  });
+
   it("creates the order when the accepted total matches", async () => {
     const { createPortalSalesOrder } = await import("@/lib/server/sales-orders");
     mockAll();
@@ -415,6 +476,29 @@ describe("what was actually verified is recorded on the order", () => {
           outcome: { status: "error", code: "90", description: "not authorised" },
         }),
       () => stockByEan.mockResolvedValue({ outcome: { status: "malformed", reason: "NO_END" } }),
+      // Authentication rejected at the HTTP layer: the client throws.
+      () => stockByEan.mockRejectedValue(Object.assign(new Error("gateway returned HTTP 401"), { kind: "http" })),
+      // Quantity readable, price NOT: the price was never verified.
+      () =>
+        stockByEan.mockResolvedValue({
+          outcome: {
+            status: "data",
+            rows: [["SYS", "1234567890123", "TEST", "G", "205/55 R16", "EUR", "op aanvraag", "", "99"]],
+            truncated: false,
+          },
+        }),
+      // Several rows, none of them this EAN: which article is ambiguous.
+      () =>
+        stockByEan.mockResolvedValue({
+          outcome: {
+            status: "data",
+            rows: [
+              ["SYS1", "OTHER-1", "X", "G", "205/55 R16", "EUR", "50.00", "", "99"],
+              ["SYS2", "OTHER-2", "Y", "G", "205/55 R16", "EUR", "60.00", "", "99"],
+            ],
+            truncated: false,
+          },
+        }),
     ]) {
       rpc.mockClear();
       const { resetLiveAvailabilityCache } = await import("@/lib/server/live-availability");
