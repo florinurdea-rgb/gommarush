@@ -1,8 +1,13 @@
 import { NextRequest } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/server-admin";
-import { logError, logEvent } from "@/lib/logger";
+import { logEvent } from "@/lib/logger";
 import { fail, ok, readJsonBody, runAdminRoute } from "@/lib/server/route-helpers";
-import { listCustomerAccounts } from "@/lib/server/customer-accounts";
+import {
+  ActivationError,
+  grantPortalAccess,
+  listCustomerAccounts,
+  reissueActivationLink,
+} from "@/lib/server/customer-accounts";
 import { isMissingSchemaError } from "@/lib/server/schema-errors";
 
 export const runtime = "nodejs";
@@ -17,17 +22,15 @@ export const runtime = "nodejs";
  * binding decides whose prices and whose orders someone sees.
  *
  * There is no public registration. This route is the only way an account is
- * created, and it is admin-authenticated.
+ * created, and it is admin-authenticated. The operator never handles a
+ * customer password: access is activated through a single-use link.
  */
-
-/** Long enough that a temporary password is not the weak link. */
-const MIN_PASSWORD_LENGTH = 12;
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return runAdminRoute(async () => {
     const { id: customerId } = await params;
     try {
-      // Never the password, and never a hash of it: nothing here can echo a
+      // Never a password, and never a hash of it: nothing here can echo a
       // credential back, because nothing here reads one.
       return ok({ accounts: await listCustomerAccounts(customerId) });
     } catch (error) {
@@ -42,59 +45,36 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   });
 }
 
+/**
+ * Grants portal access (`{ email }`) or reissues an activation link for an
+ * existing login (`{ accountId, reissue: true }`).
+ *
+ * Returns an activation URL for the operator to pass on. No password is
+ * accepted, generated or returned — the customer chooses their own on
+ * /account/attiva. See src/lib/server/customer-accounts.ts.
+ */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   return runAdminRoute(async () => {
     const { id: customerId } = await params;
     const body = await readJsonBody(request);
     if (!body || typeof body !== "object") return fail(400, "VALIDATION_FAILED");
+    const { email, accountId, reissue } = body as Record<string, unknown>;
+    // The admin's own origin: the link must open on the domain the operator
+    // is using, which is the production domain for a production admin.
+    const origin = new URL(request.url).origin;
 
-    const { email, password } = body as Record<string, unknown>;
-    if (
-      typeof email !== "string" ||
-      !email.includes("@") ||
-      typeof password !== "string" ||
-      password.length < MIN_PASSWORD_LENGTH
-    ) {
-      return fail(400, "VALIDATION_FAILED", [
-        `Email e una password temporanea di almeno ${MIN_PASSWORD_LENGTH} caratteri sono obbligatorie.`,
-      ]);
+    try {
+      const result =
+        reissue === true
+          ? await reissueActivationLink({ customerId, accountId, origin })
+          : await grantPortalAccess({ customerId, email, origin });
+      return ok(result, reissue === true ? 200 : 201);
+    } catch (error) {
+      if (error instanceof ActivationError) return fail(error.status, error.code);
+      if (isMissingSchemaError(error as { code?: string | null; message?: string | null }))
+        return fail(503, "SCHEMA_NOT_READY");
+      throw error;
     }
-
-    const admin = createSupabaseAdminClient();
-    const { data: customer, error: customerError } = await admin
-      .from("customers")
-      .select("id,active")
-      .eq("id", customerId)
-      .maybeSingle();
-    if (customerError) throw customerError;
-    if (!customer || !customer.active) return fail(404, "CUSTOMER_NOT_FOUND");
-
-    const { data: created, error: createError } = await admin.auth.admin.createUser({
-      email: email.trim().toLowerCase(),
-      password,
-      email_confirm: true,
-    });
-    if (createError) return fail(409, "CUSTOMER_AUTH_CREATE_FAILED", [createError.message]);
-
-    const user = created.user;
-    const { data: account, error: linkError } = await admin
-      .from("customer_accounts")
-      .insert({ auth_user_id: user.id, customer_id: customerId, active: true })
-      .select("id")
-      .single();
-
-    if (linkError) {
-      // An auth user with no customer binding can sign in and resolve to no
-      // customer, so it must not survive a failed link. Best-effort: if the
-      // delete also fails, the session layer still refuses the user, because
-      // it requires the binding rather than merely checking for its absence.
-      const { error: cleanupError } = await admin.auth.admin.deleteUser(user.id);
-      if (cleanupError) logError("customer_account_cleanup_failed", cleanupError);
-      return fail(409, "CUSTOMER_ACCOUNT_LINK_FAILED", [linkError.message]);
-    }
-
-    logEvent("customer_account_created", { customerId, accountId: account.id });
-    return ok({ accountId: account.id, authUserId: user.id, email: user.email }, 201);
   });
 }
 

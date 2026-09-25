@@ -370,6 +370,78 @@ const it = {
   metaRegisterTitle: "Registrati",
   metaRegisterDesc:
     "Stiamo completando l\u2019area riservata ai clienti professionali. Nel frattempo puoi richiedere un\u2019offerta con prezzi e tempi di consegna.",
+
+  // --- homepage (M22) -------------------------------------------------
+  // Every statement here is backed by implemented behaviour: the portal's
+  // size search, GommaRush net price + PFU, basket, order with delivery and
+  // payment choice, GR order numbers and status, the two fulfilment classes
+  // and delivery included in the price. No geography, no supplier count, no
+  // "lowest price", no stock figures.
+  lpHeroEyebrow: "Fornitura pneumatici per gommisti e officine",
+  lpHeroTitle: "Pneumatici per la tua officina. Ordinati in pochi minuti, consegnati da noi.",
+  lpHeroBody:
+    "Cerchi la misura, vedi il prezzo GommaRush e invii l'ordine dal tuo account. Al reperimento della merce e alla consegna pensiamo noi.",
+  lpHeroAccessNote:
+    "Accesso riservato ai clienti GommaRush. Non hai ancora un account? Richiedi un'offerta: gli accessi vengono attivati da GommaRush.",
+  lpFactStandard: "Consegna standard entro 7 giorni",
+  lpFactExpress: "Express 24–48h, su verifica",
+  lpFactPrice: "Prezzo netto GommaRush e PFU sempre indicati",
+
+  lpHowEyebrow: "Come funziona",
+  lpHowTitle: "Tu scegli. Noi reperiamo e consegniamo.",
+  lpHow1Title: "Cerca e ordina",
+  lpHow1Body: "Scegli la misura nel catalogo, confronta i pneumatici e invia l'ordine dal tuo account.",
+  lpHow2Title: "Pensiamo noi all'approvvigionamento",
+  lpHow2Body:
+    "Al momento dell'ordine verifichiamo disponibilità e prezzo, e gestiamo noi la fornitura.",
+  lpHow3Title: "Consegna alla tua attività",
+  lpHow3Body: "La merce passa dal deposito GommaRush e arriva da te con i nostri mezzi.",
+
+  lpWhyEyebrow: "Perché GommaRush",
+  lpWhyTitle: "Un solo interlocutore per acquistare pneumatici.",
+  lpWhySimpleTitle: "Acquisto semplice",
+  lpWhySimpleBody: "Un solo account per cercare, ordinare e ritrovare i tuoi ordini.",
+  lpWhyPriceTitle: "Prezzi competitivi",
+  lpWhyPriceBody: "Condizioni pensate per chi lavora nel settore, senza listini da confrontare.",
+  lpWhyDeliveryTitle: "Consegna organizzata da noi",
+  lpWhyDeliveryBody: "Deposito, mezzi e autisti GommaRush, con i tempi indicati prima di confermare.",
+  lpWhySupportTitle: "Persone, non un call center",
+  lpWhySupportBody: "Quando serve, ti risponde qualcuno che conosce il tuo ordine.",
+  lpWhyVisibilityTitle: "Ordini sempre visibili",
+  lpWhyVisibilityBody: "Ogni ordine ha il suo numero GR e il suo stato nell'area clienti.",
+
+  lpPortalEyebrow: "Area clienti",
+  lpPortalTitle: "Tutto il tuo acquisto in un unico posto.",
+  lpPortalLede:
+    "L'area clienti è lo strumento con cui i gommisti ordinano da GommaRush: dalla ricerca della misura fino allo stato dell'ordine.",
+  lpPortalCap1: "Cerca per misura: larghezza, spalla e cerchio",
+  lpPortalCap2: "Vedi il prezzo netto GommaRush e la PFU",
+  lpPortalCap3: "Componi il carrello e modifica le quantità",
+  lpPortalCap4: "Scegli consegna e pagamento: bonifico o contanti alla consegna",
+  lpPortalCap5: "Segui lo stato dei tuoi ordini",
+  lpPortalExampleCaption: "Esempio di ricerca per misura",
+  lpPortalWidth: "Larghezza",
+  lpPortalAspect: "Spalla",
+  lpPortalRim: "Cerchio",
+  lpPortalSearch: "Cerca",
+
+  lpOfferEyebrow: "Offerta su richiesta",
+  lpOfferTitle: "Preferisci parlare con noi?",
+  lpOfferBody:
+    "Mandaci misure e quantità che ti servono: ti rispondiamo con un'offerta. Per il modulo non serve un account.",
+
+  lpDeliveryEyebrow: "Consegna",
+  lpDeliveryTitle: "La consegna la organizziamo noi.",
+  lpDeliveryLede: "Il tempo di consegna è indicato prima di confermare l'ordine.",
+  lpDeliveryStandardTitle: "Standard · entro 7 giorni",
+  lpDeliveryStandardBody: "La nostra consegna standard, inclusa nel prezzo.",
+  lpDeliveryExpressTitle: "Express · 24–48h",
+  lpDeliveryExpressBody: "Per le urgenze, su verifica.",
+  lpDeliveryFlowShop: "La tua officina",
+
+  lpFinalTitle: "Ordina i tuoi pneumatici con GommaRush.",
+  lpFinalBody:
+    "Sei già cliente? Entra nell'area clienti. Non hai ancora un accesso? Richiedi un'offerta e ti ricontattiamo.",
 } as const;
 
 export type SiteCopyKey = keyof typeof it;
@@ -713,6 +785,71 @@ const en: SiteCopy = {
   metaRegisterTitle: "Sign up",
   metaRegisterDesc:
     "We are finishing the account area for trade customers. In the meantime you can request a quote with prices and delivery times.",
+  // --- homepage (M22) -------------------------------------------------
+  lpHeroEyebrow: "Tyre supply for tyre shops and garages",
+  lpHeroTitle: "Tyres for your workshop. Ordered in minutes, delivered by us.",
+  lpHeroBody:
+    "Search the size, see the GommaRush price and send the order from your account. We take care of sourcing and delivery.",
+  lpHeroAccessNote:
+    "Access is reserved for GommaRush customers. No account yet? Request an offer: accounts are activated by GommaRush.",
+  lpFactStandard: "Standard delivery within 7 days",
+  lpFactExpress: "Express 24–48h, on request",
+  lpFactPrice: "GommaRush net price and PFU always shown",
+
+  lpHowEyebrow: "How it works",
+  lpHowTitle: "You choose. We source and deliver.",
+  lpHow1Title: "Search and order",
+  lpHow1Body: "Pick the size in the catalogue, compare tyres and send the order from your account.",
+  lpHow2Title: "We handle the sourcing",
+  lpHow2Body: "When you order we check availability and price, and we manage the supply.",
+  lpHow3Title: "Delivered to your business",
+  lpHow3Body: "Goods pass through the GommaRush depot and reach you in our vans.",
+
+  lpWhyEyebrow: "Why GommaRush",
+  lpWhyTitle: "One partner for buying tyres.",
+  lpWhySimpleTitle: "Simple purchasing",
+  lpWhySimpleBody: "One account to search, order and find your orders again.",
+  lpWhyPriceTitle: "Competitive prices",
+  lpWhyPriceBody: "Terms designed for the trade, without price lists to compare.",
+  lpWhyDeliveryTitle: "Delivery run by us",
+  lpWhyDeliveryBody: "GommaRush depot, vans and drivers, with the lead time shown before you confirm.",
+  lpWhySupportTitle: "People, not a call centre",
+  lpWhySupportBody: "When you need it, someone who knows your order answers.",
+  lpWhyVisibilityTitle: "Orders always visible",
+  lpWhyVisibilityBody: "Every order has its GR number and status in your customer account.",
+
+  lpPortalEyebrow: "Customer account",
+  lpPortalTitle: "Your whole purchase in one place.",
+  lpPortalLede:
+    "The customer account is how tyre shops order from GommaRush: from searching the size to the status of the order.",
+  lpPortalCap1: "Search by size: width, aspect ratio and rim",
+  lpPortalCap2: "See the GommaRush net price and the PFU",
+  lpPortalCap3: "Build your basket and change quantities",
+  lpPortalCap4: "Choose delivery and payment: bank transfer or cash on delivery",
+  lpPortalCap5: "Follow the status of your orders",
+  lpPortalExampleCaption: "Example of a size search",
+  lpPortalWidth: "Width",
+  lpPortalAspect: "Aspect",
+  lpPortalRim: "Rim",
+  lpPortalSearch: "Search",
+
+  lpOfferEyebrow: "Offer on request",
+  lpOfferTitle: "Rather talk to us?",
+  lpOfferBody:
+    "Send us the sizes and quantities you need and we reply with an offer. The form does not require an account.",
+
+  lpDeliveryEyebrow: "Delivery",
+  lpDeliveryTitle: "We organise the delivery.",
+  lpDeliveryLede: "The delivery time is shown before you confirm the order.",
+  lpDeliveryStandardTitle: "Standard · within 7 days",
+  lpDeliveryStandardBody: "Our standard delivery, included in the price.",
+  lpDeliveryExpressTitle: "Express · 24–48h",
+  lpDeliveryExpressBody: "For urgent needs, on request.",
+  lpDeliveryFlowShop: "Your workshop",
+
+  lpFinalTitle: "Order your tyres with GommaRush.",
+  lpFinalBody:
+    "Already a customer? Open your customer account. No access yet? Request an offer and we will get back to you.",
 };
 
 const DICTIONARIES: Record<Locale, SiteCopy> = { it, en };

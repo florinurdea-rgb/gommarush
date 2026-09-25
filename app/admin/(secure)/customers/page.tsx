@@ -4,6 +4,7 @@ import { PageHeading } from "@/components/logistics/AdminShell";
 import { t } from "@/lib/i18n/logistics";
 import { getOpsLocale } from "@/lib/i18n/ops-server";
 import { getTr } from "@/lib/i18n/tr-server";
+import { CustomerCreateForm } from "@/components/logistics/CustomerCreateForm";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Elenco clienti" };
@@ -29,6 +30,11 @@ export default async function CustomersPage({
         description={tr("Aziende clienti. Un'azienda può avere più luoghi di consegna.")}
       />
 
+      {/* The only direct way to create a customer company — see CustomerCreateForm. */}
+      <div className="mb-5">
+        <CustomerCreateForm />
+      </div>
+
       <form className="mb-5 flex max-w-md gap-2" action="/admin/customers">
         <input
           name="q"
@@ -43,17 +49,17 @@ export default async function CustomersPage({
 
       {customers.length === 0 ? (
         <div className="rounded-xl border border-dashed border-ink/20 bg-white px-6 py-12 text-center text-ink-soft">
-          Nessun cliente trovato.
+          {tr("Nessun cliente trovato.")}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-ink/10 bg-white shadow-card">
+        <div className="overflow-x-auto rounded-xl border border-ink/10 bg-white shadow-card">
           <table className="w-full border-collapse text-left">
             <thead>
               <tr className="border-b border-ink/10 bg-surface-soft text-xs uppercase tracking-wide text-ink-soft">
                 <th scope="col" className="px-4 py-3 font-semibold">{t("companyName", locale)}</th>
                 <th scope="col" className="px-4 py-3 font-semibold">{t("vatNumber", locale)}</th>
                 <th scope="col" className="px-4 py-3 font-semibold">{t("locations", locale)}</th>
-                <th scope="col" className="px-4 py-3 font-semibold">Comenzi</th>
+                <th scope="col" className="px-4 py-3 font-semibold">{tr("Ordini trasporto")}</th>
                 <th scope="col" className="px-4 py-3 font-semibold">{t("contacts", locale)}</th>
                 <th scope="col" className="px-4 py-3 font-semibold">{tr("Area clienti")}</th>
               </tr>

@@ -32,7 +32,7 @@ import { isAdminEmailAllowed } from "@/lib/auth/admin-authorization";
  */
 const PUBLIC_ADMIN_PATHS = ["/admin/login", "/admin/bootstrap"];
 const PUBLIC_DRIVER_PATHS = ["/driver/login"];
-const PUBLIC_CUSTOMER_PATHS = ["/account/login"];
+const PUBLIC_CUSTOMER_PATHS = ["/account/login", "/account/attiva"];
 
 function matchesPublicPath(pathname: string, publicPaths: string[]): boolean {
   return publicPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`));

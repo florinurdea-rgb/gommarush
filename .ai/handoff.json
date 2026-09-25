@@ -1,12 +1,12 @@
 {
   "project": "GommaRush",
-  "mission_id": "M21-CUSTOMER-COMMERCE-RESKIN",
-  "mission_title": "Customer commerce UI reskin + UI/UX completion pass (PR #15)",
+  "mission_id": "M22-PRODUCT-UI-PORTAL-ACTIVATION",
+  "mission_title": "Public homepage redesign + customer portal account activation from Admin",
   "status": "IMPLEMENTED_AWAITING_REVIEW",
-  "phase": "PR #15 (customer-commerce UI) is the current work, open and unmerged; main is b1a28c9. PRODUCTION (read-only inspection 2026-09-25): 0005 and 0006 ARE APPLIED and byte-identical to the reviewed files (applied via the SQL Editor, so absent from supabase_migrations). Production business data has been reset: 1 supplier (Inter-Sprint, 4ce0b557-9575-4784-aa80-99e78af4da2f), 0 customers, 0 customer_locations, 0 logistics orders, 0 sales orders, 0 customer_accounts. The live Inter-Sprint catalogue is preserved and still ingesting. Optional hardening 0007 (revoke browser-role grants on the 0005/0006 tables) is prepared, dry-run verified, NOT applied. Gateway credentials still pending.",
+  "phase": "main = 0e737bc (PR #15) is live on Vercel Production. M22 on its own branch/PR, not merged. Production DB (read-only, 2026-09-25): 0005/0006 applied; 0 customers, 0 locations, 0 customer_accounts, 0 sales_orders; 6 auth users (staff/driver). Gateway username/password still pending, so final order submit refuses by design.",
   "last_updated": "2026-09-25",
   "canonical_branch": "main",
-  "working_branch": "design/m21-customer-commerce-reskin (PR #15, open, not merged)",
+  "working_branch": "claude/m22-product-ui-portal-activation (PR open, not merged)",
   "entry_points": {
     "working_rules": "CLAUDE.md",
     "authority_model": "docs/AI_WORKFLOW.md",
@@ -118,7 +118,6 @@
   "external_actions": "NONE. No supplier order sent; live ordering remains disabled.",
   "blockers": [
     "Inter-Sprint Gateway USERNAME and PASSWORD still missing in Vercel Production (per owner). Until set, every live check fails and the final submit refuses (LIVE_VERIFICATION_UNAVAILABLE). Also confirm INTERSPRINT_GATEWAY_ENV is exactly 'production'.",
-    "No customer exists in production after the reset (0 customers, 0 locations, 0 customer_accounts). A first real customer, a deliverable location and an admin-created portal account are needed before any end-to-end order.",
     "D3 - the real PFU tariff - remains open; the EUR 3/6/12/25 estimate is a placeholder and should be confirmed before the portal opens beyond a controlled test.",
     "D18: no approved brand-tier mapping, so tier filters stay hidden.",
     "M11B: 0004 indexes still unapplied (verified absent 2026-09-25).",
@@ -442,7 +441,7 @@
     "Deldo: unchanged and untouched. Jan has NOT replied.",
     "Vercel env: gateway customer number 21185 / environment production configured is an OWNER STATEMENT, not observed by an agent (no Vercel access)."
   ],
-  "next_recommended_mission": "Admin Orders workflow: owner-approved state machine (TO REVIEW=requested -> CONFIRMED -> PENDING PAYMENT -> later fulfilment; REJECTED; CANCELLED; delete policy), migration for the new status + history table, admin transitions with audit, separated from supplier purchasing (which stays disabled).",
+  "next_recommended_mission": "Merge M22, run the first production customer E2E once gateway credentials are set, then the Admin Orders workflow (see m21_production_gate.admin_orders_gaps).",
   "head_at_completion": "see commits on design/m21-customer-commerce-reskin after 5295b9f",
   "owner_decisions_confirmed_m9": {
     "provenance": "POLICY_OWNER - GommaRush business decisions recorded 2026-09-22. NOT Inter-Sprint statements. Never cite these as supplier-documented.",
@@ -799,6 +798,60 @@
         "Admin detail renders status raw ('requested') - needs the label map"
       ]
     },
-    "next_recommended_mission": "Admin Orders workflow: owner-approved state machine (TO REVIEW=requested -> CONFIRMED -> PENDING PAYMENT -> later fulfilment; REJECTED; CANCELLED; delete policy), migration for the new status + history table, admin transitions with audit, separated from supplier purchasing (which stays disabled)."
+    "next_recommended_mission": "Admin Orders workflow: owner-approved state machine (TO REVIEW=requested -> CONFIRMED -> PENDING PAYMENT -> later fulfilment; REJECTED; CANCELLED; delete policy), migration for the new status + history table, admin transitions with audit, separated from supplier purchasing (which stays disabled).",
+    "pr15": "MERGED 2026-09-25T12:55:56Z as 0e737bc793dfca5057402ce158abf9b9e125cd64 (merge commit; PR head 598d813, Vercel preview success).",
+    "production_deployment": {
+      "main": "0e737bc793dfca5057402ce158abf9b9e125cd64",
+      "github_deployment_id": 6661210375,
+      "environment": "Production",
+      "state": "success",
+      "at": "2026-09-25T12:57:12Z",
+      "evidence": "GitHub commit status 'Vercel: Deployment has completed' + deployment status success. Live pages not fetched (sandbox egress denies the site)."
+    }
+  },
+  "m22": {
+    "base": "origin/main 0e737bc793dfca5057402ce158abf9b9e125cd64",
+    "root_cause_account_creation": {
+      "finding": "No Admin screen could create a customer. Nothing in the UI POSTs to /api/admin/customers; customers only came into existence as a side effect of the logistics DDT/order-review flow (resolveCustomer 'newCustomer'). After the production reset there are 0 customers, so no customer detail page - and therefore no 'Accesso area clienti' panel - was reachable. The accounts API itself existed and the 0005/0006 schema is present.",
+      "evidence": [
+        "grep: only CustomerPickerField (GET search), CustomerEditor (PATCH), OrderReviewForm (GET by id) call /api/admin/customers*; no POST caller",
+        "production: customers=0, customer_accounts=0 (read-only query 2026-09-25)",
+        "production API logs: operator loaded GET /rest/v1/customers (empty) at ~16:55 UTC; no customers POST and no auth admin call followed; a separate portal login attempt resolved an auth user with NO customer_accounts binding (a staff identity trying /account)"
+      ],
+      "secondary": "The previous flow had the operator type/generate a temporary password in Admin and read it back - removed per 'no passwords in Admin'."
+    },
+    "activation_design": {
+      "mechanism": "auth.admin.generateLink({type:'invite'}) creates an unconfirmed Supabase Auth identity and returns a single-use hashed token WITHOUT sending email (no SMTP dependency). Binding customer_accounts(auth_user_id -> customer_id) is written immediately from the customer id in the admin URL (never from the email). Admin shows an activation URL on our domain: /account/attiva?token_hash=...&type=invite. The customer sets their own password; /api/account/activate verifies the token (verifyOtp) on SUBMIT (not page load, so link scanners cannot consume it), requires an ACTIVE binding BEFORE setting the password, then updateUser({password}).",
+      "reissue": "Lost/expired link or forgotten password: operator issues a new link (generateLink type 'recovery') scoped by customer id.",
+      "prerequisite": "Granting access requires >=1 active deliverable location (real street + city, isDeliverableLocation) - otherwise LOCATION_REQUIRED.",
+      "existing_email": "If the email already has an auth identity (staff/driver/other customer) -> EMAIL_ALREADY_REGISTERED; existing identities are NOT re-bound (no email-based mapping).",
+      "multiple_users": "Unchanged: several customer_accounts rows per customer allowed.",
+      "link_expiry": "Governed by the Supabase project's email OTP expiry setting (not configured by this repo); the Admin copy says 'scade dopo un tempo limitato'."
+    },
+    "public_site": [
+      "Homepage rebuilt (app/page.tsx + lp* keys in site-content.ts, IT+EN): hero with Area clienti primary / Richiedi un'offerta secondary, how-it-works (3), customer-account section with a labelled size-search example (no products/prices), why (5), delivery (Standard 7 days / Express 24-48h su verifica, from fulfilment.ts), human offer route, ink final CTA, existing footer.",
+      "Removed from homepage: 'Registrati gratuitamente' primary CTA (registration closed), 'Più fornitori/fonti' claims (production has one supplier), empty image placeholder, empty brand strip, mock order card with brand names, fake 'Consegna prevista 48 ore' hero badge. Hero.tsx deleted (unused). Other public pages untouched.",
+      "Checked at 320/375/390/768/1024/1440: no horizontal overflow; phone fold shows headline, body and both CTAs."
+    ],
+    "admin": [
+      "Customers list: 'Nuovo cliente' form (CustomerCreateForm -> POST /api/admin/customers -> redirect to detail); Romanian header 'Comenzi' -> 'Ordini trasporto'; table scrolls horizontally on phones.",
+      "Customer detail: 2-step checklist (deliverable location, portal access), portal panel with ACTIVE/NOT ACTIVE, per-login state (Attivo / In attesa di attivazione / Disattivato), login emails, last sign-in, reissue link, disable/reactivate; company + locations editor; the customer's GR sales orders.",
+      "CustomerEditor: Romanian labels 'Telefon'/'Destinatar' fixed."
+    ],
+    "customer_ui": [
+      "Login page: one-line hint about the activation link. Portal screens unchanged (already aligned in PR #15)."
+    ],
+    "integrity": "Not touched: catalogue, basket, checkout, live verification (forceFresh + D27), accepted-total gate, idempotency, GR numbering, pricing/PFU/VAT, supplier confidentiality, supplier ordering (disabled), logistics/driver systems, customer-session resolution (auth_user_id + active binding only). Middleware: only /account/attiva added to the public customer paths.",
+    "tests": {
+      "vitest": "1366 passed | 6 skipped (78 files; +45 vs 1321: customer-portal-activation 19, public-site-homepage 24, plus parametrised cases)",
+      "tsc": "clean",
+      "lint": "0 errors, 8 warnings (pre-existing)",
+      "build": "compiled successfully; /account/attiva and /api/account/activate built"
+    },
+    "production_actions_required": [
+      "None for schema: 0005/0006 are applied. Optional: 0007 grant hardening (unchanged).",
+      "After merge+deploy: Admin -> Clienti -> Nuovo cliente -> add delivery location (street+city) -> Crea accesso e link di attivazione -> send link -> customer sets password -> log in.",
+      "Use an email that has no existing GommaRush login (staff/driver emails are refused by design)."
+    ]
   }
 }

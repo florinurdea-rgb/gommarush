@@ -1,6 +1,7 @@
 import {
   Calendar,
   CheckCircle2,
+  ClipboardList,
   Clock,
   Headset,
   Layers,
@@ -43,7 +44,8 @@ export type IconName =
   | "depot"
   | "message"
   | "phone"
-  | "check";
+  | "check"
+  | "orders";
 
 export const ICONS: Record<IconName, LucideIcon> = {
   simple: MousePointerClick,
@@ -61,6 +63,7 @@ export const ICONS: Record<IconName, LucideIcon> = {
   message: MessageSquare,
   phone: Phone,
   check: CheckCircle2,
+  orders: ClipboardList,
 };
 
 export const ICON_STROKE = 1.6;
