@@ -2,11 +2,11 @@
   "project": "GommaRush",
   "mission_id": "M21-CUSTOMER-COMMERCE-RESKIN",
   "mission_title": "Customer commerce UI reskin + UI/UX completion pass (PR #15)",
-  "status": "IMPLEMENTED_AWAITING_REVIEW",
-  "phase": "PR #15 (customer-commerce UI) is the current work, open and unmerged; main is b1a28c9. PRODUCTION (read-only inspection 2026-09-25): 0005 and 0006 ARE APPLIED and byte-identical to the reviewed files (applied via the SQL Editor, so absent from supabase_migrations). Production business data has been reset: 1 supplier (Inter-Sprint, 4ce0b557-9575-4784-aa80-99e78af4da2f), 0 customers, 0 customer_locations, 0 logistics orders, 0 sales orders, 0 customer_accounts. The live Inter-Sprint catalogue is preserved and still ingesting. Optional hardening 0007 (revoke browser-role grants on the 0005/0006 tables) is prepared, dry-run verified, NOT applied. Gateway credentials still pending.",
+  "status": "DEPLOYED_E2E_PENDING_CREDENTIALS",
+  "phase": "PR #15 MERGED and DEPLOYED to Vercel Production (main 0e737bc, deployment 6661210375 success). Fail-closed live verification (D27) is now live: with gateway username/password missing, browsing and baskets work and every final submit refuses with LIVE_VERIFICATION_UNAVAILABLE. 0005/0006 applied; 0007 hardening prepared, not applied. Production holds no customer yet, so the customer E2E journey is not yet executed in production.",
   "last_updated": "2026-09-25",
   "canonical_branch": "main",
-  "working_branch": "design/m21-customer-commerce-reskin (PR #15, open, not merged)",
+  "working_branch": "main (PR #15 merged); this handoff update on claude/eager-bell-5odj14",
   "entry_points": {
     "working_rules": "CLAUDE.md",
     "authority_model": "docs/AI_WORKFLOW.md",
@@ -113,7 +113,7 @@
     "0005+0006 verified": "Applied to a disposable PostgreSQL 16. Proven: order created with PFU provenance recorded; ESTIMATED without a version refused; a version without ESTIMATED refused; pos_on_delivery refused; item FK failure leaves 0 orphan headers; idempotent replay creates no duplicate; estimated orders are findable by WHERE.",
     "production migration assessment": "SAFE. No object collisions, all FK targets present with uuid PKs, gen_random_uuid available, additive only, RLS on new tables only, idempotent. Critically: no DEPLOYED production code references any of these objects, so applying them changes nothing observable until the branch ships."
   },
-  "production_changes": "CODE: main = b1a28c9 (PR #14 era) deployed; PR #15 NOT merged. DATABASE: 0005/0006 present (applied by the owner via SQL Editor, verified 2026-09-25); business data reset by the owner. Nothing written by any agent session.",
+  "production_changes": "CODE: main 0e737bc (PR #15) deployed to Production 2026-09-25. DATABASE: unchanged by any agent.",
   "database_changes": "None by this session. 0005+0006 verified applied. 0007 prepared, not applied. 0004 not applied.",
   "external_actions": "NONE. No supplier order sent; live ordering remains disabled.",
   "blockers": [
@@ -799,6 +799,17 @@
         "Admin detail renders status raw ('requested') - needs the label map"
       ]
     },
-    "next_recommended_mission": "Admin Orders workflow: owner-approved state machine (TO REVIEW=requested -> CONFIRMED -> PENDING PAYMENT -> later fulfilment; REJECTED; CANCELLED; delete policy), migration for the new status + history table, admin transitions with audit, separated from supplier purchasing (which stays disabled)."
+    "next_recommended_mission": "Admin Orders workflow: owner-approved state machine (TO REVIEW=requested -> CONFIRMED -> PENDING PAYMENT -> later fulfilment; REJECTED; CANCELLED; delete policy), migration for the new status + history table, admin transitions with audit, separated from supplier purchasing (which stays disabled).",
+    "pr15": "MERGED 2026-09-25T12:55:56Z as 0e737bc793dfca5057402ce158abf9b9e125cd64 (merge commit; PR head 598d813, Vercel preview success).",
+    "production_deployment": {
+      "main": "0e737bc793dfca5057402ce158abf9b9e125cd64",
+      "github_deployment_id": 6661210375,
+      "environment": "Production",
+      "state": "success",
+      "at": "2026-09-25T12:57:12Z",
+      "deployment_url": "https://gommarush-8wnc3gzx8-florins-projects-eff558bb.vercel.app",
+      "evidence": "GitHub commit status 'Vercel: Deployment has completed' + deployment status success, read from the public GitHub API. Live pages NOT fetched (sandbox egress denies gommarush.com / vercel.app)."
+    },
+    "post_deploy_db_check": "2026-09-25T12:59Z read-only: 0 customers, 0 locations, 0 customer_accounts, 0 sales_orders; 13,470 active Inter-Sprint listings; 24 catalogue_products without EAN (unorderable under D27 - will show the verification-unavailable state)."
   }
 }
