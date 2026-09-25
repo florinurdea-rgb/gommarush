@@ -1,6 +1,37 @@
 # Customer portal — production activation
 
-## STATUS as of 2026-09-23
+## STATUS as of 2026-09-25 (supersedes the 2026-09-23 block below)
+
+| Step | State |
+| --- | --- |
+| `0005_customer_accounts.sql` | **APPLIED** — verified read-only, identical to the file. |
+| `0006_sales_orders.sql` | **APPLIED** — verified read-only, identical to the file (function body md5 `2115c7c3a028d01192425767089b053c`). |
+| `0007_verify_and_harden_0005_0006.sql` | **PREPARED, NOT APPLIED.** Optional. Verifies the above and removes `anon`/`authenticated` grants on the three portal tables. |
+| Production data | Reset by the owner: 1 supplier (Inter-Sprint `4ce0b557-…`), 0 customers, 0 logistics orders, 0 sales orders. Live Inter-Sprint catalogue preserved (13,461 active listings, feed still committing). |
+| Supplier ordering | Disabled. |
+| Gateway | Customer number 21185 + production environment configured (owner statement); **username/password pending**, so final order submit refuses with `LIVE_VERIFICATION_UNAVAILABLE`. |
+
+**Do not re-run 0005 or 0006.** They were applied through the SQL Editor, so
+they do not appear in `supabase_migrations`, but every object they create is
+present and matches. The full evidence is in `.ai/handoff.json` →
+`production_state_verified` and `migrations_review_2026_09_25`.
+
+### Running 0007
+
+Paste the whole of `supabase/pending-approval/0007_verify_and_harden_0005_0006.sql`
+into the production SQL Editor and run it once. It is a single transaction:
+pre-flight assertions (right project, 0005/0006 exactly as reviewed, RLS on,
+no policies, browser roles cannot call the order function), four `REVOKE`s,
+post-flight assertions (browser roles have no access, `service_role` keeps
+everything, row counts of catalogue, supplier, prices, customers, logistics
+orders/items/documents, portal tables and `auth.users` unchanged), then
+`COMMIT`. Any failed assertion aborts the transaction and nothing is kept.
+Success prints `GR 0007: all assertions passed.` and a table of unchanged
+row counts. It is safe to run twice.
+
+---
+
+## Historical — STATUS as of 2026-09-23
 
 | Step | State |
 | --- | --- |

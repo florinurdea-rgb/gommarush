@@ -40,7 +40,7 @@ export function OrderMockup() {
 
   return (
     <figure className="w-full">
-      <div className="overflow-hidden rounded-2xl border border-steel-soft bg-white shadow-card">
+      <div className="overflow-hidden rounded-2xl border border-steel-soft bg-white">
         {/* Search row */}
         <div className="border-b border-steel-soft bg-surface-soft px-4 py-4 sm:px-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-soft">

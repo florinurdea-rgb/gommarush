@@ -7,7 +7,7 @@ import {
   resolveBasket,
   type BasketLineInput,
 } from "@/lib/server/customer-basket";
-import { verifyBasketLive } from "@/lib/server/live-availability";
+import { liveVerificationMissing, verifyBasketLive } from "@/lib/server/live-availability";
 import { isDeliverableLocation } from "@/lib/commerce/delivery-address";
 import { fulfilmentPromise, type FulfilmentClass } from "@/lib/commerce/fulfilment";
 import { DEFAULT_PRICING_SETTINGS } from "@/lib/pricing/settings";
@@ -88,7 +88,8 @@ export class OrderRefusal extends Error {
     readonly code:
       | "PRICING_NOT_FINAL"
       | "BASKET_NOT_ORDERABLE"
-      | "PRICE_CHANGED",
+      | "PRICE_CHANGED"
+      | "LIVE_VERIFICATION_UNAVAILABLE",
     readonly basket: ReturnType<typeof customerBasketPayload>
   ) {
     super(code);
@@ -171,16 +172,52 @@ export async function createPortalSalesOrder(input: CreateInput): Promise<Create
   /*
     THE LIVE CHECK, at the last possible moment.
 
-    Read-only protocol 103, Inter-Sprint lane only, failing back to the stored
-    observation rather than blocking the sale. See live-availability.ts for the
-    owner decisions behind each of those three constraints.
+    Read-only protocol 103, Inter-Sprint lane only. verifyBasketLive itself
+    never throws — a lane that could not answer is MARKED
+    `feed_after_live_failure` — and the gate below then refuses to create the
+    order on any such line (D27, fail closed). See live-availability.ts for
+    the owner decisions behind those constraints.
   */
-  const verification = await verifyBasketLive(resolved);
+  /*
+    `forceFresh`: the authoritative final check must be made NOW.
+
+    Without it, an order confirmed within the cache window would be authorised
+    by an answer obtained during a basket preview seconds earlier — a cached
+    result standing in for the check that the order gate exists to perform.
+  */
+  const verification = await verifyBasketLive(resolved, Date.now, { forceFresh: true });
   const orderLines = [...verification.lines];
   const basket = customerBasketPayload(orderLines);
 
   /*
-    Availability first, price second, and both before the monetary gate.
+    THE ORDER GATE FAILS CLOSED ON VERIFICATION, and this is the first thing
+    it checks.
+
+    A line that HAS a live lane and did not get a live answer — credentials
+    absent, gateway down, authentication rejected, response malformed, budget
+    exhausted — is NOT an orderable line here, whatever the stored figure says.
+    The basket may show that stored figure with its own distinct
+    "could not confirm" state, because browsing on slightly old data costs
+    nobody anything. Committing on it does: it would present stored catalogue
+    data as though the supplier had confirmed it, and let an order through the
+    live-validation gate precisely because the gate could not run.
+
+    This SUPERSEDES the fail-open half of D22 for the order path only. D22's
+    other half stands: a failure is never reported to the customer as
+    out-of-stock. It is a verification state, and it is retryable.
+
+    A line on a lane with NO live lookup is a different case and is untouched
+    (D24): nothing was attempted, so nothing failed. That is not `isb` — the
+    legacy workbook adapter attributes to the same `intersprint` lane as the
+    live feed, so those listings are verified like any other. It is Deldo and
+    Carlini, which are registered lanes with no implemented lookup.
+  */
+  if (liveVerificationMissing(orderLines)) {
+    throw new OrderRefusal("LIVE_VERIFICATION_UNAVAILABLE", basket);
+  }
+
+  /*
+    Availability second, price third, and all of them before the monetary gate.
 
     Order matters for the message the customer gets: a basket holding a tyre
     that just went out of stock should say so, not report a pricing problem
@@ -346,6 +383,85 @@ export async function listRequestedSalesOrders() {
     .limit(200);
   if (error) throw error;
   return data ?? [];
+}
+
+/**
+ * One of the CUSTOMER'S OWN orders, for the customer's own detail screen.
+ *
+ * Ownership is a FILTER, not a check after the fact: an order id belonging to
+ * another customer resolves to no row, so it cannot be read and cannot be
+ * probed for existence. That is the same rule the delivery-location lookup
+ * uses, and it is the reason this exists separately from getSalesOrderDetail
+ * below — that one takes an id alone, which is correct for an operator and
+ * would be an authorisation hole here.
+ *
+ * The projection is explicit and deliberately narrow. `sales_orders` holds a
+ * pricing snapshot containing commercial settings and verification
+ * provenance; none of it is selected, so none of it can reach a customer
+ * payload by someone later adding a field to a spread.
+ */
+export interface CustomerSalesOrderView {
+  id: string;
+  order_number: number;
+  status: string;
+  fulfilment_class: string;
+  payment_method: string;
+  currency: string;
+  tyre_net_total_cents: number | null;
+  pfu_total_cents: number | null;
+  vat_total_cents: number | null;
+  grand_total_cents: number | null;
+  vat_rate_percent: number | null;
+  pfu_status: string | null;
+  customer_note: string | null;
+  delivery_snapshot: Record<string, unknown> | null;
+  requested_at: string;
+}
+
+export interface CustomerSalesOrderItemView {
+  id: string;
+  line_number: number;
+  quantity: number;
+  tyre_snapshot: Record<string, unknown> | null;
+  condition_snapshot: string | null;
+  unit_tyre_net_cents: number | null;
+  unit_pfu_cents: number | null;
+  unit_vat_cents: number | null;
+  unit_total_cents: number | null;
+}
+
+export async function getCustomerSalesOrderDetail(
+  orderId: string,
+  customerId: string
+): Promise<{ order: CustomerSalesOrderView; items: CustomerSalesOrderItemView[] } | null> {
+  const admin = createSupabaseAdminClient();
+  const { data: order, error: oe } = await admin
+    .from("sales_orders")
+    .select(
+      "id,order_number,status,fulfilment_class,payment_method,currency," +
+        "tyre_net_total_cents,pfu_total_cents,vat_total_cents,grand_total_cents," +
+        "vat_rate_percent,pfu_status,customer_note,delivery_snapshot,requested_at"
+    )
+    .eq("id", orderId)
+    .eq("customer_id", customerId)
+    .maybeSingle();
+  if (oe) throw oe;
+  if (!order) return null;
+
+  const { data: items, error: ie } = await admin
+    .from("sales_order_items")
+    .select(
+      "id,line_number,quantity,tyre_snapshot,condition_snapshot," +
+        "unit_tyre_net_cents,unit_pfu_cents,unit_vat_cents,unit_total_cents"
+    )
+    .eq("sales_order_id", orderId)
+    .order("line_number", { ascending: true });
+  if (ie) throw ie;
+
+  return {
+    order: order as unknown as CustomerSalesOrderView,
+    items: (items ?? []) as unknown as CustomerSalesOrderItemView[],
+  };
 }
 
 export async function getSalesOrderDetail(orderId: string) {

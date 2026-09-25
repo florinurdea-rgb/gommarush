@@ -65,7 +65,12 @@ describe("operational string map", () => {
     // says — so translating it would be the error, not leaving it.
     // "PFU" is the Italian acronym and has no English equivalent — the
     // owner's own English wording is "Estimated PFU", keeping the acronym.
-    const SAME_IN_BOTH = new Set(["Email", "Model", "Account", "PFU"]);
+    /*
+      Genuinely identical in both languages, not a copy-paste slip.
+      "Endpoint" is the English word, used as-is in Italian technical usage
+      and shown on an operator screen beside the URL it labels.
+    */
+    const SAME_IN_BOTH = new Set(["Email", "Model", "Account", "PFU", "Endpoint"]);
     const identical = Object.entries(EN_STRINGS)
       .filter(([source, target]) => source === target && !SAME_IN_BOTH.has(source))
       .map(([source]) => source);

@@ -1,8 +1,10 @@
 "use client";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/Button";
+import { CommerceCartIcon, CommerceTruckIcon, CommerceWarningIcon } from "@/components/customer/CommerceIcons";
 import { LineAvailability, type LineState, type VerifiedSource } from "@/components/customer/LineAvailability";
+import { QuantityStepper } from "@/components/customer/QuantityStepper";
 import { readBasket, writeBasket, type StoredBasketLine } from "@/lib/customer/basket";
 import { useTr } from "@/lib/i18n/tr";
 
@@ -10,21 +12,24 @@ import { useTr } from "@/lib/i18n/tr";
  * The customer basket.
  *
  * THE ONE THING THIS SCREEN MUST GET RIGHT: a customer must never mistake a
- * provisional figure for the amount they will be invoiced.
+ * provisional figure for the amount they will be invoiced. Since the owner's
+ * 2026-09-23 decision the PFU is a TEMPORARY ESTIMATE, so a total does exist —
+ * and it can move. The summary is therefore labelled and carries the estimate
+ * disclosure inline, at the exact place the number is read.
  *
- * Since the owner's 2026-09-23 decision the PFU is a TEMPORARY ESTIMATE, so a
- * total does exist — and it can move. The summary is therefore split into the
- * settled tyre value, the levies on top of it, and a total block that is
- * labelled "Totale stimato" and carries the estimate disclosure inline, at the
- * exact place the number is read rather than in a footnote.
+ * THIS IS WHERE VAT APPEARS. The catalogue shows the selling price and the PFU
+ * and stops there, deliberately; a customer browsing fifty rows is comparing
+ * net prices. Here they are committing, so the full chain is shown:
+ * Pneumatici → PFU → IVA → Totale.
  *
- * If the PFU ever becomes unresolvable again, the total block shows no number
- * at all rather than a number with a caveat beside it.
+ * THE BROWSER IS NOT AUTHORITATIVE FOR ANYTHING. It stores product id,
+ * condition and quantity; every price, fulfilment state, tax position and
+ * total on this screen came back from the server, which re-resolved all of
+ * them. A quantity change re-asks rather than recalculating locally.
  *
- * The browser is not authoritative for anything. It stores product id,
- * condition and quantity; every price, availability, tax position and total on
- * this screen came back from /api/account/basket/preview, which re-resolved all
- * of them server-side.
+ * VALIDATION IS PER LINE. Changing one quantity marks THAT line as being
+ * re-checked and leaves the rest readable. Blanking the whole basket for a
+ * round trip is what makes a two-second check feel like a page that broke.
  */
 
 type PreviewLine = {
@@ -42,7 +47,6 @@ type PreviewLine = {
     rimInch: number | null;
   } | null;
   availability: string;
-  /** The per-line verdict. See src/lib/server/customer-basket.ts. */
   state: LineState;
   availableQuantity: number | null;
   unavailableReason: string | null;
@@ -66,16 +70,13 @@ type Preview = {
   pfuInVatBase: boolean;
   pfuEstimated: boolean;
   pfuEstimateVersion: string | null;
-  /** False when any line is unavailable or short. The single checkout gate. */
   orderable: boolean;
   verifiedSource: VerifiedSource;
   fulfilment: { class: string; maxDays: number };
 };
 
-const money = (c: number | null) =>
-  c === null
-    ? "Da confermare"
-    : new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(c / 100);
+const money = (c: number | null, fallback = "—") =>
+  c === null ? fallback : new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(c / 100);
 
 const SEASON_LABELS: Record<string, string> = {
   summer: "Estive",
@@ -83,61 +84,113 @@ const SEASON_LABELS: Record<string, string> = {
   all_season: "4 stagioni",
 };
 
+/**
+ * How long typing settles before a validation is asked for.
+ *
+ * Within the 400–600ms the brief specifies. A press of +/- does not wait: the
+ * customer has finished expressing the change, and a delay there reads as lag.
+ */
+const TYPING_DEBOUNCE_MS = 500;
+
+const lineKey = (line: { productId: string; oldDot: boolean }) =>
+  `${line.productId}:${line.oldDot ? "1" : "0"}`;
+
 export function CustomerBasket() {
   const tr = useTr();
   const [stored, setStored] = useState<StoredBasketLine[]>([]);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** Which lines are mid-validation, so only those show it. */
+  const [validating, setValidating] = useState<Set<string>>(new Set());
 
-  const load = useCallback(async (lines: StoredBasketLine[]) => {
-    setStored(lines);
-    if (!lines.length) {
-      setPreview(null);
-      setBusy(false);
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      const r = await fetch("/api/account/basket/preview", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ lines }),
-      });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.code);
-      setPreview(j.basket);
-    } catch {
-      // A line running short is no longer an error — the server reports it on
-      // the line itself. Anything that reaches here is a genuine failure of
-      // the request, so the basket stays exactly as the customer left it.
-      setError(tr("Impossibile aggiornare il carrello. Riprova."));
-    } finally {
-      setBusy(false);
-    }
-  }, [tr]);
+  const debounce = useRef<number | null>(null);
+  const request = useRef(0);
+
+  const load = useCallback(
+    async (lines: StoredBasketLine[], touched: string[] = []) => {
+      if (!lines.length) {
+        setPreview(null);
+        setBusy(false);
+        setValidating(new Set());
+        return;
+      }
+      const ticket = ++request.current;
+      setBusy(true);
+      setError(null);
+      setValidating(new Set(touched));
+      try {
+        const r = await fetch("/api/account/basket/preview", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ lines }),
+        });
+        const j = await r.json();
+        // A superseded response must not overwrite a newer one.
+        if (ticket !== request.current) return;
+        if (!r.ok) throw new Error(j.code);
+        setPreview(j.basket);
+      } catch {
+        if (ticket !== request.current) return;
+        // A line running short is not an error — the server reports it on the
+        // line itself. Anything reaching here is a genuine request failure, so
+        // the basket stays exactly as the customer left it.
+        setError(tr("Impossibile aggiornare il carrello. Riprova."));
+      } finally {
+        if (ticket === request.current) {
+          setBusy(false);
+          setValidating(new Set());
+        }
+      }
+    },
+    [tr]
+  );
 
   useEffect(() => {
-    void load(readBasket());
+    const lines = readBasket();
+    setStored(lines);
+    void load(lines);
   }, [load]);
 
-  function setQuantity(line: StoredBasketLine, q: number) {
-    const next = stored
-      .map((x) => (x.productId === line.productId && x.oldDot === line.oldDot ? { ...x, quantity: q } : x))
-      .filter((x) => x.quantity > 0);
+  /**
+   * Writes the new quantity, then re-validates.
+   *
+   * The write happens FIRST and unconditionally, so the basket survives a
+   * failed or slow validation, a navigation away, or a closed tab. `immediate`
+   * separates a +/- press from typing.
+   */
+  const changeQuantity = useCallback(
+    (line: StoredBasketLine, quantity: number, immediate: boolean) => {
+      const next = stored
+        .map((x) =>
+          x.productId === line.productId && x.oldDot === line.oldDot ? { ...x, quantity } : x
+        )
+        .filter((x) => x.quantity > 0);
 
-    if (!writeBasket(next)) {
-      setError(tr("Impossibile salvare il carrello: il browser blocca l'archiviazione locale."));
-      return;
-    }
-    void load(next);
-  }
+      setStored(next);
+      if (!writeBasket(next)) {
+        setError(tr("Impossibile salvare il carrello: il browser blocca l'archiviazione locale."));
+        return;
+      }
 
-  if (busy && !preview) {
+      if (debounce.current !== null) window.clearTimeout(debounce.current);
+      const touched = [lineKey(line)];
+      if (immediate) {
+        void load(next, touched);
+      } else {
+        setValidating(new Set(touched));
+        debounce.current = window.setTimeout(() => void load(next, touched), TYPING_DEBOUNCE_MS);
+      }
+    },
+    [stored, load, tr]
+  );
+
+  const remove = (line: StoredBasketLine) => changeQuantity(line, 0, true);
+
+  if (busy && !preview && !stored.length) {
     return (
       <div>
-        <h1 className="text-2xl font-extrabold text-ink">{tr("Carrello")}</h1>
+        <h1 className="text-xl font-extrabold tracking-tight text-ink sm:text-2xl">{tr("Carrello")}</h1>
         <BasketSkeleton />
       </div>
     );
@@ -146,10 +199,14 @@ export function CustomerBasket() {
   if (!stored.length) {
     return (
       <div>
-        <h1 className="text-2xl font-extrabold text-ink">{tr("Carrello")}</h1>
-        <div className="mt-6 rounded-2xl bg-white p-8 text-center shadow-card">
-          <p className="text-ink-soft">{tr("Il carrello è vuoto.")}</p>
-          <Link className="mt-4 inline-block font-semibold text-accent underline" href="/account/catalogue">
+        <h1 className="text-xl font-extrabold tracking-tight text-ink sm:text-2xl">{tr("Carrello")}</h1>
+        <div className="mt-6 rounded-2xl border border-dashed border-ink/20 bg-white p-10 text-center">
+          <CommerceCartIcon className="mx-auto h-12 w-12 text-ink/20" />
+          <p className="mt-4 font-bold text-ink">{tr("Il carrello è vuoto.")}</p>
+          <Link
+            className="mt-4 inline-flex min-h-[44px] items-center justify-center rounded-xl bg-accent px-5 text-sm font-bold text-white"
+            href="/account/catalogue"
+          >
             {tr("Vai al catalogo")}
           </Link>
         </div>
@@ -162,95 +219,81 @@ export function CustomerBasket() {
     TWO SEPARATE CONDITIONS, deliberately not merged.
 
     `complete` is about MONEY — can a final total be produced at all.
-    `orderable` is about STOCK — can every line actually be supplied as asked.
-    A basket can be one without the other, and the customer needs to be told
-    which of the two is stopping them.
+    `orderable` is about FULFILMENT — can every line actually be supplied as
+    asked. A basket can be one without the other, and the customer needs to be
+    told which of the two is stopping them.
   */
   const orderable = preview?.orderable === true;
-  const blockedLines = preview?.lines.filter((l) => l.state !== "available") ?? [];
+  const blocked = preview?.lines.filter((l) => l.state !== "available") ?? [];
 
   return (
     <div aria-busy={busy}>
-      <h1 className="text-2xl font-extrabold text-ink">{tr("Carrello")}</h1>
+      <h1 className="text-xl font-extrabold tracking-tight text-ink sm:text-2xl">{tr("Carrello")}</h1>
 
       {error && (
-        <p role="alert" className="mt-4 rounded-xl bg-state-danger-soft p-4 text-state-danger">
-          {error}
-        </p>
+        <div role="alert" className="mt-4 rounded-xl border border-state-danger/30 bg-state-danger-soft p-4">
+          <p className="text-sm font-semibold text-state-danger">{error}</p>
+          {/* The basket itself is safe in the browser; only the check failed. */}
+          <Button className="mt-3" size="md" variant="secondary" disabled={busy} onClick={() => void load(stored)}>
+            {tr("Riprova")}
+          </Button>
+        </div>
       )}
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1.6fr_1fr] lg:items-start">
-        <div className="space-y-3">
+      <div className="mt-5 grid gap-4 lg:grid-cols-[1.7fr_1fr] lg:items-start">
+        <div className="space-y-2">
           {preview?.lines.map((line) => {
             const s = stored.find((x) => x.productId === line.productId && x.oldDot === line.oldDot);
             if (!s) return null;
+            const key = lineKey(line);
+            const name = [line.tyre?.brand, line.tyre?.modelPattern].filter(Boolean).join(" ");
             return (
-              <div
-                key={`${line.productId}-${line.oldDot}`}
-                className="rounded-2xl bg-white p-5 shadow-card"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-4">
+              <div key={key} className="rounded-2xl border border-ink/10 bg-white p-3 sm:p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <div className="font-bold text-ink">
-                      {line.tyre?.brand ?? tr("Articolo non disponibile")} {line.tyre?.modelPattern ?? ""}
+                    <div className="truncate text-[15px] font-extrabold text-ink">
+                      {name || tr("Articolo non disponibile")}
                     </div>
-                    <div className="mt-1 text-sm text-ink-soft">
+                    <div className="mt-0.5 text-sm font-semibold text-ink-soft">
                       {line.tyre?.sizeDisplay ?? ""}
                       {line.tyre?.loadSpeedRaw ? ` · ${line.tyre.loadSpeedRaw}` : ""}
                       {line.tyre?.season && SEASON_LABELS[line.tyre.season]
-                        ? ` · ${SEASON_LABELS[line.tyre.season]}`
+                        ? ` · ${tr(SEASON_LABELS[line.tyre.season])}`
                         : ""}
                       {line.oldDot ? ` · ${tr("DOT precedente")}` : ""}
                     </div>
-                    <div className="mt-2 text-sm text-ink-soft">
-                      {money(line.unitTyreNetCents)} <span className="text-xs">{tr("netto / pz")}</span>
+                    <div className="mt-1 text-xs font-semibold text-ink-soft">
+                      {money(line.unitTyreNetCents)} {tr("netto / pz")}
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    <label className="sr-only" htmlFor={`qty-${line.productId}-${line.oldDot}`}>
-                      {tr("Quantità")}
-                    </label>
-                    <input
-                      id={`qty-${line.productId}-${line.oldDot}`}
-                      className="h-11 w-20 rounded-lg border border-ink/15 px-2"
-                      type="number"
-                      min="1"
-                      max="100"
-                      /*
-                        Driven by the LOCAL basket, not by `line` from the
-                        server preview. Bound to the preview, the box ignored
-                        what was typed until the round trip returned and then
-                        snapped back to the old number — a controlled input
-                        that appears not to accept input.
-                      */
-                      value={s.quantity}
-                      disabled={busy}
-                      onChange={(e) =>
-                        setQuantity(s, Math.max(0, Math.min(100, Number(e.target.value) || 0)))
-                      }
-                    />
-                    <div className="w-28 text-right font-bold">
+                  <div className="text-right">
+                    <div className="font-extrabold text-ink">
                       {money(
                         line.unitTyreNetCents === null ? null : line.unitTyreNetCents * s.quantity
                       )}
                     </div>
-                    <button
-                      className="text-sm text-ink-soft underline hover:text-ink"
-                      disabled={busy}
-                      onClick={() => setQuantity(s, 0)}
-                    >
-                      {tr("Rimuovi")}
-                    </button>
                   </div>
                 </div>
 
-                {/*
-                  THE PER-LINE VERDICT. Previously a short line failed the
-                  whole request and the customer got a banner naming no tyre;
-                  now the tyre that is short says so itself, next to the
-                  quantity box that caused it.
-                */}
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <QuantityStepper
+                    value={s.quantity}
+                    label={`${tr("Quantità")} ${name}`.trim()}
+                    /* Typing: debounced. +/-: immediate — the customer has
+                       finished expressing the change. */
+                    onChange={(q) => changeQuantity(s, q, false)}
+                    onCommit={(q) => changeQuantity(s, q, true)}
+                  />
+                  <button
+                    type="button"
+                    className="min-h-[44px] px-2 text-sm font-semibold text-ink-soft underline underline-offset-2 hover:text-ink"
+                    onClick={() => remove(s)}
+                  >
+                    {tr("Rimuovi")}
+                  </button>
+                </div>
+
                 <LineAvailability
                   state={line.state}
                   availableQuantity={line.availableQuantity}
@@ -259,7 +302,9 @@ export function CustomerBasket() {
                   verifiedSource={line.verifiedSource}
                   verifiedAt={line.verifiedAt}
                   tyre={line.tyre}
-                  onAcceptAvailable={(q) => setQuantity(s, q)}
+                  validating={validating.has(key)}
+                  onAcceptAvailable={(q) => changeQuantity(s, q, true)}
+                  onRetry={() => void load(stored, [key])}
                   busy={busy}
                   tr={tr}
                 />
@@ -269,106 +314,87 @@ export function CustomerBasket() {
         </div>
 
         {preview && (
-          <section className="rounded-2xl bg-white p-5 shadow-card lg:sticky lg:top-6">
-            {/* ---- THE TYRE VALUE, which is settled --------------------- */}
+          <section className="rounded-2xl border border-ink/10 bg-white p-4 lg:sticky lg:top-24">
             <h2 className="text-xs font-bold uppercase tracking-wide text-ink-soft">
-              {tr("Valore pneumatici")}
+              {tr("Riepilogo")}
             </h2>
-            <div className="mt-3 flex justify-between text-sm">
-              <span>{tr("Imponibile pneumatici")}</span>
-              <strong>{money(preview.tyreNetTotalCents)}</strong>
+
+            <dl className="mt-3 space-y-2 text-sm">
+              <div className="flex justify-between">
+                <dt className="text-ink-soft">{tr("Pneumatici")}</dt>
+                <dd className="font-semibold text-ink">{money(preview.tyreNetTotalCents)}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-ink-soft">
+                  {tr("PFU")}
+                  {preview.pfuEstimated && <span aria-hidden="true"> *</span>}
+                </dt>
+                <dd className={`font-semibold ${preview.pfuTotalCents === null ? "text-state-warning" : "text-ink"}`}>
+                  {money(preview.pfuTotalCents, tr("Da confermare"))}
+                </dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-ink-soft">
+                  {tr("IVA")} {preview.vatRatePercent}%
+                </dt>
+                <dd className={`font-semibold ${preview.vatTotalCents === null ? "text-state-warning" : "text-ink"}`}>
+                  {money(preview.vatTotalCents, tr("Da confermare"))}
+                </dd>
+              </div>
+            </dl>
+
+            <div className="mt-3 flex items-baseline justify-between border-t border-ink/10 pt-3">
+              <span className="text-sm font-bold text-ink">
+                {preview.pfuEstimated ? tr("Totale stimato") : tr("Totale da pagare")}
+              </span>
+              {complete && orderable ? (
+                <strong className="text-xl font-extrabold text-ink">
+                  {money(preview.grandTotalCents)}
+                </strong>
+              ) : (
+                <strong className="text-sm text-state-warning">{tr("Non ancora disponibile")}</strong>
+              )}
             </div>
-            <p className="mt-2 text-xs text-ink-soft">
+
+            {/*
+              THE DISCLOSURE, at the exact place the number is read rather than
+              in a footnote further down the page.
+            */}
+            {complete && orderable && preview.pfuEstimated && (
+              <p className="mt-2 text-[11px] leading-relaxed text-ink-soft">
+                * {tr("PFU stimato — l'importo definitivo può variare.")}
+              </p>
+            )}
+
+            {!complete && (
+              <p className="mt-2 text-[11px] leading-relaxed text-ink-soft">
+                {tr(
+                  "Il totale finale non è ancora disponibile. L'importo indicato sopra è il valore dei pneumatici, non la cifra che sarà fatturata."
+                )}
+              </p>
+            )}
+
+            <p className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-state-success">
+              <CommerceTruckIcon className="h-4 w-4" />
               {tr("Consegna entro")} {preview.fulfilment.maxDays} {tr("giorni")} ·{" "}
               {tr("inclusa nel prezzo")}
             </p>
 
-            {/* ---- LEVIES AND TAX -------------------------------------- */}
-            <div className="mt-5 border-t border-ink/10 pt-4">
-              <h2 className="text-xs font-bold uppercase tracking-wide text-ink-soft">
-                {tr("Imposte e contributi")}
-              </h2>
-              <div className="mt-3 flex justify-between text-sm">
+            {blocked.length > 0 && (
+              <p className="mt-4 flex items-start gap-2 rounded-xl border border-state-danger/30 bg-state-danger-soft p-3 text-xs text-ink">
+                <CommerceWarningIcon className="mt-0.5 h-4 w-4 flex-none text-state-danger" />
                 <span>
-                  {preview.pfuEstimated ? tr("PFU stimato") : tr("PFU")}
-                  {preview.pfuEstimated && <span aria-hidden="true"> *</span>}
+                  {blocked.length === 1
+                    ? tr("Un articolo del carrello non è disponibile nella quantità richiesta.")
+                    : `${blocked.length} ${tr("articoli del carrello non sono disponibili nella quantità richiesta.")}`}{" "}
+                  {tr("Aggiorna o rimuovi gli articoli segnalati per continuare.")}
                 </span>
-                <strong className={preview.pfuTotalCents === null ? "text-state-warning" : ""}>
-                  {money(preview.pfuTotalCents)}
-                </strong>
-              </div>
-              <div className="mt-2 flex justify-between text-sm">
-                <span>
-                  {tr("IVA")} {preview.vatRatePercent}%
-                </span>
-                <strong className={preview.vatTotalCents === null ? "text-state-warning" : ""}>
-                  {money(preview.vatTotalCents)}
-                </strong>
-              </div>
-              {preview.pfuInVatBase && (
-                <p className="mt-2 text-xs text-ink-soft">
-                  {tr("L'IVA si applica a pneumatici + PFU.")}
-                </p>
-              )}
-            </div>
-
-            {/* ---- THE TOTAL ------------------------------------------- */}
-            <div
-              className={`mt-5 rounded-xl border-2 p-4 ${
-                !complete
-                  ? "border-state-warning/40 bg-state-warning-soft"
-                  : preview.pfuEstimated
-                    ? "border-state-warning/40 bg-state-warning-soft"
-                    : "border-accent/30 bg-accent-light/40"
-              }`}
-            >
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="text-sm font-bold text-ink">
-                  {preview.pfuEstimated ? tr("Totale stimato") : tr("Totale da pagare")}
-                </span>
-                {complete ? (
-                  <strong className="text-lg">{money(preview.grandTotalCents)}</strong>
-                ) : (
-                  <strong className="text-sm text-state-warning">
-                    {tr("Non ancora disponibile")}
-                  </strong>
-                )}
-              </div>
-
-              {/*
-                THE DISCLOSURE. A total built on an estimated levy is labelled
-                as estimated at the exact place the customer reads the number,
-                not in a footnote further down the page.
-              */}
-              {complete && preview.pfuEstimated && (
-                <p className="mt-2 text-xs leading-relaxed text-ink">
-                  * {tr("PFU stimato — l'importo definitivo può variare.")}{" "}
-                  {tr(
-                    "Il PFU indicato è una stima. L'importo definitivo può variare e sarà confermato da GommaRush."
-                  )}
-                </p>
-              )}
-
-              {!complete && (
-                <p className="mt-2 text-xs leading-relaxed text-ink">
-                  {tr(
-                    "Il totale finale non è ancora disponibile. L'importo indicato sopra è il valore dei pneumatici, non la cifra che sarà fatturata."
-                  )}
-                </p>
-              )}
-            </div>
-
-            {blockedLines.length > 0 && (
-              <p className="mt-5 rounded-xl border border-state-danger/30 bg-state-danger-soft p-3 text-xs text-ink">
-                {blockedLines.length === 1
-                  ? tr("Un articolo del carrello non è disponibile nella quantità richiesta.")
-                  : `${blockedLines.length} ${tr("articoli del carrello non sono disponibili nella quantità richiesta.")}`}{" "}
-                {tr("Aggiorna o rimuovi gli articoli segnalati per continuare.")}
               </p>
             )}
 
             <Button
-              className="mt-5 w-full"
+              className="mt-4 w-full"
+              size="lg"
               disabled={!complete || !orderable || busy}
               onClick={() => {
                 window.location.href = "/account/checkout";
@@ -385,29 +411,29 @@ export function CustomerBasket() {
 
 function BasketSkeleton() {
   return (
-    <div className="mt-6 grid gap-6 lg:grid-cols-[1.6fr_1fr] lg:items-start">
-      <div className="space-y-3">
+    <div className="mt-5 grid gap-4 lg:grid-cols-[1.7fr_1fr] lg:items-start">
+      <div className="space-y-2">
         {[0, 1].map((i) => (
-          <div key={i} className="rounded-2xl bg-white p-5 shadow-card">
+          <div key={i} className="rounded-2xl border border-ink/10 bg-white p-4">
             <div className="flex justify-between gap-4">
               <div className="flex-1 space-y-2">
                 <div className="h-5 w-44 animate-pulse rounded bg-ink/10" />
                 <div className="h-4 w-32 animate-pulse rounded bg-ink/10" />
               </div>
-              <div className="h-11 w-20 animate-pulse rounded-lg bg-ink/10" />
+              <div className="h-5 w-20 animate-pulse rounded bg-ink/10" />
             </div>
+            <div className="mt-3 h-10 w-36 animate-pulse rounded-xl bg-ink/10" />
           </div>
         ))}
       </div>
-      <div className="rounded-2xl bg-white p-5 shadow-card">
+      <div className="rounded-2xl border border-ink/10 bg-white p-4">
         <div className="space-y-3">
-          <div className="h-4 w-32 animate-pulse rounded bg-ink/10" />
+          <div className="h-4 w-24 animate-pulse rounded bg-ink/10" />
           <div className="h-5 w-full animate-pulse rounded bg-ink/10" />
           <div className="h-5 w-full animate-pulse rounded bg-ink/10" />
-          <div className="h-16 w-full animate-pulse rounded-xl bg-ink/10" />
+          <div className="h-14 w-full animate-pulse rounded-xl bg-ink/10" />
         </div>
       </div>
-      <span className="sr-only">Aggiornamento prezzi e disponibilità…</span>
     </div>
   );
 }

@@ -39,7 +39,7 @@ export default async function CustomerLoginPage() {
 
       <main className="flex flex-1 items-start justify-center px-4 py-10 sm:items-center">
         <div className="w-full max-w-sm">
-          <div className="rounded-2xl bg-white p-6 shadow-card sm:p-8">
+          <div className="rounded-2xl border border-ink/10 bg-white p-6 sm:p-8">
             <h1 className="text-xl font-extrabold tracking-tight text-ink">{tr("Area clienti")}</h1>
             <p className="mt-1 text-sm text-ink-soft">
               {tr("Accedi per consultare il catalogo, i prezzi riservati e i tuoi ordini.")}
@@ -47,7 +47,11 @@ export default async function CustomerLoginPage() {
             <CustomerLoginForm />
           </div>
 
-          <div className="mt-4 rounded-2xl border border-ink/10 bg-white/60 p-5">
+          {/*
+            Secondary, and drawn as such: no second card competing with the
+            sign-in one, just a quiet section underneath it.
+          */}
+          <div className="mt-6 px-1">
             <h2 className="text-sm font-bold text-ink">{tr("Non hai un account?")}</h2>
             <p className="mt-1 text-sm text-ink-soft">
               {tr("La registrazione online non è ancora attiva. Gli accessi vengono creati da GommaRush: contattaci e attiviamo il tuo account.")}
@@ -56,7 +60,7 @@ export default async function CustomerLoginPage() {
               type="button"
               disabled
               aria-disabled="true"
-              className="mt-3 inline-flex min-h-[44px] w-full cursor-not-allowed items-center justify-center rounded-xl border border-ink/15 px-4 text-sm font-semibold text-ink/40"
+              className="mt-3 inline-flex min-h-[44px] w-full cursor-not-allowed items-center justify-center rounded-xl border border-ink/15 bg-surface-soft px-4 text-sm font-bold text-ink/40"
             >
               {tr("Registrati — prossimamente")}
             </button>

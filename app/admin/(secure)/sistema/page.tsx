@@ -1,6 +1,8 @@
 import { PageHeading } from "@/components/logistics/AdminShell";
 import { getSystemHealth, PERIOD_LABELS, type MetricPeriod } from "@/lib/server/quote-metrics";
 import { describeEmailConfig } from "@/lib/email/send-quote-request";
+import { describeGatewayConfig } from "@/lib/server/supplier-gateway";
+import { GatewayConfigPanel } from "@/components/logistics/GatewayConfigPanel";
 import { checkQuoteSchema } from "@/lib/server/quote-schema-check";
 import { SchemaStatusPanel } from "@/components/quote/SchemaStatusPanel";
 import Link from "next/link";
@@ -103,6 +105,12 @@ export default async function SystemPage({
           </Link>
         ))}
       </nav>
+
+      {/* Whether this deployment can verify a customer order at all. The
+          order gate fails closed on live verification, so missing credentials
+          mean no order can be completed — which must be visible here rather
+          than discovered by a customer. */}
+      <GatewayConfigPanel report={describeGatewayConfig("intersprint")} tr={tr} />
 
       {/* Configuration first: every other number below is meaningless if the
           deployment cannot send mail at all. */}

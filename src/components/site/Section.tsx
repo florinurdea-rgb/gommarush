@@ -157,16 +157,24 @@ export function SectionHeading({
  * minimum touch target then hold everywhere by construction rather than by
  * each caller remembering.
  */
-// `transition-colors` covers colour, background-colour and border-colour but
-// NOT box-shadow, so the primary CTA's hover lift would snap. Listed
-// explicitly instead. (A background-image swap is discrete and cannot be
-// transitioned at all -- that is why the two accent gradients are only one
-// shade apart: the change has to be imperceptible, not animated.)
 const BUTTON_BASE =
-  "inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-5 text-[15px] font-bold transition-[color,background-color,border-color,box-shadow] duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2";
+  "inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-5 text-[15px] font-bold transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2";
 
+/*
+  THE PRIMARY CTA IS THE SAME BUTTON AS THE COMMERCE PRIMARY.
+
+  It used to be the `gr-accent` gradient with a tinted lift shadow, while the
+  customer area's primary was a flat `bg-accent`. It is the single most-seen
+  element on the site and it changed appearance at exactly the moment a
+  customer crossed from the public pages into their account — which is the
+  discontinuity this pass exists to remove. Flat accent, no lift, matching
+  src/components/Button.tsx.
+
+  The gradient tokens stay in tailwind.config.js: `gr-ink` and the section
+  grounds still use theirs, and nothing else about the marketing palette moves.
+*/
 export const BUTTON_STYLES = {
-  primary: `${BUTTON_BASE} bg-gr-accent text-white shadow-cta hover:bg-gr-accent-hover hover:shadow-ctaHover focus-visible:ring-accent`,
+  primary: `${BUTTON_BASE} bg-accent text-white hover:bg-accent-dark focus-visible:ring-accent`,
   secondary: `${BUTTON_BASE} border border-steel text-ink hover:border-accent hover:text-accent focus-visible:ring-accent`,
   onInk: `${BUTTON_BASE} bg-white text-ink hover:bg-accent-light focus-visible:ring-white focus-visible:ring-offset-ink`,
   ghostOnInk: `${BUTTON_BASE} border border-white/30 text-white hover:border-white hover:bg-white/10 focus-visible:ring-white focus-visible:ring-offset-ink`,

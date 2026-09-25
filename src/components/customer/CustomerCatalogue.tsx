@@ -3,8 +3,18 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/Button";
-import { CartIcon } from "@/components/customer/CartIcon";
-import { addBasketLine } from "@/lib/customer/basket";
+import {
+  CommerceAllSeasonIcon,
+  CommerceCartIcon,
+  CommerceCheckIcon,
+  CommerceMinusIcon,
+  CommercePlusIcon,
+  CommerceSnowflakeIcon,
+  CommerceSunIcon,
+  CommerceTruckIcon,
+} from "@/components/customer/CommerceIcons";
+import { QuantityStepper } from "@/components/customer/QuantityStepper";
+import { addBasketLine, basketQuantity, BASKET_CHANGED_EVENT } from "@/lib/customer/basket";
 import { BRAND_TIER_LABELS } from "@/lib/catalogue/brand-tiers";
 import { catalogueViewState, sameValues, shouldQueryCatalogue } from "@/lib/customer/catalogue-view";
 import { useTr } from "@/lib/i18n/tr";
@@ -35,6 +45,18 @@ import { useTr } from "@/lib/i18n/tr";
  * A SIZE WITH NO TYRES IS REACHABLE, and answered plainly. That is the
  * deliberate cost of lists that never narrow, and a better screen than a
  * dimension the customer cannot select and cannot explain the absence of.
+ *
+ * WHAT THE PRICE BLOCK SHOWS — OWNER DECISION, 2026-09-24. A result shows the
+ * GommaRush selling price and the PFU amount, and nothing else: no VAT line,
+ * no VAT-inclusive total, and no estimate wording on the PFU. A tyre shop
+ * scanning fifty rows is comparing net prices, and four figures per row to
+ * compare one of them is noise. VAT and the full total appear in the basket,
+ * where the customer is committing rather than browsing.
+ *
+ * PRESENTATION ONLY. `pfuEstimated` and `pfuEstimateVersion` are untouched on
+ * the wire and in every snapshot, the estimate disclosure still appears in the
+ * basket and at checkout, and nothing about PFU provenance or auditability
+ * changes because of what this screen chooses to draw.
  *
  * IT OPENS ON A SELECTION WHEN ASKED TO. "Vedi alternative" on an unavailable
  * basket line links here with that tyre's size in the query string, and the
@@ -140,6 +162,8 @@ export function CustomerCatalogue({
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Bumped by "Riprova" to re-run the same search after a failed request. */
+  const [attempt, setAttempt] = useState(0);
 
   const dimensions = { widthMm: width, aspectRatio: aspect, rimInch: rim };
   const canQuery = shouldQueryCatalogue(dimensions);
@@ -218,7 +242,7 @@ export function CustomerCatalogue({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [filters, page, canQuery]);
+  }, [filters, page, canQuery, attempt]);
 
   const view = catalogueViewState({
     ...dimensions,
@@ -239,24 +263,41 @@ export function CustomerCatalogue({
    */
   const [added, setAdded] = useState<string | null>(null);
   const [addError, setAddError] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ id: number; tyre: string } | null>(null);
+  const [toast, setToast] = useState<{ id: number; tyre: string; quantity: number } | null>(null);
+
+  /**
+   * Per-result quantity, before it is committed to the basket.
+   *
+   * Lives here rather than in each card so the number survives the card
+   * re-rendering when a response lands, and so "Aggiungi" adds what the
+   * customer set rather than one at a time.
+   */
+  const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const quantityOf = (key: string) => quantities[key] ?? 1;
+  const setQuantity = (key: string, quantity: number) =>
+    setQuantities((current) => ({ ...current, [key]: quantity }));
 
   const add = useCallback(
-    (o: Offer) => {
+    (o: Offer, quantity: number) => {
       const key = `${o.tyre.productId}-${o.tyre.oldDot ? "old" : "new"}`;
-      if (addBasketLine(o.tyre.productId, o.tyre.oldDot)) {
+      // ONE operation, not `quantity` of them: the store merges by
+      // product+condition, so adding 4 is a single write and a single event.
+      if (addBasketLine(o.tyre.productId, o.tyre.oldDot, quantity)) {
         setAddError(null);
         setAdded(key);
         const id = Date.now();
         setToast({
           id,
           tyre: [o.tyre.brand, o.tyre.modelPattern, o.tyre.sizeDisplay].filter(Boolean).join(" "),
+          quantity,
         });
         window.setTimeout(() => setAdded((current) => (current === key ? null : current)), CONFIRMATION_MS);
         window.setTimeout(
           () => setToast((current) => (current?.id === id ? null : current)),
           CONFIRMATION_MS
         );
+        // Reset to 1 so the next add from the same card is not a surprise.
+        setQuantity(key, 1);
         return;
       }
       // Storage refused the write — private browsing, blocked site data, or a
@@ -289,128 +330,188 @@ export function CustomerCatalogue({
 
   const hasSelection = Boolean(width || aspect || rim || season || brand || tier);
   const hasExtraFilters = Boolean(season || brand || tier);
-  // Both literals appear in the source, so Tailwind's scanner emits both.
-  const columns = tiersConfigured ? "lg:grid-cols-8" : "lg:grid-cols-7";
+  const extraFilterCount = [season, brand, tier].filter(Boolean).length;
+  /** Phone only: whether season/brand/sort are unfolded. Always shown from `sm`. */
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  const basketCount = useBasketCount();
 
   return (
     <div>
-      <h1 className="text-2xl font-extrabold text-ink">{tr("Catalogo pneumatici")}</h1>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h1 className="text-xl font-extrabold tracking-tight text-ink sm:text-2xl">
+          {tr("Catalogo pneumatici")}
+        </h1>
+        {view === "results" && total > 0 && (
+          <span className="text-sm font-semibold text-ink-soft">
+            {total} {tr("pneumatici disponibili")}
+          </span>
+        )}
+      </div>
       <p className="mt-1 text-sm text-ink-soft">
         {tr("Scegli la misura per vedere i pneumatici disponibili e il prezzo GommaRush.")}
       </p>
 
       {/*
-        THE STICKY FILTER BAR.
+        THE SEARCH BAR.
 
-        Pinned to the top of the viewport, full container width (the negative
-        gutters cancel the page padding so the backdrop reaches the edges and
-        results do not show through beside it).
+        PRIMARY IS THE SIZE. Width, aspect and rim sit together in their own
+        row, visually separated from everything else, because that is the one
+        thing a tyre shop always knows and the one thing without which this
+        screen cannot answer. Season, brand and sort are secondary and are
+        drawn as such.
+
+        Sticky, because a customer comparing tyres scrolls and a filter bar
+        that scrolls away turns every adjustment into a trip back to the top.
+        It sits below the shell header, which is itself sticky at `top-0`.
       */}
-      <div className="sticky top-0 z-30 -mx-4 mt-5 border-b border-ink/10 bg-surface-soft/90 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
-        <div className="rounded-2xl bg-white p-3 shadow-card">
-          <p className="sr-only">
-            {tr("Larghezza, spalla e cerchio sono obbligatori per vedere i risultati.")}
-          </p>
+      <div className="sticky top-[57px] z-30 -mx-4 mt-4 border-b border-ink/10 bg-white/95 px-4 py-3 backdrop-blur sm:top-[65px] sm:mx-0 sm:rounded-b-2xl sm:border-x sm:px-4">
+        <p className="sr-only">
+          {tr("Larghezza, spalla e cerchio sono obbligatori per vedere i risultati.")}
+        </p>
 
-          <div className={`grid grid-cols-3 gap-2 ${columns}`}>
-            <Select
-              label={tr("Larghezza")}
-              required
-              value={width}
-              set={setWidth}
-              facetValues={widths}
-              placeholder={tr("Scegli")}
-            />
-            <Select
-              label={tr("Spalla")}
-              required
-              value={aspect}
-              set={setAspect}
-              facetValues={aspectRatios}
-              placeholder={tr("Scegli")}
-            />
-            <Select
-              label={tr("Cerchio")}
-              required
-              value={rim}
-              set={setRim}
-              facetValues={rims}
-              placeholder={tr("Scegli")}
-            />
+        {/* PRIMARY — the size. Three equal columns at every width. */}
+        <div className="grid grid-cols-3 gap-2">
+          <Select
+            label={tr("Larghezza")}
+            required
+            value={width}
+            set={setWidth}
+            facetValues={widths}
+            placeholder={tr("Scegli")}
+          />
+          <Select
+            label={tr("Spalla")}
+            required
+            value={aspect}
+            set={setAspect}
+            facetValues={aspectRatios}
+            placeholder={tr("Scegli")}
+          />
+          <Select
+            label={tr("Cerchio")}
+            required
+            value={rim}
+            set={setRim}
+            facetValues={rims}
+            placeholder={tr("Scegli")}
+          />
+        </div>
 
-            <Field label={tr("Stagione")}>
-              <select value={season} onChange={(e) => setSeason(e.target.value)} className={CONTROL}>
-                <option value="">{tr("Tutte")}</option>
-                <option value="summer">{tr("Estive")}</option>
-                <option value="winter">{tr("Invernali")}</option>
-                <option value="all_season">{tr("4 stagioni")}</option>
-              </select>
-            </Field>
+        {/*
+          ON A PHONE THE SECONDARY FILTERS FOLD AWAY.
 
-            {/*
-              The one list still read from a response, and the only one worth
-              narrowing: "which brands exist in 205/55 R16" is a useful
-              question. Empty until a size is chosen, because a brand list over
-              the whole catalogue is the scan this screen was rebuilt to avoid.
-            */}
-            <Select
-              label={tr("Marca")}
-              value={brand}
-              set={setBrand}
-              facetValues={brands}
-              placeholder={tr("Tutte")}
-            />
-
-            <Field label={tr("Ordina per")}>
-              <select value={sort} onChange={(e) => setSort(e.target.value)} className={CONTROL}>
-                <option value="price_asc">{tr("Prezzo più basso")}</option>
-                <option value="brand_asc">{tr("Marca A–Z")}</option>
-              </select>
-            </Field>
-
-            {/*
-              Premium / Fascia media / Economiche appear only once an APPROVED
-              brand classification exists. Three filters that all return nothing
-              would read as an empty catalogue instead of an unset business rule.
-            */}
-            {tiersConfigured && (
-              <Field label={tr("Fascia")}>
-                <select value={tier} onChange={(e) => setTier(e.target.value)} className={CONTROL}>
-                  <option value="">{tr("Tutte")}</option>
-                  {BRAND_TIER_LABELS.map((x) => (
-                    <option key={x.tier} value={x.tier}>
-                      {x.label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
+          This band is sticky, and on a 375px screen the full two-row version
+          took roughly half of what was left between the header and the bottom
+          navigation — once a size was chosen, the results it existed to serve
+          started below the fold. The size stays visible and one tap away at
+          all times; season, brand and sort sit behind one clearly labelled
+          toggle that says how many of them are in force. From `sm` there is
+          room, and they are always shown.
+        */}
+        <div className="mt-2 flex items-center justify-between gap-2 sm:hidden">
+          <button
+            type="button"
+            aria-expanded={filtersOpen}
+            aria-controls="catalogue-secondary-filters"
+            onClick={() => setFiltersOpen((open) => !open)}
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-ink/15 bg-white px-3 text-sm font-bold text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            {filtersOpen ? (
+              <CommerceMinusIcon className="h-4 w-4" />
+            ) : (
+              <CommercePlusIcon className="h-4 w-4" />
             )}
-
-            {/*
-              Always in the bar, in its own column, so the row does not reflow
-              the moment something is selected and the button is where the
-              customer last saw it. Disabled rather than hidden when there is
-              nothing to clear.
-            */}
-            <div className="flex flex-col justify-end">
-              <span className="block text-[11px] font-bold uppercase tracking-wide text-transparent" aria-hidden="true">
-                .
+            {tr("Filtri aggiuntivi")}
+            {extraFilterCount > 0 && (
+              <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-accent px-1.5 py-0.5 text-[11px] font-bold leading-none text-white">
+                {extraFilterCount}
               </span>
+            )}
+          </button>
+          {hasSelection && (
+            <button
+              type="button"
+              onClick={reset}
+              className="min-h-[44px] px-2 text-xs font-bold text-ink-soft underline underline-offset-2 hover:text-ink"
+            >
+              {tr("Azzera")}
+            </button>
+          )}
+        </div>
+
+        {/* SECONDARY — season, brand, sort. Quieter, and on their own row. */}
+        <div
+          id="catalogue-secondary-filters"
+          className={`mt-2 grid-cols-2 gap-2 border-t border-ink/10 pt-2 sm:grid sm:grid-cols-4 ${
+            filtersOpen ? "grid" : "hidden"
+          }`}
+        >
+          <Field label={tr("Stagione")}>
+            <select value={season} onChange={(e) => setSeason(e.target.value)} className={CONTROL}>
+              <option value="">{tr("Tutte")}</option>
+              <option value="summer">{tr("Estive")}</option>
+              <option value="winter">{tr("Invernali")}</option>
+              <option value="all_season">{tr("4 stagioni")}</option>
+            </select>
+          </Field>
+
+          {/*
+            Filled from the same request as the results, so every option is a
+            brand that exists in the chosen size. Empty until a size is
+            picked, because a brand list over the whole catalogue is a scan
+            this screen was rebuilt to avoid.
+          */}
+          <Select
+            label={tr("Marca")}
+            value={brand}
+            set={setBrand}
+            facetValues={brands}
+            placeholder={tr("Tutte")}
+          />
+
+          <Field label={tr("Ordina per")}>
+            <select value={sort} onChange={(e) => setSort(e.target.value)} className={CONTROL}>
+              <option value="price_asc">{tr("Prezzo più basso")}</option>
+              <option value="brand_asc">{tr("Marca A–Z")}</option>
+            </select>
+          </Field>
+
+          {/*
+            Premium / Fascia media / Economiche appear only once an APPROVED
+            brand classification exists. Three filters that all return nothing
+            would read as an empty catalogue instead of an unset business rule.
+          */}
+          {tiersConfigured && (
+            <Field label={tr("Fascia")}>
+              <select value={tier} onChange={(e) => setTier(e.target.value)} className={CONTROL}>
+                <option value="">{tr("Tutte")}</option>
+                {BRAND_TIER_LABELS.map((x) => (
+                  <option key={x.tier} value={x.tier}>
+                    {x.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
+
+          {/* From `sm` the reset sits at the end of the secondary row. */}
+          {hasSelection && (
+            <div className="hidden items-end justify-end sm:flex">
               <button
                 type="button"
                 onClick={reset}
-                disabled={!hasSelection}
-                className="mt-1 h-11 w-full rounded-xl border border-ink/15 px-2 text-sm font-bold text-ink-soft transition-colors hover:border-ink/30 hover:text-ink disabled:cursor-not-allowed disabled:border-ink/10 disabled:text-ink/30"
+                className="min-h-[44px] px-2 text-xs font-bold text-ink-soft underline underline-offset-2 hover:text-ink"
               >
                 {tr("Azzera")}
               </button>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
       {addError && (
-        <p role="alert" className="mt-4 rounded-xl bg-state-danger-soft p-4 text-sm text-state-danger">
+        <p role="alert" className="mt-4 rounded-xl border border-state-danger/30 bg-state-danger-soft p-4 text-sm text-state-danger">
           {addError}
         </p>
       )}
@@ -420,15 +521,20 @@ export function CustomerCatalogue({
         else, so the panel the customer is reading is always the answer to the
         selection currently in the bar above it.
       */}
-      <div className="mt-6" aria-live="polite" aria-busy={loading}>
+      <div className="mt-5" aria-live="polite" aria-busy={loading}>
         {view === "awaiting_dimensions" ? (
           <PromptForSize tr={tr} />
         ) : view === "loading" ? (
           <ResultsSkeleton tr={tr} />
         ) : view === "error" ? (
-          <p className="rounded-xl bg-state-danger-soft p-4 text-state-danger">{error}</p>
+          <div role="alert" className="rounded-2xl border border-state-danger/30 bg-state-danger-soft p-4">
+            <p className="text-sm font-semibold text-state-danger">{error}</p>
+            <Button className="mt-3" size="md" variant="secondary" onClick={() => setAttempt((n) => n + 1)}>
+              {tr("Riprova")}
+            </Button>
+          </div>
         ) : view === "refused" ? (
-          <p className="rounded-2xl bg-white p-5 text-sm text-ink-soft shadow-card">
+          <p className="rounded-2xl border border-ink/10 bg-white p-5 text-sm text-ink-soft">
             {tr("La selezione è troppo ampia per essere ordinata correttamente.")}{" "}
             {refused?.matched} {tr("pneumatici")}. {tr("Aggiungi un filtro per restringere la ricerca.")}
           </p>
@@ -441,29 +547,34 @@ export function CustomerCatalogue({
           />
         ) : (
           <>
-            <p className="text-sm text-ink-soft">
-              {`${total} ${tr("pneumatici disponibili")}`}
-            </p>
-
-            <div className="mt-3 space-y-3">
-              {offers.map((o) => (
-                <OfferCard
-                  key={`${o.tyre.productId}-${o.tyre.oldDot ? "old" : "new"}`}
-                  offer={o}
-                  deliveryDays={deliveryDays}
-                  onAdd={add}
-                  added={added === `${o.tyre.productId}-${o.tyre.oldDot ? "old" : "new"}`}
-                  tr={tr}
-                />
-              ))}
+            <div className="space-y-2">
+              {offers.map((o) => {
+                const key = `${o.tyre.productId}-${o.tyre.oldDot ? "old" : "new"}`;
+                return (
+                  <OfferCard
+                    key={key}
+                    offer={o}
+                    deliveryDays={deliveryDays}
+                    quantity={quantityOf(key)}
+                    onQuantityChange={(q) => setQuantity(key, q)}
+                    onAdd={add}
+                    added={added === key}
+                    tr={tr}
+                  />
+                );
+              })}
             </div>
 
             {total > PAGE_SIZE && (
-              <nav className="mt-6 flex items-center justify-between gap-4" aria-label={tr("Paginazione")}>
+              <nav
+                className="mt-5 grid grid-cols-2 items-center gap-3 sm:flex sm:justify-between sm:gap-4"
+                aria-label={tr("Paginazione")}
+              >
                 <Button size="md" variant="secondary" disabled={page === 0} onClick={() => setPage((x) => Math.max(x - 1, 0))}>
                   {tr("Precedente")}
                 </Button>
-                <span className="text-sm text-ink-soft">
+                {/* Its own line on a phone, where three items do not fit across 320px. */}
+                <span className="order-first col-span-2 text-center text-sm text-ink-soft sm:order-none">
                   {tr("Pagina")} {page + 1} {tr("di")} {lastPage + 1}
                 </span>
                 <Button
@@ -480,7 +591,14 @@ export function CustomerCatalogue({
         )}
       </div>
 
-      {toast && <AddedToast key={toast.id} tyre={toast.tyre} tr={tr} />}
+      {toast && <AddedToast key={toast.id} tyre={toast.tyre} quantity={toast.quantity} tr={tr} />}
+      {basketCount > 0 && (
+        <>
+          {/* Reserves the sticky bar's height, so it never covers the last result or the pager. */}
+          <div className="h-[60px] md:hidden" aria-hidden="true" />
+          <StickyBasketBar count={basketCount} tr={tr} />
+        </>
+      )}
     </div>
   );
 }
@@ -489,15 +607,62 @@ type Tr = (text: string) => string;
 
 /** Shared control styling, so every field in the bar is the same object. */
 const CONTROL =
-  "mt-1 h-11 w-full rounded-xl border border-ink/15 bg-white px-2.5 text-sm font-normal text-ink";
+  "mt-1 h-11 w-full rounded-xl border border-ink/15 bg-white px-2.5 text-base font-semibold text-ink sm:text-sm";
 
 /**
- * A tyre, for the empty result.
+ * The basket count, live, for the sticky bar.
  *
- * Carcass, rim and hub. An empty panel of text reads as a page that failed;
- * a drawing of the thing that is missing reads as an answer to the question
- * that was asked.
+ * Same three listeners the navigation uses: the basket's own event, `storage`
+ * for another tab, and focus for a tab that changed while hidden. Zero until
+ * mount, because the basket lives in the browser and a server-rendered count
+ * would be a hydration mismatch.
  */
+function useBasketCount(): number {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    const sync = () => setCount(basketQuantity());
+    sync();
+    window.addEventListener(BASKET_CHANGED_EVENT, sync);
+    window.addEventListener("storage", sync);
+    window.addEventListener("focus", sync);
+    return () => {
+      window.removeEventListener(BASKET_CHANGED_EVENT, sync);
+      window.removeEventListener("storage", sync);
+      window.removeEventListener("focus", sync);
+    };
+  }, []);
+  return count;
+}
+
+/**
+ * The persistent route to the basket once there is something in it.
+ *
+ * COUNT AND NAVIGATION, NO TOTAL. A grand total here would be computed from
+ * whatever the catalogue happened to show, before any fulfilment check and
+ * before VAT — a number that then changes the moment the basket opens. Showing
+ * it would be worse than showing nothing, because it would look like a quote.
+ *
+ * On a phone it sits above the navigation bar and clears the home indicator;
+ * above `md` the header already carries a basket link with the same count, so
+ * this stays out of the way.
+ */
+function StickyBasketBar({ count, tr }: { count: number; tr: Tr }) {
+  return (
+    <div className="fixed inset-x-0 bottom-[calc(56px+env(safe-area-inset-bottom))] z-30 px-3 pb-2 md:hidden">
+      <Link
+        href="/account/basket"
+        className="mx-auto flex min-h-[52px] max-w-content items-center justify-between gap-3 rounded-2xl bg-ink px-4 text-white shadow-modal"
+      >
+        <span className="flex items-center gap-2 text-sm font-bold">
+          <CommerceCartIcon className="h-5 w-5" />
+          {count} {count === 1 ? tr("pneumatico") : tr("pneumatici")}
+        </span>
+        <span className="text-sm font-bold underline underline-offset-2">{tr("Vai al carrello")}</span>
+      </Link>
+    </div>
+  );
+}
+
 function TyreIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -569,19 +734,27 @@ function NoResults({
  * interrupting. It is announced once and removed on a timer, so nothing
  * accumulates in the corner of a long browse.
  */
-function AddedToast({ tyre, tr }: { tyre: string; tr: Tr }) {
+function AddedToast({ tyre, quantity, tr }: { tyre: string; quantity: number; tr: Tr }) {
   return (
     <div
       role="status"
       aria-live="polite"
-      className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex justify-center px-4"
+      /*
+        Above the phone navigation AND the sticky basket bar that sits on top
+        of it, so a confirmation never lands under the two things it is telling
+        the customer to use. On desktop neither exists, so it returns to the
+        bottom of the viewport.
+      */
+      className="pointer-events-none fixed inset-x-0 bottom-[calc(116px+env(safe-area-inset-bottom))] z-50 flex justify-center px-4 md:bottom-4"
     >
       <div className="gr-toast pointer-events-auto flex max-w-full items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-white shadow-modal">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-state-success">
-          <CartIcon className="h-4 w-4" />
+          <CommerceCartIcon className="h-4 w-4" />
         </span>
         <span className="min-w-0">
-          <span className="block text-sm font-bold">{tr("Aggiunto al carrello")}</span>
+          <span className="block text-sm font-bold">
+            {quantity} × {tr("Aggiunto al carrello")}
+          </span>
           {tyre && <span className="block truncate text-xs text-white/70">{tyre}</span>}
         </span>
         <Link
@@ -595,98 +768,133 @@ function AddedToast({ tyre, tr }: { tyre: string; tr: Tr }) {
   );
 }
 
+/** Season pill, drawn with the approved seasonal marks. */
+const SEASON_ICONS: Record<string, (props: { className?: string }) => JSX.Element> = {
+  summer: CommerceSunIcon,
+  winter: CommerceSnowflakeIcon,
+  all_season: CommerceAllSeasonIcon,
+};
+
+/**
+ * One result.
+ *
+ * MOBILE IS NOT THE DESKTOP ROW SQUEEZED. Under `sm` identity and price share
+ * the first row and a full-width action row follows, with the stepper and
+ * Aggiungi side by side and both at 44px. From `sm` it becomes a single
+ * scanning row — identity left, price right, action right — so a shop can run
+ * down fifty of them and add from several without the eye leaving one column.
+ *
+ * ONLY WHAT THE PROJECTION ACTUALLY CARRIES is drawn: brand, model, size,
+ * load/speed, season, XL, run-flat, older DOT, availability, price, PFU and
+ * the GommaRush delivery promise. There is no photograph, no brand mark and no
+ * label value, because the catalogue holds none of those and inventing one
+ * would be inventing a product claim.
+ */
 function OfferCard({
   offer,
   deliveryDays,
+  quantity,
+  onQuantityChange,
   onAdd,
   added,
   tr,
 }: {
   offer: Offer;
   deliveryDays: number;
-  onAdd: (o: Offer) => void;
+  quantity: number;
+  onQuantityChange: (quantity: number) => void;
+  onAdd: (o: Offer, quantity: number) => void;
   added: boolean;
   tr: Tr;
 }) {
   const t = offer.tyre;
   const loadSpeed = t.loadSpeedRaw ?? [t.loadIndex, t.speedRating].filter(Boolean).join("");
+  const SeasonIcon = t.season ? SEASON_ICONS[t.season] : undefined;
+  const name = [t.brand, t.modelPattern].filter(Boolean).join(" ");
 
   return (
     <article
-      className={`rounded-2xl bg-white p-5 shadow-card transition-shadow ${
-        added ? "ring-2 ring-state-success" : ""
+      className={`rounded-2xl border bg-white p-3 transition-colors sm:p-4 ${
+        added ? "border-state-success" : "border-ink/10"
       }`}
     >
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <div className="font-extrabold text-ink">
-            {t.brand ?? tr("Marca non indicata")} {t.modelPattern ?? ""}
+      {/*
+        ONE GRID, TWO SHAPES. Phone: identity and price share the first row,
+        the stepper and Aggiungi take the full second row. From `sm`: one
+        scanning row — identity, price, action. The eye runs brand/model →
+        size → attributes → availability and delivery → price → quantity + add,
+        and a phone shows roughly twice as many results per screen as the
+        stacked card did.
+      */}
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center sm:gap-x-4 sm:gap-y-2">
+        {/* ---- IDENTITY ------------------------------------------------ */}
+        <div className="min-w-0">
+          <div className="truncate text-[15px] font-extrabold text-ink">
+            {name || tr("Marca non indicata")}
           </div>
-          <div className="mt-1 text-sm text-ink-soft">
+          <div className="mt-0.5 text-sm font-semibold text-ink-soft">
             {t.sizeDisplay ?? tr("Misura non indicata")}
             {loadSpeed ? ` · ${loadSpeed}` : ""}
           </div>
+        </div>
 
-          <div className="mt-3 flex flex-wrap gap-2">
-            {t.season && SEASON_LABELS[t.season] && <Tag>{tr(SEASON_LABELS[t.season])}</Tag>}
-            {t.xl && <Tag>XL</Tag>}
-            {t.runFlat && <Tag>Run-flat</Tag>}
-            {t.oldDot && <Tag>{tr("DOT precedente")}</Tag>}
-            <Tag>{tr(AVAILABILITY_LABELS[offer.availability])}</Tag>
+        {/* Attributes, availability, delivery: full width on a phone, under the name from `sm`. */}
+        <div className="col-span-2 -mt-1 flex flex-wrap items-center gap-1.5 sm:col-span-1 sm:col-start-1 sm:row-start-2 sm:mt-0">
+          {t.season && SEASON_LABELS[t.season] && (
+            <Tag>
+              {SeasonIcon && <SeasonIcon className="h-3.5 w-3.5" />}
+              {tr(SEASON_LABELS[t.season])}
+            </Tag>
+          )}
+          {t.xl && <Tag>XL</Tag>}
+          {t.runFlat && <Tag>Run-flat</Tag>}
+          {t.oldDot && <Tag>{tr("DOT precedente")}</Tag>}
+          <Tag>{tr(AVAILABILITY_LABELS[offer.availability])}</Tag>
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-state-success">
+            <CommerceTruckIcon className="h-3.5 w-3.5" />
+            {tr("Consegna entro")} {deliveryDays} {tr("giorni")}
+          </span>
+        </div>
+
+        {/* ---- PRICE ---------------------------------------------------
+            Selling price and PFU. No VAT line and no VAT-inclusive total:
+            owner decision, recorded at the top of this file. Nothing about
+            PFU provenance changes — this is what is drawn, not what is held.
+        */}
+        <div className="col-start-2 row-start-1 text-right sm:row-span-2">
+          <div className="whitespace-nowrap text-lg font-extrabold leading-none text-ink">
+            {money(offer.tyreSaleNetCents)}{" "}
+            <span className="text-xs font-semibold text-ink-soft">{tr("netto")}</span>
+          </div>
+          <div className="mt-1 whitespace-nowrap text-xs font-semibold text-ink-soft">
+            {tr("PFU")} {money(offer.pfuAmountCents)}
           </div>
         </div>
 
-        <div className="text-right">
-          <div className="text-lg font-extrabold text-ink">
-            {money(offer.tyreSaleNetCents)}{" "}
-            <span className="text-xs font-medium text-ink-soft">{tr("netto")}</span>
-          </div>
-          {/*
-            The PFU disclosure. An unqualified price next to an "Add" button
-            reads as the price payable, so the card says what is still on top
-            of it and — when the PFU is the temporary estimate — that the
-            estimate can move.
-          */}
-          <div className="mt-1 text-xs text-ink-soft">
-            {offer.pfuEstimated
-              ? `+ ${tr("PFU stimato")} + ${tr("IVA")} 22%`
-              : offer.pfuStatus === "TO_CONFIRM"
-                ? `+ ${tr("PFU")} ${tr("e")} ${tr("IVA")} ${tr("da confermare")}`
-                : `+ ${tr("PFU")} + ${tr("IVA")} 22%`}
-          </div>
-          {offer.pfuEstimated && (
-            <div className="mt-1 max-w-[16rem] text-[11px] leading-snug text-state-warning">
-              {tr("PFU stimato — l'importo definitivo può variare.")}
-            </div>
-          )}
-          <div className="mt-1 text-xs font-semibold text-state-success">
-            {tr("Consegna entro")} {deliveryDays} {tr("giorni")}
-          </div>
-          {/*
-            The confirmed state is a DIFFERENT button, not a recoloured one:
-            green ground, a tick and a changed word. The previous cue was a
-            switch to the secondary variant, which on a white card is close
-            enough to the resting state to be missed entirely — which is how
-            "I added it and nothing happened" survived the first fix.
-          */}
+        {/* ---- ACTION --------------------------------------------------- */}
+        <div className="col-span-2 flex items-center gap-2 sm:col-span-1 sm:col-start-3 sm:row-span-2 sm:row-start-1">
+          <QuantityStepper
+            value={quantity}
+            onChange={onQuantityChange}
+            disabled={!offer.priceAvailable}
+            label={`${tr("Quantità")} ${name} ${t.sizeDisplay ?? ""}`.trim()}
+          />
           <button
             type="button"
             disabled={!offer.priceAvailable}
-            onClick={() => onAdd(offer)}
-            className={`mt-3 inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold transition-colors disabled:cursor-not-allowed disabled:bg-ink/10 disabled:text-ink/40 ${
-              added
-                ? "bg-state-success text-white"
-                : "bg-gr-accent text-white shadow-cta hover:bg-gr-accent-hover"
+            onClick={() => onAdd(offer, quantity)}
+            className={`inline-flex h-11 min-w-[7rem] flex-1 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-ink/10 disabled:text-ink/40 sm:flex-none ${
+              added ? "bg-state-success text-white" : "bg-accent text-white hover:bg-accent-dark"
             }`}
           >
             {added ? (
               <>
-                <CheckIcon className="h-4 w-4" />
+                <CommerceCheckIcon className="h-4 w-4" />
                 {tr("Aggiunto")}
               </>
             ) : (
               <>
-                <CartIcon className="h-4 w-4" />
+                <CommerceCartIcon className="h-4 w-4" />
                 {tr("Aggiungi")}
               </>
             )}
@@ -697,26 +905,9 @@ function OfferCard({
   );
 }
 
-function CheckIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden="true"
-    >
-      <path d="M5 12.5l4.5 4.5L19 7" />
-    </svg>
-  );
-}
-
 function Tag({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center rounded-full bg-surface-soft px-2.5 py-1 text-xs font-semibold text-ink-soft">
+    <span className="inline-flex items-center gap-1 rounded-md bg-surface-soft px-2 py-0.5 text-[11px] font-bold text-ink-soft">
       {children}
     </span>
   );
