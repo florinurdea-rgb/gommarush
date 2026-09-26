@@ -148,7 +148,7 @@ export function CustomerEditor({
             onChange={(event) => onChange({ location_name: event.target.value })} />
         </div>
         <div>
-          <label className={labelClass}>Destinatar</label>
+          <label className={labelClass}>{tr("Destinatario")}</label>
           <input className={inputClass} value={draft.recipient_name}
             onChange={(event) => onChange({ recipient_name: event.target.value })} />
         </div>
@@ -173,7 +173,7 @@ export function CustomerEditor({
             onChange={(event) => onChange({ province: event.target.value })} />
         </div>
         <div>
-          <label className={labelClass}>Telefon</label>
+          <label className={labelClass}>{tr("Telefono")}</label>
           <input className={inputClass} value={draft.phone}
             onChange={(event) => onChange({ phone: event.target.value })} />
         </div>
@@ -233,7 +233,7 @@ export function CustomerEditor({
               onChange={(event) => setCompany({ ...company, email: event.target.value })} />
           </div>
           <div>
-            <label className={labelClass}>Telefon</label>
+            <label className={labelClass}>{tr("Telefono")}</label>
             <input className={inputClass} value={company.phone}
               onChange={(event) => setCompany({ ...company, phone: event.target.value })} />
           </div>

@@ -45,6 +45,10 @@ export default async function CustomerLoginPage() {
               {tr("Accedi per consultare il catalogo, i prezzi riservati e i tuoi ordini.")}
             </p>
             <CustomerLoginForm />
+            {/* First sign-in happens through the activation link, not here. */}
+            <p className="mt-4 text-xs leading-relaxed text-ink-soft">
+              {tr("Hai ricevuto un link di attivazione da GommaRush? Aprilo per scegliere la tua password.")}
+            </p>
           </div>
 
           {/*
