@@ -1,0 +1,1 @@
+import {CustomerBasket} from "@/components/customer/CustomerBasket";export default function BasketPage(){return <CustomerBasket/>;}

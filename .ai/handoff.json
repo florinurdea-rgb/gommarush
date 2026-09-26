@@ -1,0 +1,857 @@
+{
+  "project": "GommaRush",
+  "mission_id": "M22-PRODUCT-UI-PORTAL-ACTIVATION",
+  "mission_title": "Public homepage redesign + customer portal account activation from Admin",
+  "status": "IMPLEMENTED_AWAITING_REVIEW",
+  "phase": "main = 0e737bc (PR #15) is live on Vercel Production. M22 on its own branch/PR, not merged. Production DB (read-only, 2026-09-25): 0005/0006 applied; 0 customers, 0 locations, 0 customer_accounts, 0 sales_orders; 6 auth users (staff/driver). Gateway username/password still pending, so final order submit refuses by design.",
+  "last_updated": "2026-09-25",
+  "canonical_branch": "main",
+  "working_branch": "claude/m22-product-ui-portal-activation (PR open, not merged)",
+  "entry_points": {
+    "working_rules": "CLAUDE.md",
+    "authority_model": "docs/AI_WORKFLOW.md",
+    "architecture": "docs/architecture/00_README.md",
+    "deldo_lane": "docs/architecture/02_SUPPLIER_RULES.md",
+    "database_and_migrations": "docs/DATABASE_BASELINE.md",
+    "security": "docs/SECURITY_FINDINGS.md",
+    "schema_evidence": "docs/SCHEMA_RECONCILIATION_REPORT.md",
+    "deldo_activation": "docs/DELDO_ACTIVATION.md",
+    "verify_baseline": "scripts/verify-migration-baseline.sh",
+    "schema_baseline": "supabase/baseline/ (0001 structure, 0002 functions+triggers+checks)",
+    "post_baseline": "supabase/post-baseline/0001_deldo_classification.sql",
+    "pricing_engine": "src/lib/pricing/ (settings.ts, pfu.ts, calculate.ts, projection.ts)",
+    "catalogue_search": "src/lib/server/catalogue-search.ts",
+    "internal_preview": "app/admin/(secure)/catalogue/ricerca/page.tsx + app/api/admin/catalogue/search/route.ts",
+    "pricing_spec": "docs/architecture/03_PRICING_PFU_VAT.md",
+    "intersprint_feed_adapter": "src/lib/catalogue/intersprint-feed-adapter.ts",
+    "intersprint_observations": "src/lib/suppliers/intersprint/feed/observation.ts",
+    "intersprint_lane": "docs/suppliers/intersprint/README.md",
+    "intersprint_commercial_policy": "src/lib/suppliers/intersprint/commercial-policy.ts",
+    "selling_policy": "src/lib/commerce/selling-policy.ts",
+    "feed_lifecycle": "src/lib/suppliers/intersprint/feed/lifecycle.ts",
+    "feed_runner": "src/lib/suppliers/intersprint/feed/runner.ts",
+    "feed_csv_reader": "src/lib/suppliers/intersprint/feed/csv-reader.ts",
+    "feed_ftp_transport": "src/lib/suppliers/intersprint/feed/ftp-transport.ts",
+    "ftp_provisioning": "infra/ftp/provision-intersprint-ftp.sh",
+    "pending_approval_sql": "supabase/pending-approval/0002_intersprint_supplier_identity.sql",
+    "feed_worker_script": "infra/intersprint-worker/ingest-feed.sh",
+    "feed_worker_install": "infra/intersprint-worker/install.sh",
+    "feed_worker_docs": "infra/intersprint-worker/README.md",
+    "feed_ingestion_server": "src/lib/server/feed-ingestion.ts",
+    "feed_ingest_endpoints": "app/api/feed/intersprint/{ingest,commit}/route.ts",
+    "feed_worker_auth": "src/lib/auth/feed-worker-auth.ts",
+    "feed_status": "src/lib/server/feed-status.ts (shown on /admin/catalogue)",
+    "production_reconciliation": "docs/PRODUCTION_RECONCILIATION.md",
+    "pending_approval_rename": "supabase/pending-approval/0003_intersprint_supplier_rename.sql (0002 is STALE)",
+    "pending_approval_indexes": "supabase/pending-approval/0004_m11b_catalogue_indexes.sql",
+    "catalogue_workspace": "app/admin/(secure)/catalogue/page.tsx + src/components/catalogue/CatalogueWorkspace.tsx",
+    "catalogue_browse_read": "src/lib/server/catalogue-browse.ts",
+    "supplier_lanes": "src/lib/catalogue/supplier-lanes.ts",
+    "listing_state": "src/lib/catalogue/listing-state.ts",
+    "catalogue_import_ui": "app/admin/(secure)/catalogue/importa/page.tsx (secondary)",
+    "brand_tiers": "src/lib/catalogue/brand-tiers.ts (mechanism present, mapping EMPTY pending approval)",
+    "catalogue_sort": "src/lib/catalogue/catalogue-sort.ts",
+    "customer_portal": "app/account/ + app/api/account/",
+    "customer_session": "src/lib/auth/customer-session.ts",
+    "customer_basket": "src/lib/server/customer-basket.ts",
+    "sales_orders": "src/lib/server/sales-orders.ts",
+    "pending_customer_accounts": "supabase/pending-approval/0005_customer_accounts.sql",
+    "pending_sales_orders": "supabase/pending-approval/0006_sales_orders.sql",
+    "customer_catalogue_read": "src/lib/server/customer-catalogue.ts (customer projection over the accepted M11B engine)",
+    "delivery_address_rule": "src/lib/commerce/delivery-address.ts",
+    "customer_accounts_admin": "src/components/logistics/CustomerAccountsPanel.tsx + app/api/admin/customers/[id]/accounts/route.ts",
+    "fulfilment_promise": "src/lib/commerce/fulfilment.ts",
+    "order_number_format": "src/lib/commerce/order-number.ts",
+    "catalogue_view_state": "src/lib/customer/catalogue-view.ts",
+    "pfu_estimate": "src/lib/pricing/pfu-estimate.ts (amounts are OWNER PLACEHOLDERS, not tariffs)",
+    "portal_activation": "docs/PRODUCTION_PORTAL_ACTIVATION.md"
+  },
+  "source_authority": {
+    "deldo": "API documentation.pdf and 26933TEST.csv, supplied by Jan Van Dyck (Deldo NV), subject 'RE: Connect platform and orders for - 026933 (Go Rush Trasporti srl)'. Both inspected directly in this session. GoRush customer number 026933.",
+    "note": "The PDF does NOT document the CSV columns ('we send you 1 file in CSV format so that you can examine file header and structure'). The sample file IS the column contract, and every mapping was read off it.",
+    "deldo_reverified": "Both primary artefacts were re-read independently on 2026-09-22 and every PRIMARY claim in docs/suppliers/deldo/README.md was re-derived from them: 26933TEST.csv (1,322,596 bytes, sha256 5e384ccf45d06ec3..., 6,729 data rows, 35 columns, ';' delimited, no quoting, POINT decimal separator on 6729/6729 Price values, pure ASCII, LF endings, 0 malformed rows) and API documentation.pdf (18 pages). The existing parser and GET_STOCK client were confirmed to match these artefacts.",
+    "intersprint": "vrd-pcr.csv.xlsx and vrd-truck.csv.xlsx, sent by Antonello Moio (Inter-Sprint) on 5 August 2026 as samples of the files their integration places on the GommaRush FTP folder. Both inspected directly on 2026-09-22. PCR: sheet 'vrd-pcr', 34 columns, 9,559 data rows padded out to Excel's full 1,048,576-row grid. TRUCK: sheet 'vrd-truck', 33 columns (no wcat), 134 data rows. On 18 September 2026 he added 'The integration has been completed; you can probably already check it now' - SECOND-HAND, no arriving file has been observed.",
+    "intersprint_catalogue_provenance_proof": "PROVEN 2026-09-22: the sorted sysnr set of vrd-pcr and the sorted supplier_article_id set of production's 9,559 listings share the same MD5 (4901cdbd6bb6b4a3be9ef1db0ba9314b), the same sum (4066526316), the same min (12851) and max (538231). production.source_row runs 2..9560, matching the file's data rows exactly, and supplier_item_code reproduces itemcode byte for byte including internal spacing. The current catalogue was therefore built from this feed family, keyed on sysnr.",
+    "intersprint_production_ftp": "OWNER-VERIFIED by direct inspection of the FTP VM (ubuntu-2gb-hel1-1) on 2026-09-22. Inter-Sprint is actively uploading: authenticated vsftpd uploads observed from source IP 193.172.180.162. Two feeds present in /srv/ftp/intersprint/incoming: vrd-001-21185-107.csv (PCR, ~3,060,504 B, ~11,208 lines) and vrd-001-21185.csv (truck, ~46,527 B, ~172 lines). Deliveries recur and OVERWRITE the same two filenames - observed 21-22 September around 06:27, 10:27, 12:2x, 14:27, PCR and truck refreshed independently, sizes varying. Files are genuinely semicolon-delimited CSV and the header matches the contract established from the August XLSX samples. Sizes and line counts are OBSERVATIONS, not a contract, and nothing in code depends on them. This is owner operational observation, NOT an Inter-Sprint contractual statement.",
+    "m10_production_verification": "READ-ONLY inspection of the production database on 2026-09-22, after two real Inter-Sprint feeds were processed by the deployed worker. Run ef834c00-3326-4c47-916e-4f18561e03aa (PCR, vrd-001-21185-107.csv, 3,060,504 B, checksum 04fa0b3c6a25) and run 77b811d4-5b0f-41ed-89ca-ec67b67fd060 (truck, vrd-001-21185.csv, 46,527 B, checksum 70a5d9196b13). Both status='committed', both supplier_id=4ce0b557-9575-4784-aa80-99e78af4da2f, both adapter='intersprint-feed', both import_mode='partial', both deactivated_listings=0, both rejected_rows=0."
+  },
+  "completed": [
+    "M21 UI/UX completion (2026-09-25, commit 25fd00b on PR #15): mobile catalogue search band folded (secondary filters behind 'Filtri aggiuntivi' on phones, ~140px vs ~290px sticky), compact result grid, sticky-basket spacer, 320px pager overflow fixed, catalogue retry; fixed-height shell header matching the sticky offset; checkout single status region + lg two-column sticky summary + full Pneumatici/PFU/IVA/Totale chain + preview price-move notice + retry that never submits; amber retryable line state for feed_after_live_failure; order detail no longer renders raw fulfilment_class; stale 'verification only on submit' / 'fails open' comments corrected.",
+    "M21 production-readiness: order gate fails closed on live verification (D27), forceFresh so a cached basket answer cannot serve the final check, unconfigured/unaddressable live lanes marked as failures rather than silent passes, admin Sistema screen reports gateway config PRESENT/MISSING without exposing values.",
+    "M21 final: live verification moved onto every basket preview (supersedes D21), live PRICE read and re-priced through the approved engine, 20s per-EAN call-rate cache; public primary CTA flattened to match the commerce primary and lift shadows removed from public cards.",
+    "M18 (PR #12): catalogue filter bar rebuilt as one sticky labelled row; dropdown freeze-on-focus; basket toast and cart icon.",
+    "M19 (PR #13): size lists served unfiltered from a cached server source and rendered with the page; fetch gate restored; 'no tyres in this size' state.",
+    "M20 (PR #14): per-line availability (available/limited/unavailable), live Inter-Sprint protocol-103 check at final confirm only, accepted-total price gate, View alternatives deep link.",
+    "M21: customer commerce reskin. New shell (header mirrors the public header, phone bottom bar with safe-area insets), approved CommerceIcons asset set adopted, QuantityStepper primitive, catalogue price presentation (net + PFU only), catalogue quantity + single-operation add + sticky basket bar, basket/checkout per-line revalidation with debounce, customer order detail page, account/profile and login reskin.",
+    "M17 - PRODUCTION ACTIVATION (partial, by design). Pre-checks all passed: HEAD b0de8ef clean and matching origin; production Supabase project sfvaqextratpnprcamwd confirmed by fingerprint (13,226 active products, both M10 import runs present, supplier at 4ce0b557..., 14 customers, 26 logistics orders); Vercel production branch confirmed as main by deployment history; both migration files byte-identical to the reviewed versions. DEPLOYED: PR #5 retargeted from claude/confident-albattani-p43rkj to main and merged (fast-forward lineage, zero conflicts) -> f26517c, Vercel Production SUCCESS. PR #6 merged one follow-up fix -> 114a1e0. Production now carries the portal, the admin sales-order screens and the accepted M11B review fix. NOT APPLIED: 0005 and 0006. The production Supabase connector exposes no apply_migration tool and its execute_sql runs in a read-only transaction ('ERROR: 25006: cannot execute CREATE TABLE in a read-only transaction'). This is a deliberate guardrail and was NOT worked around - no attempt was made to find service-role keys or route DDL through another channel. PRODUCTION DATA UNCHANGED: snapshot taken before the merge and re-taken after is byte-identical across customers(14), customer_locations(16), catalogue_products(13226), listings(13249), listing_prices(32285), suppliers(16), orders(26), order_items(44), order_documents(57), import_runs(5), 32 public tables, 28 public functions. new_tables_present=0 confirms the migrations genuinely did not run. FIXED DURING ACTIVATION: the admin account panel generated a temporary password then cleared it on success, with no password reset in the portal - an operator who did not copy it first would have stranded the customer. The credentials now appear once, with a copy button and select-all fallback, dismissed explicitly, held in component state only.",
+    "M16 - TEMPORARY PFU ESTIMATE + PRODUCTION READINESS. EVIDENCE FIRST: searched for any PFU figure GommaRush already holds. There is none - production document_charges is empty, no order_items.environmental_fee is populated, none of the 57 imported documents mentions PFU, and neither supplier feed carries a PFU column. The estimate amounts are therefore OWNER PLACEHOLDERS chosen for flow testing, not sourced tariffs, and they say so in their own version id ('gr-pfu-estimate-2026-09-placeholder-v1'). METHOD: banded by supplier-reported weight, which is the physical basis the real scheme uses and is present for 11,407 of 13,226 active products. Bands measured against the real catalogue: <=11kg EUR 3.00, 11-20kg EUR 6.00, 20-40kg EUR 12.00, >40kg EUR 25.00. Product-class fallback where weight is missing (1,819 products), then a conservative EUR 6.00 catch-all - the 11-20kg amount rather than the lowest, because an under-estimate is the failure nobody notices. Amounts are deliberately round so they cannot be mistaken for a published tariff. Deterministic, no I/O, no model call at transaction time. SAFETY: a new PfuStatus value ESTIMATED, separate from RULE_CALCULATED, which is resolved (carries an amount) but NOT verified (isVerifiedPfuStatus returns false). resolvePfu prefers supplier-stated, then a verified tariff, then the estimate - so populating VERIFIED_PFU_TARIFFS retires the estimate with NO code change. allowEstimate:false gives accounting-grade callers the old TO_CONFIRM refusal. estimatedPfu() is the only constructor and requires the estimate object, so an estimated amount cannot exist without its version. SNAPSHOT: pfu_status, pfu_estimate_version, vat_rate_percent and delivery_promise_max_days are first-class COLUMNS on sales_orders and sales_order_items, not jsonb, so 'which orders rest on an estimate?' is a WHERE clause. Two check constraints make it impossible to store ESTIMATED without a version, or a version without ESTIMATED. Historical totals are never rewritten. CUSTOMER DISCLOSURE: owner wording 'PFU stimato - l'importo definitivo può variare.' / 'Estimated PFU - final amount may change.' on every catalogue card, in the basket total block, and on checkout. The basket total is labelled 'Totale stimato' while the PFU is estimated. LOCALIZATION: the customer portal is now bilingual through the existing LocaleProvider / gr_locale cookie and the same translate() map the admin uses. No second mechanism. +24 PFU estimate tests; 15 pre-existing tests whose premise the owner's decision replaced were rewritten to assert the new behaviour plus the invariant that survives it. 1,072 tests total.",
+    "MISSION 1 - CUSTOMER ENTRY + CATALOGUE UX. D11 RESOLVED BY THE OWNER: PFU sits INSIDE the VAT taxable base, at the Italian ordinary 22%. DEFAULT_PRICING_SETTINGS.pfuVatBase moved from 'unresolved' to 'inside_vat_base'. This does NOT make a total available - D3, the tariff itself, is still open and VERIFIED_PFU_TARIFFS is still empty - but the engine now stops one step earlier and more honestly, at pfu_unresolved rather than vat_policy_unresolved. One pricing test asserted the old policy state and was rewritten to assert the new one plus the refusal that still holds. PUBLIC ENTRY: 'Area clienti' / 'Customer account' is now the PRIMARY header CTA at every breakpoint, plus footer and hamburger entries, all pointing at one central CUSTOMER_ROUTES.account. 'Registrati' demoted to a desktop secondary. The account screen offers Login as primary and registration as a visibly disabled future option that explains accounts are created by GommaRush - no registration form, nothing collected. Identity is still the explicit auth_user_id -> customer_id binding; nothing infers a customer from an email. DELIBERATE CATALOGUE: results require width + aspect + rim. The gate is enforced in the ROUTE, not only the component, so a hand-written query string cannot trigger the whole-catalogue read that the global sort has to refuse anyway. Facets are still served while the size is incomplete and narrow as each dimension is chosen. The component's state machine was extracted to catalogue-view.ts so the loading/stale precedence is a testable property: a request in flight never shows the previous selection's results. Skeletons match the shape of the cards they replace. RESULT CONTENT: brand, model, size, LI/SI, season, XL/run-flat, DOT condition, customer-safe availability, GommaRush net price and 'Consegna entro 7 giorni'. The delivery promise comes from the FULFILMENT CLASS (src/lib/commerce/fulfilment.ts), never from the supplier lane - publishing a per-offer lead time would have let a customer infer which tyres come from the 48h supplier and which from the 7-day one. BASKET: the summary is split into three blocks - known tyre value, what is still to be added (PFU, IVA 22%), and a final payable block that shows NO NUMBER while PFU is unresolved and says in words that the figure above is the tyre value and not the invoice total. CHECKOUT: V1 payment methods reduced to bank transfer and cash on delivery. POS on delivery removed from both the UI and the 0006 check constraint, and a test asserts the two cannot drift apart. ORDER NUMBER: formatSalesOrderNumber formats the EXISTING sales_order_number_seq value as GR-000000. One mechanism, one formatter, used by the customer confirmation, customer order history, admin inbox and admin detail. No second numbering scheme. +41 tests (1,042 total).",
+    "M12/M13/M14 REVIEW FIX. Build blocker: `next build` runs ESLint and three react/no-unescaped-entities errors (Italian apostrophes in JSX text) failed the Vercel compile - typecheck and tests were already clean, so the failure was never a type error and the speculative type fixes did not address it. CORRECTNESS: the customer catalogue paged SUPPLIER LISTINGS and collapsed them to products afterwards, so page size varied, there was no total (hence no pagination past the first 50 listings of 9,559), and the quoted price was only the cheapest offer ON THAT PAGE - a customer could be quoted MORE than GommaRush's own best price. Rebuilt on the accepted M11B engine via a new selectCatalogueRows(); the offerable selection is materialised whole (bounded at 1,000, refused above with a narrow-your-search message), then filtered on sellability, sorted and sliced. Sorting is Lowest price (the SELLING price, not supplier cost) and Brand A-Z; brand tiers appear only when an approved mapping exists; no 'Recommended' was invented. SAFETY: order creation was a header insert followed by an items insert with a compensating delete - not a transaction, so a crash between them left an order with a grand total and NO LINES in the operator's confirmation inbox. Replaced with a create_portal_sales_order RPC in 0006 (one transaction), verified against real PostgreSQL 16. Idempotency was a pre-check plus insert against a GLOBALLY unique key: rescoped to unique (customer_id, idempotency_key) and a 23505 now returns the racing request's order. Added a check constraint making a 'complete' order without totals unrepresentable. The order route returned raw error.message with a 500, publishing PostgreSQL constraint and column names to customers; replaced with a code allowlist plus server-side logging. The basket never checked quantity against evidenced stock - it now sources the cheapest listing that can actually evidence the requested quantity and refuses otherwise. Placeholder-address rejection was duplicated in two places that already disagreed; centralised in delivery-address.ts. TESTS: the M12 boundary test was tautological - it asserted that a hand-written CustomerTyreOffer literal lacked fields its own type does not declare, and would have passed unchanged while the route returned internal offers. Replaced with tests that run the real read against rows carrying a supplier name, article codes, costs and exact stock. +36 net tests (999 total). Completed the missing M12 admin customer-account UI: list with email read from the auth identity, create with a generated temporary password, reversible deactivate. No public registration, no invitation email, multiple logins per company preserved.",
+    "M12/M13 in progress: explicit auth-user→customer mapping; protected customer portal; login/logout; account/company/location view; customer-safe catalogue projection with supplier alternatives collapsed to one visible GommaRush offer per product+condition; local basket with server-side price/stock revalidation; checkout UI; separate sales_orders/sales_order_items schema with immutable customer/delivery/pricing/tyre snapshots; idempotent order creation; customer order history; admin 'Ordini clienti' inbox; 'Conferma e invia ordine' deliberately disabled so no supplier action can occur.",
+    "M11B review fix: lane/vehicle membership is now DATABASE-CORRECT. Runs are indexed to ids and the joined relation is filtered on last_import_run_id, so a supplier tab or a Car&Van/Truck choice changes product membership, the total and the page boundaries rather than only which offers are drawn. An empty lane matches a sentinel id so it returns nothing instead of everything. Supplier-article search now resolves to product ids in a bounded pre-query, making a claim the old code made and did not honour actually true. Facets share the same run constraint. +15 tests.",
+    "M11B amendment: catalogue sorting and the brand-tier taxonomy. brand-tiers.ts is the central, reusable mechanism the customer catalogue will share - premium / mid_range / value, with provenance and approver on each assignment - and its mapping is DELIBERATELY EMPTY because no approved classification exists and none can be derived (Inter-Sprint's 'LUXE BANDEN' is a product segment spanning many brands, not a brand statement). An unclassified brand resolves to null, never to 'value' by omission, and the UI hides the tier filter with an explanation rather than showing three buckets that all return nothing. catalogue-sort.ts separates DATABASE-NATIVE ordering (brand A-Z) from OFFER-DERIVED ordering (lowest price, freshest, most stock), whose keys live on another table: those materialise the whole filtered set before slicing, bounded at 1,000 products, and are REFUSED with a visible message above that rather than sorting a page in isolation - which is the exact bug M11B removed. +32 tests.",
+    "M11B: /admin/catalogue is now Browse & Compare. New read at src/lib/server/catalogue-browse.ts rooted at catalogue_products rather than supplier_product_listings, which makes ordering and pagination DATABASE-CORRECT (the previous search ordered a page by listing id then sorted that page by brand in JS - a locally sorted page in a globally unsorted sequence) and makes canonical grouping free, since one row IS one catalogue_product_id. Three narrow reads - products paginated, their listings with the latest observation only, open conflicts - each on an index that already exists. Supplier lanes (Inter-Sprint 7d, Deldo 7d, Carlini 48h) with attribution by import ADAPTER, replacing the hard-coded laneCode 'intersprint' in catalogue-search.ts. Vehicle classification by run provenance with product_class fallback. States CURRENT / NO_CURRENT_PRICE / NEEDS_REVIEW / CONFLICT. Dependent facets computed with every filter except the one being listed. Importer moved to /admin/catalogue/importa and /ricerca now redirects, so there is one Catalogue experience. Feed health compacted to a strip. +43 tests.",
+    "M11A: production reconciliation, READ-ONLY. (A) Corrected the last stale handoff risk still claiming the worker was 'NOT DEPLOYED'. (B) Full PRESERVE/RESET/VERIFY matrix over all 25 populated tables in docs/PRODUCTION_RECONCILIATION.md; exactly ONE provable RESET set was identified and NOT executed. (C) Inter-Sprint identity RE-ESTABLISHED on provenance rather than the stale 9,559 listing count; 0003 replaces 0002 and was proven against a disposable PostgreSQL 16 - happy path, idempotent re-run, documented rollback, and all six refusal cases blocking with distinct messages. (D) M11B foundation: Car/Van vs Truck resolves DETERMINISTICALLY for 100% of 13,206 listings via run provenance with a product_class fallback; two missing indexes prepared in 0004 and verified locally. (E) Retention measured and designed, nothing deleted. F1: found that the supplier's own 'group description' column maps 1:1 to product_class across 6,215 legacy rows - a real field, not an invention.",
+    "M10: production feed activation. Architecture chosen: the worker runs ON the FTP VM and calls a protected application endpoint over HTTPS (option B), rejecting direct Supabase writes (option A) because that would put the RLS-bypassing service-role key on a box exposed on port 21. The worker is a dependency-free bash script - no Node, no npm tree on that VM - that reads the spool directory LOCALLY, so no FTP client and no FTP credentials are involved in ingestion at all. It checks file stability (vsftpd STOR is not atomic), claims by atomic mv, checksums, gzips and uploads, drives the batched commit to completion, and archives ONLY then. Server side: bearer-token auth with constant-time compare, checksum re-verified against the received bytes, category detected from the wcat column (never the filename - truck's name is a strict prefix of PCR's), then analyzeCatalogueImport/commitCatalogueImport - the SAME path the admin upload screen uses, so there is one catalogue pipeline. importMode is hard-wired to 'partial' while D14 is open. The importer now dispatches its reader on the bytes (zip magic = workbook, else delimited text) so real CSV and the XLSX samples reach the same M8 commercial mapping. Admin feed-status block on /admin/catalogue reports last success AND last attempt per feed, freshness, filename, short checksum and row counts. +50 tests, including the bash worker executed against a stub server.",
+    "M9: Inter-Sprint FTP ingestion chain. commercial-policy.ts records the owner's confirmations with POLICY_OWNER provenance kept structurally distinct from supplier-documented facts; transport inclusion resolves per RELEASE (>= 60 PCR / 10 truck = transport_included, below = transport_separate, unknown quantity = fails closed). selling-policy.ts implements the minimum-5 customer offer rule centrally, as a lookup extensible by supplier/customer/channel, and NEVER alters supplier stock - a listing showing 3 keeps showing 3 internally and is filtered out of the customer projection in searchCatalogue rather than in the UI. csv-reader.ts DETECTS the delimiter against the verified column contract and fails closed on anything unproven, then hands header-keyed rows to the existing M8 adapter so there is still one commercial mapping. lifecycle.ts is pure decision logic: SHA-256 identity (not filename), duplicate/in-progress/abandoned-lock handling, and planCompletion treating a zero-row commit as a FAILURE. runner.ts sequences it against a FeedTransport interface. ftp-transport.ts implements that over basic-ftp, credentials from env only, read-only unless explicitly enabled. +80 tests.",
+    "M8: Inter-Sprint price & stock feed ingestion. New adapter src/lib/catalogue/intersprint-feed-adapter.ts reads the supplier's REAL columns (sysnr, itemcode, nett-price, available, eancode, weight, EPREL) and writes the same NormalizedCatalogueRow as the existing pre-normalised 'isb' adapter, so there is one commercial mapping downstream and no parallel catalogue. sysnr is the listing identity (proven, not chosen). '>  20' is preserved as stock_minimum with stock_exact NULL. Excel grid padding (1,039,016 PCR rows carrying a stray '20' in the nett-price column) is dropped by adapter.isPaddingRow before validation and counted as summary.paddingRows. SupplierObservation gained stockMinimum and classifyObservation now accepts a banded minimum as known stock - without that, 7,991 of 9,559 rows would have been unusable while only the LOW-stock rows stayed usable. src/lib/suppliers/intersprint/feed/observation.ts builds lane observations with run-time-asserted classification, null currency, and commercialMode 'unknown' so nothing is marked up yet. +68 tests. Verified against both real sample workbooks: 0 rejected rows, every real row priced, both availability forms present.",
+    "M7: central GommaRush pricing layer in src/lib/pricing/, deliberately OUTSIDE any supplier adapter. settings.ts holds markup 20% (provenance POLICY_OWNER), optional minimum profit, VAT 22% (STATUTORY) and pfuVatBase='unresolved'; every figure carries a provenance marker and an UNRESOLVED one is refused, not defaulted. pfu.ts implements SUPPLIER_EXACT/RULE_CALCULATED/MANUAL_CONFIRMED/TO_CONFIRM with an EMPTY verified-tariff table and refuses to derive an amount from weight. calculate.ts computes cost -> markup -> net -> PFU -> taxable -> VAT -> total in integer cents, failing closed at three points. projection.ts makes the customer/internal split two DIFFERENT TYPES so a supplier cost has nowhere to sit in a customer payload. catalogue-search.ts searches the existing normalized catalogue (no parallel catalogue) by width/aspect/rim/season. Internal preview at /admin/catalogue/ricerca, admin-guarded by the (secure) layout AND re-checked in the route. 56 new tests.",
+    "M6: runtime data-classification guard at the Deldo import boundary (assertDataClassification / assertFeedCommercialMode in observation.ts); classification re-asserted and surfaced explicitly on DeldoListingPersistencePlan as dataClassification/commercialMode/observationSource; 24 new tests; Quality=season and Vehicle=vehicle-class locked by regression tests.",
+    "M5: reconciled the docs/suppliers provenance system with the existing Deldo implementation; corrected two factual errors; closed the lane-freshness test gap; recorded PRIMARY/SECOND-HAND/UNCONFIRMED provenance in docs/suppliers/deldo/README.md.",
+    "DOCUMENTATION ONLY. Recorded the approved commercial architecture decisions in docs/architecture/04_SALES_SOURCING_MODEL.md: supplier identity invisible to customers; customer buys only from GommaRush; standard up to ~7 days vs express ~24-48h manually sourced from the Italian supplier; the 15-20% express share recorded explicitly as a planning assumption and not a rule; supplier minimum quantities and consolidation supported internally; customer order acceptance and supplier purchase/release as separate events; many customer orders per supplier batch; delivery promises must account for consolidation and cut-off rather than raw supplier availability; normal/older-DOT/Demo kept distinguishable; older-DOT offerable as a clearly identified cheaper GommaRush option; supplied DOT year preserved; Deldo Demo meaning unverified and not to be inferred; exact supplier listing/article survives sourcing and ordering; V1 payments bank transfer, POS on delivery, cash; manual review of every customer order; customer-specific pricing supported architecturally; portal and WhatsApp on one catalogue/pricing/order engine.",
+    "Added Deldo activation question 8 (what does the Demo column mean), noting explicitly that no DOT-encoding question is needed because the feed already supplies the year."
+  ],
+  "in_progress": [
+    "OPTIONAL: owner runs supabase/pending-approval/0007_verify_and_harden_0005_0006.sql in the production SQL Editor (verify + revoke browser-role grants on the portal tables).",
+    "Owner review of PR #15 (not merged)."
+  ],
+  "tests": {
+    "npm test": "1072 passed / 6 skipped (69 files). Up from 1048.",
+    "npm run typecheck": "PASS (tsc --noEmit, clean).",
+    "npm run lint": "0 errors, 7 warnings - all pre-existing UI warnings.",
+    "npm run build": "PASS (Compiled successfully).",
+    "0005+0006 verified": "Applied to a disposable PostgreSQL 16. Proven: order created with PFU provenance recorded; ESTIMATED without a version refused; a version without ESTIMATED refused; pos_on_delivery refused; item FK failure leaves 0 orphan headers; idempotent replay creates no duplicate; estimated orders are findable by WHERE.",
+    "production migration assessment": "SAFE. No object collisions, all FK targets present with uuid PKs, gen_random_uuid available, additive only, RLS on new tables only, idempotent. Critically: no DEPLOYED production code references any of these objects, so applying them changes nothing observable until the branch ships."
+  },
+  "production_changes": "CODE: main = b1a28c9 (PR #14 era) deployed; PR #15 NOT merged. DATABASE: 0005/0006 present (applied by the owner via SQL Editor, verified 2026-09-25); business data reset by the owner. Nothing written by any agent session.",
+  "database_changes": "None by this session. 0005+0006 verified applied. 0007 prepared, not applied. 0004 not applied.",
+  "external_actions": "NONE. No supplier order sent; live ordering remains disabled.",
+  "blockers": [
+    "Inter-Sprint Gateway USERNAME and PASSWORD still missing in Vercel Production (per owner). Until set, every live check fails and the final submit refuses (LIVE_VERIFICATION_UNAVAILABLE). Also confirm INTERSPRINT_GATEWAY_ENV is exactly 'production'.",
+    "D3 - the real PFU tariff - remains open; the EUR 3/6/12/25 estimate is a placeholder and should be confirmed before the portal opens beyond a controlled test.",
+    "D18: no approved brand-tier mapping, so tier filters stay hidden.",
+    "M11B: 0004 indexes still unapplied (verified absent 2026-09-25).",
+    "The production site cannot be HTTP smoke-tested from this sandbox (proxy denies gommarush.com and vercel.app).",
+    "D14 snapshot-vs-delta unresolved; ingestion stays partial and absence deactivates nothing.",
+    "Plain HTTP gateway / plain FTP (security findings 1 and 2).",
+    "Deldo persistence remains gated; untouched."
+  ],
+  "risks": [
+    "UPDATED 2026-09-25: entries below that mention supplier 'asdas', duplicate ZUIN/FINTYRE/CARLINI/Demo suppliers, or 0005/0006 being unapplied describe production BEFORE the owner's reset. Current state is in production_state_verified.",
+    "CORRECTION to an earlier entry in this file: the `isb` adapter does NOT lack a live lane. SUPPLIER_LANES maps BOTH `intersprint-feed` and `isb` to the single `intersprint` lane - one commercial relationship imported two ways - so all 13,422 active listings are live-verifiable. The earlier claim that 3,289 isb listings had no live lookup was wrong. Lanes genuinely without an implemented lookup are Deldo and Carlini, neither of which has active production listings.",
+    "24 active production listings (of 13,422 on the Inter-Sprint lane) have NO EAN. Under D27 a live lane with no identifier is an unverifiable line, so those 24 are now unorderable and will refuse at checkout with the retryable verification message. They are browsable and can be added to a basket. Either backfill the EAN or accept that they cannot be sold through the portal.",
+    "FAIL-CLOSED ORDERING MAKES THE GATEWAY A HARD DEPENDENCY (D27). With INTERSPRINT_GATEWAY_* unset, or the gateway unreachable, NO customer order can be completed - the portal browses and baskets normally and refuses at the final step with a retryable message. Whether those variables are set in Vercel Production could NOT be determined from the build environment (no Vercel credential; api.vercel.com unreachable through the sandbox proxy). The admin Sistema screen now reports PRESENT/MISSING per variable without exposing values - read it there before merging.",
+    "Live verification now runs on every basket preview, so the plain-HTTP Inter-Sprint gateway (security finding 1 (docs/SECURITY_FINDINGS.md)) is called far more often than under D21. Rate is bounded by a 500ms client debounce and a 20s per-EAN server cache, not by the confirm-only restriction that was lifted. If INTERSPRINT_GATEWAY_* are unset in Vercel - still UNVERIFIED from this environment - no call is made, every line reads 'feed', and the basket silently stops being live-checked without failing. Confirm those variables before treating the new behaviour as active.",
+    "M21 BRIEF AMBIGUITY, not resolved silently. The brief says 'Keep dependent facets' AND 'Preserve the existing technically correct behaviour'. Those conflict: M19 (merged, deployed, owner-requested) made the three SIZE lists deliberately non-dependent because the narrowing was both the slow half and the unstable half of the screen; the BRAND facet remains dependent. Current verified behaviour was preserved and M19 was not reverted. If dependent size lists are genuinely wanted back, that is a reversal of M19 and needs saying explicitly.",
+    "M21 SCOPE JUDGEMENT on the public marketing site. The brief lists the public homepage and header in scope. They already use the target system (white surfaces, GommaRush blue primary, steel hairlines, rounded-2xl cards, 'Area clienti' as the primary CTA at every breakpoint), and the actual discontinuity was the customer shell, which was a single unstyled line of links. The shell was rebuilt to mirror the public header exactly. Marketing pages were NOT recomposed: their copy is out of bounds for this mission and their tokens already match. If a visual change to the marketing pages is wanted it needs its own pass with copy authority.",
+    "M21 COPY CHANGES, deliberate and bounded. The reskin brief forbids supplier terminology on customer screens, which conflicted with four strings introduced earlier the same day by M20: 'Verificato ora con il fornitore', 'Fornitore non raggiungibile — dato del', 'Verifica con il fornitore…' and 'Il prezzo aggiornato dal fornitore è'. All four lost the supplier reference; their meaning is unchanged. 'Non disponibile in stock' was shortened to 'Non disponibile'. The LONG-STANDING production line 'Non viene inoltrato automaticamente a un fornitore' was KEPT untouched - it is a business statement about GommaRush's process, and removing the word would invert its meaning. No other customer-facing copy was added, shortened or rewritten.",
+    "The live availability check calls the Inter-Sprint gateway over PLAIN HTTP (http://customers.inter-sprint.nl, Gateway Manual v2.2 §1.1), so the customer number, username and password cross the wire in clear text on every call. This is security finding 1 (docs/SECURITY_FINDINGS.md) and it is now on the order path, one call per Inter-Sprint basket line at confirm. It was scoped to confirm-only (D21) to bound the exposure, NOT to remove it. The gateway has also never been exercised from the application - only from the env-gated live probe - so whether production credentials are set is UNVERIFIED from this environment. If they are not, verifyBasketLive detects it, makes no call, and every line stays on the feed with source 'feed'; nothing breaks, but nothing is checked live either. Confirm INTERSPRINT_GATEWAY_* is set in Vercel before treating the live check as active.",
+    "Pre-existing and NOT fixed here: the customer catalogue payload's tyre spec carries `reviewRequired` and `reviewReasons`, which are internal catalogue data-quality flags with no customer-facing purpose. Found while adding `ean` to FORBIDDEN_CUSTOMER_FIELDS - that addition was reverted because an EAN is printed on the tyre's own label and is not confidential, but the review flags are a different matter. `laneCode` IS on the forbidden list and is verified not to leak.",
+    "Catalogue dimension dropdowns are now UNFILTERED (src/lib/server/catalogue-dimensions.ts): they list every distinct width_mm / aspect_ratio / rim_inch in catalogue_products, so the catalogue's own data-quality problems are now VISIBLE to customers. Production currently holds rim_inch values 175, 195 and 225 - almost certainly 17.5, 19.5 and 22.5 truck rims lost to an integer parse - and widths 10, 11, 12, 13 alongside 750, 825, 950, 1050, 1150, 1250, which are industrial/agricultural sizes or parse artefacts. These were previously hidden by the dependent facet query, which never offered a value with no tyre behind it. They are NOT filtered out here: silently hiding them would resolve a data-quality conflict by concealing it, and would also hide genuinely buyable truck stock. Two separate follow-ups: (1) investigate whether rim_inch needs a decimal type and a re-parse of the affected listings, (2) decide whether the customer portal should scope to passenger-car sizes at all - that is a commercial decision, not an engineering one.",
+    "The PFU estimate magnitudes (EUR 3 / 6 / 12 / 25 by weight band) are placeholders chosen for order-flow testing. They are not sourced from any published tariff, because no PFU evidence exists anywhere in GommaRush's data. They are deliberately round and conservative, they are disclosed to the customer, and every order records that it used them - but a real customer charged on them would be charged an unverified amount. Confirm or replace before opening the portal beyond controlled testing.",
+    "The customer portal is Italian-only. The root layout already provides LocaleProvider and the operational string map (useTr) reaches /account, so the mechanism exists and is unused there - an English visitor follows an English 'Customer account' CTA into an Italian portal. Not in Mission 1's scope and deliberately not half-done; it is a contained follow-up (convert the five customer components to useTr and add the strings to admin-strings.data.ts).",
+    "Customer catalogue sorting and totals require materialising the filtered selection, bounded at 1,000 products (OFFER_SORT_MAX_PRODUCTS). An unfiltered browse of the whole catalogue is REFUSED with a message asking for a size, rather than silently truncated. This is correct but means a customer must pick at least one dimension before seeing ordered results. Removing the bound needs a current-offer view or materialised column, not a larger cap.",
+    "M11B CORRECTED (review finding, 2026-09-22): lane and vehicle were creating an !inner embed on supplier_product_listings but constraining it ONLY with active=true. No adapter or feed-category predicate ever reached the join, so `count` described 'products with any active listing' whatever tab was selected and the page was a slice of that wrong set; offers were then filtered after pagination, which made the screen look plausible while totals and page boundaries were wrong. My earlier note calling this 'a density artefact, not a correctness one' was WRONG. Fixed by resolving import runs to ids first (loadRunIndex/allowedRunIds) and filtering the joined relation on last_import_run_id, which is a real column, so PostgREST turns it into a join predicate. The legacy fallback - uncategorised runs whose listings classify by product_class - is pushed down as a root-level or(product_class.in.(...),product_class.is.null). Facets take the same run-id constraint, so they cannot describe a different set than the results. 15 regression tests in tests/catalogue-browse-membership.test.ts, with a mock that MODELS membership and the class fallback so they would fail if the predicate were removed.",
+    "M11B: one deviation remains in the vehicle filter, by design. A product whose legacy product_class contradicts a categorised run's stated vehicle is EXCLUDED from that vehicle's results rather than admitted on provenance. It cannot occur in production today - product_class is only ever set by the legacy car-family import, and no product_class value is 'truck' - and were it to occur it would be a genuine data anomaly worth withholding from a vehicle filter until reviewed. Expressing provenance-wins would need an OR across the root and the embedded relation, which PostgREST cannot do reliably; a current-offer view would remove the constraint entirely.",
+    "M11B amendment: offer-derived sorts (price, freshness, stock) materialise the filtered set and are capped at 1,000 products. Beyond that the sort is refused and the default brand order is used, with sortRefused surfaced to the UI. This is deliberate: sorting an already-paginated page by a key from another table produces a locally sorted page in a globally unsorted sequence. The durable fix is a current-offer view or a denormalised current_price_cents on supplier_product_listings maintained by the importer, which would make these sorts database-native - a schema change, so it needs approval and is not attempted here.",
+    "M11B amendment: APPROVED_BRAND_TIERS is empty, so every tier filter matches nothing by construction (an empty tier filters on an impossible brand rather than being ignored - ignoring it would make premium and value return identical results and look like a working feature). Populating it is an owner decision; see D18.",
+    "M11B: the 0004 indexes are NOT yet applied. product_class has no index and season alone is only the fourth column of catalogue_products_size_idx, so the Vehicle tab and a season-only filter sequentially scan 13,183 products. Correct but slow; apply 0004 through the documented procedure before browse traffic leans on those two facets.",
+    "M11B: supplier lane attribution is by import ADAPTER, not by supplier id or name. That is deliberate - the Inter-Sprint supplier row is still named 'asdas' and duplicate supplier records exist (D2) - but it means a lane gains rows only once an importer for it exists. Deldo and Carlini correctly render empty.",
+    "M11B: src/lib/server/catalogue-search.ts and catalogue-browse.ts are TWO READS OF ONE CATALOGUE, not two catalogues. Search owns the listing-level read and the customer/internal projection pair (needed for M12); browse owns the admin workspace. They share the tables, the pricing engine and the selling policy. Do not duplicate logic between them.",
+    "M10 SUPERSEDED 2026-09-22: the worker IS deployed and the pipeline IS live. Two real Inter-Sprint feeds were processed end to end into production and verified read-only: ef834c00-3326-4c47-916e-4f18561e03aa (PCR) and 77b811d4-5b0f-41ed-89ca-ec67b67fd060 (truck). The earlier 'not deployed, never run' wording was correct when written and is now false; it is replaced rather than deleted so the progression stays legible.",
+    "M10 FILENAME TRAP: the truck feed 'vrd-001-21185.csv' is a STRICT PREFIX of the PCR feed 'vrd-001-21185-107.csv'. Any startsWith/includes match on filenames classifies PCR as truck and applies a minimum release of 10 instead of 60. The feeds are told apart by the wcat column, which only PCR carries, and a test pins that.",
+    "M10: vsftpd STOR is NOT atomic - the supplier's file appears at its final name and grows. The worker requires STABLE_SECONDS (default 90) of no modification, re-checks the size after claiming and returns the file if it moved, and the server re-hashes the received bytes against the declared checksum. A truncated upload hashes perfectly well and looks complete, so this is three independent guards on purpose.",
+    "M10: importMode is hard-wired to 'partial' in submitIntersprintFeed and is NOT a caller parameter. A 'complete' run is the only thing that may propose deactivating listings absent from a file, and D14 is unresolved. Do not make this configurable until a supplier statement settles snapshot semantics.",
+    "M10: the feed worker token is a SEPARATE, single-purpose credential. The Supabase service-role key must never reach the FTP VM: it bypasses RLS on customers, orders and logistics, and that box is exposed on port 21.",
+    "M10: production writes the EU-label header as 'Fuel efficiency' where the August samples wrote 'Fuel effeciency'. Neither is mapped - the catalogue has no EU-label columns beyond eprel_id - so the difference is recorded, not depended on.",
+    "M10: feed staleness on the admin block uses a 24-hour GommaRush operational threshold, NOT a supplier promise. The observed 06:27/10:27/12:2x/14:27 cadence is an observation. Commercial freshness remains a separate question owned by the observation layer.",
+    "M10: the minimum-5 rule remains a CATALOGUE VISIBILITY policy and was deliberately not turned into an order-time rejection. assessSellability is called by searchCatalogue only; a future Protocol 103 live check that proves exactly 4 available can still allow an order for 4 without touching it.",
+    "M9: the FTP client is the one unverified component in the chain. It is deliberately read-only by default and no test depends on it - the lifecycle and runner are tested against an in-memory FeedTransport - so the untested surface is confined to the socket conversation itself.",
+    "M9: transport inclusion is a property of the RELEASE, not of a catalogue row. An observation built without a release quantity resolves to commercialMode 'unknown' and fails closed. The internal preview prices on the assumption that a consolidated order reaches the minimum, and the screen states that assumption rather than letting a per-tyre figure imply one tyre ships free.",
+    "M9: categoryForProductClass defaults an unrecognised product class to the PCR minimum of 60 - the HIGHER of the two - because being wrong toward 'we have not reached the minimum' costs a transport charge we expected, while the opposite promises free transport we were never entitled to.",
+    "M9: the minimum-5 rule filters the CUSTOMER projection inside searchCatalogue, not in the UI, so a future export, feed or public API cannot accidentally publish a suppressed listing. The internal projection still carries the real stock plus the suppression reason.",
+    "M9: a commit applying zero rows is treated as a FAILURE and the file goes to failed/. An Inter-Sprint delivery always carries rows, so zero means the wrong file was read or something broke; filing it under processed would hide that and suppress the retry.",
+    "M9: the completion record is written BEFORE the file is moved. A crash between the two leaves a correct database and a misplaced file rather than the reverse - a file in the wrong directory is a tidying problem, a file marked processed that never was is a double-charge.",
+    "M9: added the runtime dependency basic-ftp ^5.3.1 for the transport. Chosen over hand-rolling the protocol; it is dependency-free and typed. npm audit reports pre-existing advisories in the tree unrelated to this addition.",
+    "M8: the sample files are AUGUST 2026 SAMPLES, not current prices. They must be imported with classification 'test'. buildIntersprintObservation asserts the classification at run time and has no default, so an importer cannot omit it.",
+    "M8: the samples are saved to Excel's full 1,048,576-row grid and 1,039,016 PCR padding rows carry a stray '20' in the nett-price column - read naively, a million EUR 20 tyres with no identity. isPaddingRow drops them. Note that xlsx-reader's MAX_SHEET_ROWS is 200,000, so such a file reports truncated=true; the real data occupies the first 9,559 rows so nothing is lost, but the flag is expected rather than alarming.",
+    "M8: the real FTP delivery is probably a true .csv - the sample names are '*.csv.xlsx', i.e. a CSV opened in Excel. The CSV dialect (delimiter, quoting, encoding) is UNVERIFIED and must be read off a real file. The commercial mapping lives in the adapter and is container-independent, so a CSV reader wires to the same adapter; do NOT write a second commercial parser.",
+    "M8: the feed states NO season and NO vehicle class. group description carries Dutch merchandising groups and Snowgrip is a 3PMSF marking shared by winter and all-season tyres. Both are left null and flagged CLASS_OR_SEASON_UNRESOLVED. This is SAFE on re-import only because gorush_commit_catalogue_batch writes every product field as coalesce(nullif(incoming,''), existing) - tests/intersprint-feed-reimport.test.ts reads the migration itself to pin that. Without it, one price refresh would wipe the season off all 9,052 products.",
+    "M8: truck rims are written as tenths - 22.5\" arrives as '225'. Stored as supplied and flagged RIM_LOOKS_LIKE_TENTHS, never divided into the integer rim_inch column, where it would become 22: a different tyre.",
+    "M8: the feed's EU label data (fuel efficiency, wet grip, rollnoise, noise level, snow/ice grip, present on 8,981 rows) is NOT mapped because catalogue_products has no columns for it. Only eprel_id is stored. Adding those columns is a schema change and was out of scope.",
+    "M8 RESOLVES THE EVIDENCE FOR D1, not the fix. The supplier record named 'asdas' IS Inter-Sprint: the sysnr MD5 proof above is deterministic. Renaming it is a PRODUCTION DATA MUTATION and remains an owner decision. Safest reconciliation: UPDATE suppliers SET name where id = '4ce0b557-9575-4784-aa80-99e78af4da2f' only, after a backup, touching no listing or product row, since supplier_id is already correct on all 9,559 listings.",
+    "M7: the catalogue schema has NO EU-label columns beyond eprel_id (no fuel efficiency, wet grip or noise). 8,972 of 9,550 active products carry an eprel_id. The preview surfaces that id and nothing more; the richer label data is simply not in the system and must not be inferred from it.",
+    "M7: availability is projected as unknown/in_stock/on_request, never as a quantity. ISB ships thresholds ('>20') and the Deldo sample is banded 3..100, so neither is a count a customer promise could rest on. Today every row reads 'unknown' because no stock is stored at all.",
+    "M7: the preview is INTERNAL ONLY and deliberately has no public counterpart. The customer projection exists and is tested but nothing serves it yet. The first route that does must use toCustomerOffer, never toInternalOffer.",
+    "buildDeldoImport currently has NO non-test caller: there is no admin route, upload route or server action that reaches Deldo import. So there was no live bypass to close. The runtime guard was added because the FIRST such route - the next mission is feed activation - would otherwise pass unvalidated JSON straight through an erased TypeScript type.",
+    "guardKnownTestFile only recognises the one named file 26933TEST.csv. It is a deliberate backstop, not a heuristic, and must not be broadened into 'looks like test data' - such a guess would eventually be wrong in the expensive direction.",
+    "CORRECTED: a prior session working on the unrelated branch claude/sleepy-gauss-lezg26 concluded that no Deldo parser could be written because the primary files had never been inspected. That was wrong. The parser exists, is grounded in 26933TEST.csv, and is tested. That branch diverged from d6e2cda and never contained any of this Deldo work; it duplicated the schema baseline independently. Do not merge it over this branch.",
+    "Discount range was misstated as '-407.69 to +63.23' in both src/lib/suppliers/deldo/feed/parse.ts and docs/DELDO_ACTIVATION.md. The true range across 3,639 non-zero values is -407.69 to +78.33; 644 rows exceeded the stated upper bound. Both corrected. The conclusion drawn from it - never apply Discount - was and remains correct.",
+    "Stock in 26933TEST.csv has a hard floor of 3 and a hard ceiling of 100 (464 rows at exactly 100, none above, no zero-stock rows). That looks like deliberate banding rather than true counts, so it must not be presented as an exact quantity until Deldo confirms the semantics.",
+    {
+      "id": "R17",
+      "severity": "low",
+      "summary": "Production's function bodies were not created from the repository's migrations: 12 of 28 have their comments stripped and differ in formatting, though all 28 are semantically identical.",
+      "impact": "Evidence that functions too were applied outside version control. No behavioural difference exists today, but the same practice produced R15.",
+      "resolution": "The baseline carries the repository's commented versions. Requiring all schema change to go through migrations, enforced by the verify script in CI, is the fix."
+    },
+    {
+      "id": "R15",
+      "severity": "medium",
+      "summary": "RESOLVED IN SOURCE, NOT YET IN THE LEDGER. The 14 tables that no migration created are now in supabase/baseline/, proved to rebuild from empty. What remains is reconciling production's migration ledger, which needs a backup and approval (B9).",
+      "impact": "Until the ledger is reconciled, `supabase db push` against production is still unpredictable. The schema itself is no longer at risk of being lost.",
+      "resolution": "docs/SCHEMA_RECONCILIATION_REPORT.md section 10."
+    },
+    {
+      "id": "R16",
+      "severity": "medium",
+      "summary": "Production changes were historically applied outside the migration system. A captured baseline fixes the past but not the practice.",
+      "impact": "Without a rule and a check, the divergence recurs and the next baseline is needed in months.",
+      "resolution": "scripts/verify-migration-baseline.sh is now CI-suitable and asserts every object count. Wiring it into CI closes this."
+    },
+    {
+      "id": "R10",
+      "severity": "medium",
+      "summary": "Deldo documentation conflicts with itself on the GET_STOCK request parameter. The 'URL Parameters' section lists productId=[integer|string] OR ean=[string]; both worked examples use article=.",
+      "impact": "A wrong parameter name means every live lookup fails, or worse, silently returns nothing useful.",
+      "resolution": "article= is implemented because it is the only form demonstrated. Confirm with Deldo when requesting the token - it costs one line in the same email as B5."
+    },
+    {
+      "id": "R11",
+      "severity": "high",
+      "summary": "The Discount column's meaning is undocumented and values range from -407.69 to +78.33. A plain percentage discount cannot be negative.",
+      "impact": "If Discount must be applied to reach the real purchase price, every Deldo cost is currently wrong. If it must not, applying it later would corrupt every margin.",
+      "resolution": "Carried verbatim and never applied. purchasePrice is the Price column as supplied. Needs D7."
+    },
+    {
+      "id": "R12",
+      "severity": "high",
+      "summary": "Which of Deldo's two documented pricing modes GoRush receives is not stated anywhere - tyre price with transport separate, or transport included for a destination country.",
+      "impact": "The same number means different things under each. A markup applied to the wrong interpretation misprices every Deldo tyre.",
+      "resolution": "Every observation carries commercialMode 'unknown', which classifyObservation treats as not commercially usable. Needs D8."
+    },
+    {
+      "id": "R13",
+      "severity": "medium",
+      "summary": "Neither the feed nor the API returns a currency.",
+      "impact": "Deldo is Belgian and EUR is the obvious assumption, but an assumed currency on a purchase price is exactly the class of silent error this integration must not make.",
+      "resolution": "currency is left null. Needs D8 alongside the pricing mode."
+    },
+    {
+      "id": "R14",
+      "severity": "low",
+      "summary": "530 of 6,729 rows are flagged for review: 459 parenthesised or damaged load/speed values, 70 three-digit truck rims, 3 imperial widths.",
+      "impact": "Descriptive only - no commercial field is affected. These rows import with null dimensions rather than guesses.",
+      "resolution": "Acceptable. Revisit if search quality suffers."
+    },
+    {
+      "id": "R1",
+      "severity": "high",
+      "summary": "Carried from M1, unchanged: the Inter-Sprint Gateway Manual conflict. protocols.ts cites Gateway Manual v2.2 with paragraph refs; the sleepy-gauss capability notes assert no verified protocol documentation exists, and the manual is not in this repository.",
+      "impact": "The Inter-Sprint protocol registry may be inferred rather than documented.",
+      "resolution": "D6. Unaffected by this mission."
+    },
+    {
+      "id": "R2",
+      "severity": "high",
+      "summary": "Carried: document_analyses and document_extracted_lines do not exist in production but are queried by live routes (/api/admin/ddt-import/status, /api/cron/document-analysis). Confirmed again this mission - these 4 tables are the only repo-created tables absent from production.",
+      "resolution": "Confirm whether the DDT document-analysis feature is in use."
+    },
+    {
+      "id": "R4",
+      "severity": "medium",
+      "summary": "Carried from M1, unchanged: the production catalogue hangs off supplier 'asdas'; duplicate ZUIN / FINTYRE / CARLINI records.",
+      "resolution": "D1, D2."
+    }
+  ],
+  "owner_decisions_required": [
+    {
+      "id": "D27",
+      "question": "RESOLVED 2026-09-24, SUPERSEDES the fail-open half of D22 FOR THE ORDER PATH ONLY. Final order submission fails CLOSED on live verification: if a line's lane has a live lookup and no live answer was obtained - credentials absent, gateway down, auth rejected, malformed response, budget exhausted, no EAN to ask with - no order is created.",
+      "why": "Fail-open let stored catalogue data be presented as supplier-confirmed and let an order through the live-validation gate precisely because the gate could not run. The basket still shows stored figures with a distinct 'could not confirm' state, because browsing on slightly old data costs nobody anything; committing on it does.",
+      "blocks": "Nothing in code. OPERATIONALLY it blocks every customer order whenever the gateway is unreachable or unconfigured - see the risk entry.",
+      "note": "D22's other half STANDS: a verification failure is never shown as out-of-stock. It renders as an amber retryable state (HTTP 503, LIVE_VERIFICATION_UNAVAILABLE). The order path also passes forceFresh, so a cached basket answer can never substitute for the authoritative final check."
+    },
+    {
+      "id": "D26",
+      "question": "RESOLVED 2026-09-24, SUPERSEDES D21. The live supplier check runs on EVERY basket preview - basket open and every quantity change - as well as at order confirmation. It now verifies the current QUANTITY and the current PRICE.",
+      "why": "D21 had quantity edits answered from imported catalogue state. That let a customer reduce a line until the stored figure accepted it, be told it was fine, and have the order refused seconds later by the check that actually counts. The approved requirement is a real current check. Price was previously not read at all, even at confirm: protocol 103 column 7 is now parsed and a changed cost is re-priced through calculateTyrePrice, so the customer's selling price and totals follow it.",
+      "blocks": "Nothing. Recorded as resolved.",
+      "note": "The plain-HTTP credential exposure D21 bounded is NOT removed, only rate-limited: client debounce plus a 20s per-EAN server cache that collapses a burst of edits on one tyre into one lookup. The cache holds the SUPPLIER'S ANSWER, never a verdict, so reduce-to-available still works inside the window. Moving the gateway to HTTPS remains the real fix and is the supplier's to provide."
+    },
+    {
+      "id": "D25",
+      "question": "RESOLVED 2026-09-24. Catalogue results show the GommaRush net selling price and the PFU amount only — no VAT line, no VAT-inclusive total, no 'PFU stimato' wording and no estimate warning.",
+      "why": "A shop scanning fifty rows compares net prices; four figures per row to compare one of them is noise. PRESENTATION ONLY: pfuEstimated and pfuEstimateVersion are unchanged on the wire and in every order snapshot, and the estimate disclosure still appears in the basket and at checkout where the customer commits.",
+      "blocks": "Nothing. Recorded as resolved."
+    },
+    {
+      "id": "D21",
+      "question": "RESOLVED 2026-09-24. The live Inter-Sprint stock check runs at the FINAL CONFIRM only, not on quantity edits.",
+      "why": "Reverses the earlier 'do NOT make external calls during checkout'. Protocol 103 is read-only and cannot place an order, but the gateway is plain HTTP (security finding 2) and credentials cross the wire in clear text on every call. One call per basket line at the moment a promise is made is a very different exposure from one per keystroke, and buys the same guarantee. Quantity edits re-resolve against the stored feed instead.",
+      "blocks": "Nothing. Recorded as resolved."
+    },
+    {
+      "id": "D22",
+      "question": "RESOLVED 2026-09-24. A live lookup that fails or times out falls back to the stored feed observation, and the line says so.",
+      "why": "Fail-closed would let one Inter-Sprint outage stop every checkout, including the 3,289 isb-lane listings that have no live lane and could never be verified. Silent fallback was rejected: a customer told a figure was verified live must be able to rely on it. The line is marked feed_after_live_failure with the reason, on screen and in the order snapshot.",
+      "blocks": "Nothing. Recorded as resolved."
+    },
+    {
+      "id": "D23",
+      "question": "RESOLVED 2026-09-24. When the recomputed price differs from the one shown, the NEW price wins and the change is shown before the confirm re-enables.",
+      "why": "Enforced on the server, not by the screen: the order carries acceptedTotalCents and createPortalSalesOrder refuses with PRICE_CHANGED at any other figure, returning the recomputed basket so the customer sees the new number. Holding the quoted price was rejected as an open-ended margin commitment with no expiry.",
+      "blocks": "Nothing. Recorded as resolved."
+    },
+    {
+      "id": "D24",
+      "question": "RESOLVED 2026-09-24. isb-lane listings (3,289 active) are treated as available per the stored feed, labelled with the observation time.",
+      "why": "They have no live API and inventing one is not possible. Showing them identically to a live-verified line would imply a check that cannot happen; requiring manual confirmation would put a human in the loop on ~25% of orders.",
+      "blocks": "Nothing. Recorded as resolved."
+    },
+    {
+      "id": "D20",
+      "question": "CONFIRM OR REPLACE the temporary PFU estimate amounts: EUR 3.00 (<=11kg), 6.00 (11-20kg), 12.00 (20-40kg), 25.00 (>40kg), 6.00 fallback.",
+      "why": "No PFU evidence exists in GommaRush's data - verified against production. These magnitudes were chosen to be round and conservative so a real order could be tested, NOT read from a tariff. A customer charged on them is charged an unverified amount.",
+      "blocks": "Opening the portal to customers beyond a controlled test. Does not block the test order itself."
+    },
+    {
+      "id": "D19",
+      "question": "V1 customer payment methods are bank transfer and cash on delivery - OWNER-CONFIRMED 2026-09-23. POS on delivery was removed from the checkout and from the 0006 check constraint.",
+      "why": "Recorded so a later reader can see POS was removed by decision rather than lost. Re-adding it is a migration plus a one-line change to PAYMENT_METHODS.",
+      "blocks": "Nothing. Recorded as resolved."
+    },
+    {
+      "id": "D18",
+      "question": "Approve a brand-tier mapping: which catalogue brands are premium, mid-range and value for GommaRush?",
+      "why": "The taxonomy mechanism exists and is wired into the admin catalogue and ready for the customer catalogue, but no classification is populated. Whether a brand is premium is a positioning decision about GommaRush's market, not a fact about the manufacturer, and nothing in the supplier data supports one. Two tyre businesses would answer differently.",
+      "blocks": "The Premium / Mid-range / Value filters. Everything else in the workspace works without it.",
+      "note": "Add entries to APPROVED_BRAND_TIERS in src/lib/catalogue/brand-tiers.ts, each carrying provenance and approver. The catalogue's brands include MICHELIN, BRIDGESTONE, VREDESTEIN, CONTINENTAL, HANKOOK, NEXEN, NANKANG, SUNNY, ROADHOG, MASTERSTEEL, DELINTE, LANDSAIL, DOUBLE COIN."
+    },
+    {
+      "id": "D17",
+      "question": "RESOLVED 2026-09-22. The worker is deployed on the FTP VM, cron runs every 10 minutes as gr-ingest under flock, and TWO REAL Inter-Sprint feeds were processed end to end into production and independently verified. Runs ef834c00 (PCR) and 77b811d4 (truck).",
+      "why": "Everything is written and tested; nothing has been deployed. Needs: run infra/intersprint-worker/install.sh as root, generate a token with openssl rand -hex 32, set it in /etc/gommarush/intersprint-worker.env AND as FEED_WORKER_TOKEN in the application environment, and set INTERSPRINT_SUPPLIER_ID.",
+      "blocks": "Nothing.",
+      "note": "No secret exists in this environment, so the token must be generated by whoever deploys.",
+      "status": "RESOLVED"
+    },
+    {
+      "id": "D15",
+      "question": "Currency is EUR for V1 — OWNER-CONFIRMED BUSINESS DECISION, 2026-09-22. This is NOT supplier-primary evidence: the Inter-Sprint feed still contains no currency column and no Inter-Sprint document in this repository states one. Stored price rows read 'EUR' via the pre-existing NOT NULL DEFAULT on supplier_listing_prices.currency, which coincides with the decision but did not establish it. Do not cite this as a supplier fact.",
+      "why": "The owner confirmed what the number IS but not its currency, and no Inter-Sprint document in this repository states one. Observations carry null rather than an inferred EUR.",
+      "blocks": "Nothing for V1.",
+      "status": "RESOLVED FOR V1 BY OWNER DECISION"
+    },
+    {
+      "id": "D16",
+      "question": "RESOLVED 2026-09-22. The worker is deployed on the FTP VM, cron runs every 10 minutes as gr-ingest under flock, and TWO REAL Inter-Sprint feeds were processed end to end into production and independently verified. Runs ef834c00 (PCR) and 77b811d4 (truck).",
+      "why": "The ingestion chain is complete and tested apart from the socket. Without credentials and egress it cannot read /incoming, so we still do not know whether Inter-Sprint has delivered anything.",
+      "blocks": "Nothing.",
+      "note": "INTERSPRINT_FTP_ALLOW_WRITES must stay false until someone has watched it list, download and move one file.",
+      "status": "RESOLVED"
+    },
+    {
+      "id": "D12",
+      "question": "RESOLVED BY OWNER 2026-09-22: nett-price is the net purchase price GommaRush pays, and transport is included once Inter-Sprint's minimum release is reached (PCR 60, truck 10). Recorded in commercial-policy.ts with POLICY_OWNER provenance. Not to be re-asked of Inter-Sprint.",
+      "why": "The number is on every row and is carried faithfully, but its commercial meaning is unstated. Until answered every observation carries commercialMode 'unknown' and fails closed, so no Inter-Sprint cost can be marked up or quoted. This is the single blocker between the finished pipeline and a real selling price.",
+      "blocks": "Nothing. Inter-Sprint prices are now commercially usable.",
+      "note": "One email. Can be combined with D13 and D14.",
+      "status": "RESOLVED"
+    },
+    {
+      "id": "D13",
+      "question": "RESOLVED. Endpoint, protocol, port, passive mode, /incoming path, dedicated account, real CSV format and recurring delivery are all verified. Superseded by D16 (deployment).",
+      "why": "Inter-Sprint say their integration is complete and files are being placed on our FTP folder, but nothing in this system fetches or looks for them, and we have never observed one arrive. The sample names ('*.csv.xlsx') suggest the real delivery is CSV, whose dialect is unverified.",
+      "blocks": "Any automatic price refresh. Manual upload of a supplied file already works.",
+      "status": "RESOLVED"
+    },
+    {
+      "id": "D14",
+      "question": "Ask Inter-Sprint whether each delivered file is the complete catalogue or only changes since the last one.",
+      "why": "It decides what a listing's ABSENCE from a file means. Treating a delta as a complete snapshot would deactivate most of the catalogue on the first import.",
+      "blocks": "Automatic deactivation of listings. Nothing else - absence is currently treated as saying nothing."
+    },
+    {
+      "id": "D10",
+      "question": "CORRECTED BY M8. The earlier framing - 'obtain a price-bearing Inter-Sprint file' - was WRONG. Price-bearing data already exists and always did: nett-price and available are present on all 9,559 rows of the vrd-pcr sample, and the catalogue's missing prices are an artefact of the pre-normalised workbook that was imported dropping those two columns. The real question is now D12/D13: confirm what nett-price means, and connect FTP delivery.",
+      "why": "M7 reported zero purchase prices in the database and inferred that no price data had been supplied. The inference was wrong. The data was in the supplier's own file the whole time.",
+      "blocks": "Nothing any more. Superseded by D12 and D13.",
+      "status": "RESOLVED - superseded"
+    },
+    {
+      "id": "D11",
+      "question": "RESOLVED BY OWNER 2026-09-23: PFU sits INSIDE the VAT taxable base, taxed at the Italian ordinary 22%. tyre net + PFU = taxable base; taxable base x 22% = VAT. pfuVatBase is now 'inside_vat_base' in DEFAULT_PRICING_SETTINGS. This unblocks the accounting position only - D3, the tariff amount, still blocks every customer total.",
+      "why": "pfuVatBase is 'unresolved', which is what stops a customer total being produced. Both answers are implemented and tested; only the decision is missing. It must be settled before the first price snapshot, because snapshots are immutable.",
+      "blocks": "Any customer-facing gross total."
+    },
+    {
+      "id": "D7",
+      "question": "What does the Deldo feed's Discount column mean, and is it already reflected in Price?",
+      "why": "Values run from -407.69 to +78.33, so it is not a plain percentage discount. Until answered, purchase cost cannot be considered final.",
+      "blocks": "Any use of a Deldo purchase price.",
+      "note": "One question to Jan@deldo.com. Can be combined with D8 and R10."
+    },
+    {
+      "id": "D8",
+      "question": "Which of the two Deldo pricing modes does GoRush receive - transport separate, or transport included for a destination country - and in what currency?",
+      "why": "The same number means different things under each mode, and no currency is supplied anywhere.",
+      "blocks": "Any markup or supplier comparison involving Deldo."
+    },
+    {
+      "id": "D9",
+      "question": "Approve provisioning an FTP account for Deldo on the existing GommaRush FTP endpoint, and sending Deldo the credentials.",
+      "why": "Deldo pushes the hourly feed to our server. This is an external action and a credential change, so it is not taken autonomously.",
+      "note": "The existing endpoint is PLAIN FTP (security finding 2). Ask Deldo whether they support FTPS or SFTP in the same email."
+    },
+    {
+      "id": "D6",
+      "question": "Carried from M1: does the Inter-Sprint Gateway Manual v2.2 exist and can it be supplied?",
+      "blocks": "Trusting the Inter-Sprint protocol registry."
+    },
+    {
+      "id": "D1",
+      "question": "Carried, EVIDENCE NOW CONCLUSIVE: supplier 'asdas' is Inter-Sprint (sysnr MD5 proof, M8). What remains is approval to rename the record in production - a data mutation - and to decide the correct legal name to use."
+    },
+    {
+      "id": "D2",
+      "question": "Carried from M1: deduplicating supplier records."
+    },
+    {
+      "id": "D3",
+      "question": "STILL OPEN, now with a temporary workaround. The owner decided on 2026-09-23 that PFU must not block V1 ordering, so a clearly-labelled ESTIMATE is used (src/lib/pricing/pfu-estimate.ts). What is still needed: the real tariff source, its per-category values and effective dates. Loading them into VERIFIED_PFU_TARIFFS retires the estimate automatically. Until then every order is stamped pfu_status='ESTIMATED' with the estimate's version id."
+    },
+    {
+      "id": "D4",
+      "question": "Carried from M1, PARTIALLY DECIDED: markup is now set to 20% for the internal preview (2026-09-22) and held as configuration in DEFAULT_PRICING_SETTINGS. Still open: whether 20% is also the live selling markup, whether a minimum euro profit per tyre applies, and the policy for products with no verified weight. Note the Deldo feed has NO weight column at all."
+    },
+    {
+      "id": "D5",
+      "question": "Carried from M1: approve the migration reconciliation strategy. Now also blocks persisting Deldo observations (B7)."
+    }
+  ],
+  "review_decisions_required": [
+    "Approve the captured baseline (docs/SCHEMA_RECONCILIATION_REPORT.md sections 8-10) before the ledger is reconciled.",
+    "Decide on the two overlapping unique indexes on orders' document number (report section 9.1) - reproduced as-is, not tidied.",
+    "Decide whether print_jobs and client_offer_requests should finally be retired (report section 9.2).",
+    "Confirm whether the DDT document-analysis feature is in use (R2); it decides whether those tables join the baseline or are dropped."
+  ],
+  "commits": [
+    {
+      "sha": "773b6d5",
+      "summary": "Record approved commercial decisions and the Deldo Demo question"
+    }
+  ],
+  "not_verified": [
+    "Whether an Inter-Sprint delivery is a complete snapshot or a delta (D14). STILL UNRESOLVED. Ingestion stays partial; absence of a row means nothing and no deactivation path exists.",
+    "That nett-price is Go Rush's cost by SUPPLIER evidence. It is an owner decision (POLICY_OWNER), not an Inter-Sprint statement.",
+    "Currency by supplier evidence. EUR is an owner decision for V1 (D15).",
+    "Any PFU tariff value. Inter-Sprint confirmed PFU is NOT in their feed. Still unresolved (D3), and pfuVatBase is still 'unresolved' (D11), so no customer total is produced.",
+    "Conflict behaviour on a feed-to-feed import. All 1,555 current conflicts are legacy-vs-feed; the expectation that they fall after M11A is reasoned, not measured.",
+    "Deldo: unchanged and untouched. Jan has NOT replied.",
+    "Vercel env: gateway customer number 21185 / environment production configured is an OWNER STATEMENT, not observed by an agent (no Vercel access)."
+  ],
+  "next_recommended_mission": "Merge M22, run the first production customer E2E once gateway credentials are set, then the Admin Orders workflow (see m21_production_gate.admin_orders_gaps).",
+  "head_at_completion": "see commits on design/m21-customer-commerce-reskin after 5295b9f",
+  "owner_decisions_confirmed_m9": {
+    "provenance": "POLICY_OWNER - GommaRush business decisions recorded 2026-09-22. NOT Inter-Sprint statements. Never cite these as supplier-documented.",
+    "nett_price_is_net_purchase_cost": true,
+    "transport_included_at_minimum_release": {
+      "pcr": 60,
+      "truck": 10
+    },
+    "customer_minimum_offer_quantity": 5,
+    "minimum_offer_is_gommarush_selling_policy_not_supplier_semantic": true,
+    "supplier_stock_preserved_when_suppressed": true,
+    "banded_stock_never_resolved_to_exact": true
+  },
+  "main_head_verified": "1aa706417604af25220b9e6aa0af9fe26afa56c1 (PR #4 merged; branch HEAD 5e1f0e0 confirmed an ancestor)",
+  "m10_verified_evidence": {
+    "pcr_run": {
+      "id": "ef834c00-3326-4c47-916e-4f18561e03aa",
+      "category_note": "intersprint-feed:category=pcr",
+      "source_rows": 11207,
+      "committed_rows": 11207,
+      "rejected": 0,
+      "actions": "5947 unchanged, 3464 insert_product, 1528 conflict, 256 update_listing, 12 insert_listing (sums to 11207)",
+      "price_rows": 11194,
+      "null_or_zero_prices": 0,
+      "price_range_eur": "21.12 - 643.96, avg 117.35",
+      "stock": "1614 exact, 9580 banded, 0 unknown, 0 zero-exact",
+      "conflicts": 1555
+    },
+    "truck_run": {
+      "id": "77b811d4-5b0f-41ed-89ca-ec67b67fd060",
+      "category_note": "intersprint-feed:category=truck",
+      "source_rows": 171,
+      "committed_rows": 171,
+      "rejected": 0,
+      "actions": "171 insert_product",
+      "price_rows": 171,
+      "null_or_zero_prices": 0,
+      "price_range_eur": "92.87 - 608.95, avg 246.69",
+      "stock": "53 exact, 118 banded, 0 unknown, 0 zero-exact",
+      "conflicts": 0
+    },
+    "catalogue_totals": "products 9,550 -> 13,183 (+3,633 = 3,464 PCR + 171 truck, reconciles exactly). listings 9,559 -> 13,206 (+3,647). price rows 9,559 -> 20,924 (+11,365, all with cost and stock). identifiers 28,632 -> 40,993.",
+    "band_semantics": "'>  20' stored as stock_exact NULL / stock_minimum 20 on 9,698 rows. Exact counts store exact=minimum. Exact '20' (122 rows) is distinct from the '>  20' band. No band was ever resolved to a number.",
+    "integrity": "0 duplicate validated EANs, 0 duplicate EANs of any status, 0 duplicate product_keys, 7 duplicate spec groups out of 13,183 (0.05%, plausible variants). 0 listings deactivated, 0 inactive listings.",
+    "isolation": "orders, order_items, customers, inventory_units, vehicles and suppliers all last changed 2026-09-15 - a week BEFORE the 16:08 import. Nothing outside the catalogue was touched, and the supplier row was not renamed."
+  },
+  "m10_findings": [
+    {
+      "id": "F1",
+      "severity": "medium",
+      "summary": "3,633 products created by M10 have NULL season, product_class, size_display and xl.",
+      "evidence": "All 3,633 M10-created products: has_season 0, has_class 0, has_size_display 0, has_xl 0. The pre-existing 9,550 retain theirs (9,052 with season) - the commit function's coalesce protection worked and erased nothing.",
+      "assessment": "CORRECT BEHAVIOUR, REAL USABILITY GAP. The raw feed states no season, class or XL flag, and the adapter refuses to invent them; every such row is flagged CLASS_OR_SEASON_UNRESOLVED (all 3,633 have review_required=true). Consequence: those products cannot be found by the season filter in /admin/catalogue/ricerca. They ARE findable by size - 3,628 of 3,633 carry a full width/aspect/rim tuple - and 3,618 have a scannable EAN.",
+      "proposed_fix": "Do NOT derive season from the feed. Options for M11A/M11B: (a) enrich from EPREL, which 3,480 of them have; (b) an operator bulk-classification screen driven by review_required; (c) make the season filter explicitly include 'unclassified' rather than silently hiding them. Decide in M11B, not now."
+    },
+    {
+      "id": "F2",
+      "severity": "low",
+      "summary": "1,555 conflicts were recorded, and their root cause is the LEGACY import, not the live feed.",
+      "evidence": "1,324 manufacturer_code_conflict, 134 product_ean_change, 89 weight_conflict, 8 ean_spec_mismatch. All status='open'. The 8 spec mismatches are the same tyre differing only in a trailing character of the 'Type' code: PRECON5 vs PRECON5#, CT8 vs 'CT8,', CSC5SUVVOL vs 'CSC5SUVVO.', K127AXLA # vs K127AXLAO.",
+      "assessment": "The importer did exactly the right thing: it refused to merge and routed each to catalogue_conflicts instead of overwriting. The pattern shows 'Type' is a 10-character truncated fixed-width field whose last character differs between the old pre-normalised workbook and the raw feed, so it is NOT a reliable model identifier. Every conflict is a legacy-product-vs-feed comparison by construction, because before this run all existing products were legacy.",
+      "proposed_fix": "Expect conflicts to fall sharply once the legacy 9,550 are reconciled in M11A and subsequent imports compare feed-to-feed. Re-measure after the next few runs rather than acting now. Never resolve them by trusting 'Type'."
+    },
+    {
+      "id": "F3",
+      "severity": "low",
+      "summary": "13 PCR rows produced no listing and no price.",
+      "evidence": "11,207 committed rows but 11,194 price rows. The 13 are exactly the conflict rows with matched_listing_id IS NULL.",
+      "assessment": "NOT data loss. Those rows conflicted and could not be safely resolved to a product, so no listing existed to attach a price to. 13 articles are absent from the catalogue pending conflict resolution - 0.12% of the feed.",
+      "proposed_fix": "Handle with the rest of the open conflicts. No separate action."
+    },
+    {
+      "id": "F4",
+      "severity": "medium",
+      "summary": "1,841 active listings carry no purchase price: legacy rows the live feed no longer contains.",
+      "evidence": "13,206 active listings, 11,365 with a cost on their latest observation, 1,841 without. Every listing has at least one observation (never_observed = 0).",
+      "assessment": "This is the D14 consequence working as intended. Import mode is partial, so absence from a feed deactivates nothing - correctly, since snapshot-vs-delta is unresolved. The cost is that the catalogue accumulates listings that Inter-Sprint may no longer offer, and they are indistinguishable from live ones except by the absence of a recent priced observation.",
+      "proposed_fix": "M11A classification input: a listing whose latest observation predates the first real feed run AND has no cost is a strong PRESERVE-but-flag candidate. Do NOT deactivate on absence until D14 is resolved."
+    },
+    {
+      "id": "F5",
+      "severity": "low",
+      "summary": "supabase/pending-approval/0002 is now STALE and must not be repaired by editing its count.",
+      "evidence": "Its guard expects exactly 9,559 listings on the supplier; production now has 13,206, so it raises and refuses to run.",
+      "assessment": "It fails safe. The count was a fingerprint tying the row to the sysnr MD5 evidence, not a target to update.",
+      "proposed_fix": "Marked STALE in the file this mission. Supplier identity must be RE-VERIFIED against current production before a replacement rename is designed."
+    }
+  ],
+  "automation_assessment": {
+    "safe_to_leave_cron_active": true,
+    "reasoning": "Every safety property held under real data: partial mode with zero deactivations, zero null or zero prices, bands never resolved, no product duplication, nothing outside the catalogue touched, and checksum idempotency means an unchanged re-upload creates no run at all. The two real findings (F1 unclassified new products, F4 stale legacy listings) are additive and reversible, not corrupting.",
+    "watch_items": [
+      "catalogue_conflicts grows per changed feed (~1,500 on this run, all status='open'). Expected to fall sharply once legacy products are reconciled (F2), but re-measure after a few automated runs.",
+      "supplier_listing_prices grows by ~11,400 rows per changed feed. Intentional price history, but unbounded - plan retention before it matters.",
+      "Unclassified products (F1) accumulate with every new article until a classification path exists."
+    ]
+  },
+  "m11a_findings": {
+    "reset_proposed_not_executed": {
+      "records": "supplier 'Furnizor Demo (test)' 6edece30-cd25-4ae8-9ad0-160e13ad4ebe; its 7 orders numbered 83-89; their 7 order_items, ~26 inventory_units and order_status_history children.",
+      "proof": "Name states both Demo and (test). All 7 orders have customer_id NULL, status 'expected', identical 2026-08-18 creation, sequential numbering, zero documents and uniform shape. A real transport order has a customer.",
+      "status": "SUPERSEDED 2026-09-25: production now holds 1 supplier and 0 logistics orders, so the reset was carried out by the owner outside this repo. Kept for provenance."
+    },
+    "explicitly_not_reset": [
+      "Supplier 'Name' 0b31299b: placeholder name BUT its order #222 is DELIVERED to a real customer. A rename/merge, never a deletion.",
+      "Supplier 'asdas' 4ce0b557: this IS Inter-Sprint. Rename only.",
+      "ZUIN x4, FINTYRE x2, CARLINI x2 duplicates: merge candidates (D2), each carrying orders.",
+      "'Rossi Gomme SRL' / 'Autogomme Rossi': common Italian demo-style names but both carry orders; cannot be proven dummy.",
+      "The 1,841 no-current-price legacy listings, the 1,555 conflicts and the 3,633 F1 products - all explicitly preserved per mission instruction."
+    ],
+    "intersprint_identity": {
+      "basis": "PROVENANCE, not counts. Exactly one supplier has an intersprint-feed/isb import run; exactly one holds ISB:-prefixed listing keys; all 13,206 of its listings are ISB:-keyed with ZERO exceptions; no supplier is already named Inter-Sprint.",
+      "target_name": "Inter-Sprint — the platform label. NO legal entity name is asserted; nothing in the repo establishes one and a supplier label does not need one.",
+      "verification": "0003 tested on disposable PostgreSQL 16: renames on the happy path, no-ops on re-run, rollback statement restores 'asdas', and refuses with a distinct error for each of: rival supplier with ISB keys, target holding a non-ISB key, name collision, no import run, no ISB listings, supplier row absent."
+    },
+    "m11b_foundation": {
+      "car_van_vs_truck": "DETERMINISTIC, 100% coverage of 13,206 listings: 9,679 pcr + 171 truck from last_import_run_id -> catalogue_import_runs.notes, and 3,356 legacy via product_class. Zero unclassifiable. No inference needed.",
+      "latest_observation": "Already served by supplier_listing_prices_listing_idx (supplier_listing_id, observed_at DESC). No change required.",
+      "comparison_grouping": "Group on catalogue_product_id only. NO fuzzy matching - the unique index on validated EAN already guarantees convergence. Where products do not converge, show separate rows.",
+      "indexes_missing": "product_class (unindexed, will be the primary facet) and season-alone (only the 4th column of the size index). Both prepared in 0004, verified locally, NOT applied.",
+      "stale_listings": "1,841 active listings with no current price must be FLAGGED and visible, never hidden and never deactivated while D14 is open."
+    },
+    "f1_strategy": {
+      "discovery": "The supplier's own 'group description' column - carried in the feed, preserved in catalogue_import_rows.raw_payload, and NOT currently mapped by the adapter - maps 1:1 to product_class across all 14 groups on 6,215 legacy rows that have both. Season maps 1:1 too, with one exception.",
+      "assessment": "This is NOT invention: it is the supplier's own merchandising group, and almost certainly how the legacy values were derived upstream.",
+      "cautions": [
+        "Empirical mapping proven on OUR data; no Inter-Sprint document states it. Record as derived evidence, not supplier fact.",
+        "'group description' is TRUNCATED to 20 characters ('BESTELWAGEN BANDEN M', 'ALL-SEASON LIGHT-TRU') - the same fixed-width truncation that makes 'Type' unreliable. Any lookup must key on the truncated form as delivered.",
+        "ALL-SEASON 4X4/SUV carries TWO seasons across 469 legacy rows (all_season and summer). A legacy data-quality defect to resolve BEFORE deriving anything.",
+        "Motorcycle and scooter groups correctly carry NULL season; that is right, not missing."
+      ],
+      "recommendation": "Map group/group description in the adapter as real supplier fields, then derive class and season through an EXPLICIT lookup table where an unrecognised group yields NULL. Needs owner sign-off; not executed in M11A."
+    },
+    "conflict_strategy": "Surface the 1,555 open conflicts as a review queue keyed on supplier_listing_key. NEVER resolve one using the truncated 'Type' column, and never by fuzzy matching. Expect the count to fall once imports compare feed-to-feed rather than legacy-vs-feed; re-measure after several automated runs before investing in bulk resolution.",
+    "retention": {
+      "measured": "catalogue_import_rows is 4,348 bytes/row and 87 MB - 62% of the whole 140 MB database. supplier_listing_prices is 217 bytes/row and 4.4 MB.",
+      "projection": "At ~11,378 rows per changed feed and 3 changed feeds a day: staging grows ~47 MB per import (~51 GB/year); price history grows ~2.4 MB per import (~2.6 GB/year).",
+      "conclusion": "The retention problem is STAGING, not price history - roughly 20x - and staging is the part whose value expires once a run is committed and triaged.",
+      "proposal": "Designed in docs/PRODUCTION_RECONCILIATION.md section 5. Drop normalized_payload on committed runs past N days and keep raw_payload only for conflict/rejected rows; thin price observations to one per listing per day past N days, always keeping the latest; retire conflicts on status transition, never on age. NOTHING executed."
+    }
+  },
+  "m21_ux_completion": {
+    "date": "2026-09-25",
+    "pr": "https://github.com/florinurdea-rgb/gommarush/pull/15",
+    "branch": "design/m21-customer-commerce-reskin",
+    "reconciled_before_work": {
+      "pr_head": "39fc1a558f03a1ff1a7e2b62cab004dba0808953",
+      "main": "b1a28c9ee62e5f197f1e55e6938d89b03673ddd0",
+      "behind_main": 0,
+      "ahead_of_main": 5,
+      "mergeable": "clean"
+    },
+    "code_commit": "25fd00bac2407e9f5cdbed7bf660c687b8807928",
+    "ux_issues_found": [
+      "Phone catalogue: sticky search band ~290px of a 667px screen (header 57 + nav 56 + basket bar 60 also fixed), so results started below the fold.",
+      "Shell header was 65px on phones (logo mark 44px + Esci button), not the 57px the sticky bar assumed; the size bar slid 8px under it.",
+      "Sticky basket bar covered the last result/pager on phones (no reserved space).",
+      "Pager overflowed horizontally by 18px at 320px.",
+      "Mobile result card ~240px tall (1.5 results per screen).",
+      "Checkout: up to five stacked status panels, some simultaneously; 'Riprova' in the verification panel submitted the order (a second order CTA); PFU disclosure printed twice in one panel; summary showed only a grand total while line amounts were VAT-inclusive (basket shows net).",
+      "A line whose live check failed rendered green 'Disponibile' with a grey note; the amber semantics only existed after a failed submit.",
+      "A unit price moved by a preview re-check silently replaced the total the customer was reading.",
+      "Order detail rendered order.fulfilment_class raw ('standard'/'express').",
+      "Inputs at 14-15px triggered iOS zoom on focus; stepper buttons and Rimuovi below 44px; stepper buttons had no visible keyboard focus.",
+      "Stale comments claimed live verification happens only on submit (CustomerCheckout) and that the order path fails open (sales-orders.ts, live-availability.ts, tests/live-availability.test.ts header)."
+    ],
+    "decisions": [
+      "Checkout status is ONE region chosen in priority order: validating > load_failed > unavailable (red) > price_changed (amber, re-confirm) > verification (amber, retry) > pricing pending > ready.",
+      "A preview-level verification failure does NOT disable the final button: the submit makes a fresh forceFresh check that may succeed; if it cannot, the server refuses with LIVE_VERIFICATION_UNAVAILABLE (D27 unchanged). The basket 'Procedi' likewise stays enabled.",
+      "Price change on preview is detected by UNIT price (quantity edits ignored); the accepted total always equals the total on screen, and the server's accepted-total gate is unchanged.",
+      "Checkout line amounts switched to net x qty so lines sum to 'Pneumatici', matching the basket. Presentation only.",
+      "Desktop checkout sticky summary is safe because both required choices are in the left column in view; phone keeps the button in normal flow, not sticky.",
+      "Express option left as-is: it pre-exists in fulfilment.ts / docs 04 with its approved label; no new semantics added."
+    ],
+    "copy_changes": [
+      "Removed the duplicated second PFU sentence at checkout ('Il PFU indicato è una stima...') - the same disclosure was printed twice in one panel; kept the basket's exact wording as a footnote.",
+      "Reused existing strings only: 'Filtri aggiuntivi', 'Riprova', 'Il prezzo aggiornato è', 'Pneumatici', 'PFU', 'IVA'. No new customer copy."
+    ],
+    "files_changed": [
+      "app/account/(secure)/layout.tsx",
+      "app/account/(secure)/orders/[id]/page.tsx",
+      "app/account/login/page.tsx",
+      "src/components/customer/CustomerBasket.tsx",
+      "src/components/customer/CustomerCatalogue.tsx",
+      "src/components/customer/CustomerCheckout.tsx",
+      "src/components/customer/CustomerLoginForm.tsx",
+      "src/components/customer/CustomerShellNav.tsx",
+      "src/components/customer/LineAvailability.tsx",
+      "src/components/customer/QuantityStepper.tsx",
+      "src/lib/commerce/fulfilment.ts",
+      "src/lib/server/live-availability.ts (comment only)",
+      "src/lib/server/sales-orders.ts (comment only)",
+      "tests/live-availability.test.ts",
+      "tests/customer-commerce-completion.test.ts (new)",
+      ".ai/handoff.json"
+    ],
+    "unchanged_on_purpose": [
+      "pricing engine, PFU/VAT, order gate order, forceFresh, D27 fail-closed, idempotency, GR numbering, customer scoping, logistics/sales separation, catalogue query gating, M19 unfiltered size lists, alternatives deep link, Inter-Sprint feed, supplier ordering disabled",
+      "GommaRush Logo component",
+      "customer copy except the one duplicate removed"
+    ],
+    "tests": {
+      "vitest": "1316 passed | 6 skipped (76 files); +31 tests (30 new suite, 1 live-availability)",
+      "tsc": "clean",
+      "lint": "0 errors, 8 warnings (all pre-existing)",
+      "build": "next build compiled successfully"
+    },
+    "visual_verification": "Rendered catalogue/basket/checkout/login in a throwaway harness with mocked APIs (not committed) and checked 320/375/390/768/1024/1440: no horizontal overflow, sticky band pinned exactly at 57/65px, amber vs red states distinct, price-move and submit-verification-failure states shown.",
+    "blockers": [
+      "Inter-Sprint Gateway username/password still external: with INTERSPRINT_GATEWAY_* unset every line reads 'Verifica non riuscita' and the final submit refuses (LIVE_VERIFICATION_UNAVAILABLE), by design.",
+      "0005/0006 still unapplied on production (read-only connector) - unchanged from previous entry."
+    ]
+  },
+  "production_state_verified": {
+    "verified_at": "2026-09-25T08:19Z",
+    "method": "READ-ONLY queries through the production Supabase connector (current_user supabase_read_only_user). Nothing was written.",
+    "supplier": {
+      "id": "4ce0b557-9575-4784-aa80-99e78af4da2f",
+      "name": "Inter-Sprint",
+      "note": "The only supplier row. The 0003 rename is effectively done; 'asdas' is gone. Furnizor Demo and the duplicate supplier rows no longer exist."
+    },
+    "catalogue": {
+      "catalogue_products": 13438,
+      "supplier_product_listings": 13461,
+      "active_listings": 13461,
+      "listings_not_on_intersprint": 0,
+      "supplier_listing_prices": 99018,
+      "catalogue_import_runs": 15,
+      "last_import_run": "2026-09-25T06:31:49Z",
+      "note": "This IS the live production Inter-Sprint catalogue; the feed worker is still committing runs."
+    },
+    "business_data": {
+      "customers": 0,
+      "customer_locations": 0,
+      "orders (logistics)": 0,
+      "order_items": 0,
+      "order_documents": 0,
+      "customer_accounts": 0,
+      "sales_orders": 0,
+      "sales_order_items": 0,
+      "auth.users": 6,
+      "note": "Reset by the owner outside this repo. The M11A RESET manifest below is therefore historical, not pending."
+    },
+    "migrations_0005_0006": {
+      "state": "APPLIED",
+      "evidence": [
+        "customer_accounts, sales_orders, sales_order_items, sales_order_number_seq all present; every column, type, nullability and default equals the files.",
+        "All 26 constraints present with identical definitions (auth_user_id unique, customer-scoped idempotency unique, order_number unique, POS excluded, complete-has-totals, PFU estimate/version pair, FKs to customers/customer_locations/catalogue_products/supplier_product_listings).",
+        "All 12 indexes (including the unique ones) present with identical definitions.",
+        "RLS enabled on all three tables, no policies.",
+        "create_portal_sales_order: prosrc md5 2115c7c3a028d01192425767089b053c (2878 chars) == the body in 0006; SECURITY DEFINER, search_path=public; EXECUTE held by postgres and service_role only.",
+        "sales_order_number_seq start 1000, is_called=true, last_value=1000: one number was drawn and its order no longer exists (reset). The next order will be GR-001001. Gaps are expected and harmless; uniqueness holds.",
+        "Not recorded in supabase_migrations (the ledger stops at 20260908142622 catalogue_commit_batch): applied through the SQL Editor."
+      ],
+      "residual_finding": "anon and authenticated hold Supabase's default SELECT/INSERT/UPDATE/DELETE grants on the three tables and USAGE on the sequence. RLS with no policy denies every row today, so this is defence in depth, not an open hole. 0007 removes them."
+    },
+    "migration_0004": "NOT applied (catalogue_products_class_idx and catalogue_products_season_brand_idx absent).",
+    "not_verifiable_from_here": [
+      "Vercel environment variables. Owner states INTERSPRINT_GATEWAY customer number 21185 and environment production are configured; username and password are NOT. INTERSPRINT_LIVE_ORDERING_ENABLED must stay unset/false.",
+      "Live HTTP smoke test of gommarush.com (proxy denies it)."
+    ]
+  },
+  "migrations_review_2026_09_25": {
+    "conclusion": "0005 and 0006 are SAFE and ALREADY APPLIED. Do not re-run them. The only SQL to run is the optional 0007 verify-and-harden package.",
+    "checked": {
+      "existing_table_conflicts": "None possible: the objects are the 0005/0006 objects themselves, verified identical.",
+      "foreign_keys": "customer_accounts.customer_id -> customers ON DELETE CASCADE; sales_orders -> customers, customer_locations (no cascade, so a customer with orders cannot be deleted - intended); items -> sales_orders CASCADE, catalogue_products, supplier_product_listings. Targets exist and hold only reset/live data.",
+      "auth_mapping": "auth_user_id UNIQUE, explicit admin-created binding, no email inference; no FK to auth.users by design (auth schema not referenced). Read only via the service role in customer-session.ts.",
+      "atomicity": "create_portal_sales_order inserts header and all items in one function transaction; SALES_ORDER_NO_ITEMS raised on empty.",
+      "idempotency": "UNIQUE(customer_id, idempotency_key) plus an early lookup that returns the existing order; verified: a replay with the same key returned the same order number.",
+      "numbering": "bigint sequence from 1000, UNIQUE(order_number); formatted GR-000000 by order-number.ts.",
+      "customer_isolation": "RLS on, no policies; all app reads filter by the session customer id through the service role; browser roles cannot EXECUTE the RPC.",
+      "app_compatibility": "All 20 RPC parameters the app sends match the function signature; every column the app selects exists.",
+      "dummy_data_assumptions": "None. Neither migration inserts, reads or depends on any row. The reset leaves them fully valid.",
+      "catalogue_and_logistics_impact": "Neither migration touches catalogue, supplier, price, import, logistics orders or documents. 0007 asserts equal before/after counts on all of those plus auth.users."
+    },
+    "package": "supabase/pending-approval/0007_verify_and_harden_0005_0006.sql",
+    "package_dry_run": "PostgreSQL 16 with a production-shaped mock (anon/authenticated/service_role, Supabase default grants, 0005+0006 applied from the files): pass; re-run pass (idempotent); after it, service_role still creates an order through the RPC, replay returns the same number, anon gets 'permission denied'; a tampered function body and a missing Inter-Sprint supplier each abort in PREFLIGHT and leave the grants unchanged."
+  },
+  "m21_production_gate": {
+    "date": "2026-09-25",
+    "verified_before_work": {
+      "pr15_head": "81f164efd5ea46ba64853a970d4aba74c5022e84 (the brief's 'f3e677c' was stale)",
+      "main": "b1a28c9ee62e5f197f1e55e6938d89b03673ddd0",
+      "ahead": 8,
+      "behind": 0
+    },
+    "env_required": {
+      "note": "Traced from src/lib/suppliers/gateway/config.ts. Vercel is NOT reachable from this sandbox (egress denies api.vercel.com and gommarush.com) and no Vercel connector exists, so presence could not be observed by an agent. Status below = owner statement; verify on /admin Sistema (reports PRESENT/MISSING without values).",
+      "INTERSPRINT_GATEWAY_CUSTOMER_NUMBER": "PRESENT (owner statement)",
+      "INTERSPRINT_GATEWAY_ENV": "PRESENT (owner statement) - MUST be exactly 'production'; any other value silently selects the TEST endpoint",
+      "INTERSPRINT_GATEWAY_USERNAME": "MISSING (owner statement)",
+      "INTERSPRINT_GATEWAY_PASSWORD": "MISSING (owner statement)",
+      "INTERSPRINT_GATEWAY_BASE_URL": "optional - leave unset (defaults per env)",
+      "INTERSPRINT_GATEWAY_TIMEOUT_MS": "optional (default 20000)",
+      "INTERSPRINT_LIVE_ORDERING_ENABLED": "must stay UNSET/false (only the exact string 'true' enables Protocol 104)"
+    },
+    "live_validation_architecture": {
+      "catalogue": "stored/imported state only; no live call.",
+      "basket_preview": "POST /api/account/basket/preview -> resolveBasket -> verifyBasketLive (Protocol 103 by EAN, 20s per-EAN answer cache, 6s budget, 500ms client typing debounce; +/- immediate).",
+      "final_submit": "createPortalSalesOrder -> idempotency lookup -> resolveBasket -> verifyBasketLive(forceFresh: true) -> liveVerificationMissing? LIVE_VERIFICATION_UNAVAILABLE -> basketIsOrderable? BASKET_NOT_ORDERABLE -> grandTotal !== acceptedTotal? PRICE_CHANGED -> monetary gate -> create_portal_sales_order RPC.",
+      "outcomes": {
+        "sufficient": "live/available",
+        "insufficient": "live/limited (N available) or unavailable at 0 - authoritative",
+        "price_changed": "re-priced via calculateTyrePrice (markup, PFU re-resolved, VAT) -> new total -> PRICE_CHANGED at submit unless re-accepted",
+        "timeout/network": "feed_after_live_failure 'transport'",
+        "auth failure": "HTTP error -> 'transport', or gateway error code -> 'gateway_NN'",
+        "malformed": "'malformed' / 'unparseable_quantity'",
+        "config missing": "'not_configured'",
+        "no EAN": "'no_identifier'",
+        "price unreadable or re-price failed": "NEW: live quantity kept, 'price_unverified'",
+        "several rows, none this EAN": "NEW: 'ambiguous_rows'",
+        "all failures": "never out_of_stock; amber retry in basket/checkout; order refused LIVE_VERIFICATION_UNAVAILABLE"
+      }
+    },
+    "defects_fixed": [
+      "An unreadable live price, or a failed re-price, left the line marked 'live' at its STORED price, so the final order could be created without the current supplier price being verified. Now marked price_unverified -> order gate refuses.",
+      "When a 103 response had rows but none carried the EAN, rows[0] was used - another article's stock and price could be applied. Now: EAN match, else a single row (request is addressed by EAN), else 'ambiguous_rows' failure.",
+      "Stale 'FAILS OPEN' module header in live-availability.ts and stale test titles corrected to D27."
+    ],
+    "final_confirm_freshness": "PROVEN: forceFresh bypasses the per-EAN cache at submit (fresh answer refreshes the cache); a test seeds the preview cache at cost 100.00, moves the supplier cost to 110.00, and shows submit re-asks, re-prices through the engine, refuses the stale accepted total with PRICE_CHANGED and a supplier-free basket, then succeeds once the recomputed total is accepted.",
+    "intersprint_protocol103_security": {
+      "primary_document": "Inter-Sprint Gateway Manual v2.2 (Moerdijk, August 2018) is NOT in this repository and was not available to this session. Every statement below is the repo's TRANSCRIPTION of it (with the manual section it cites), not independently re-verified - see R1/D6.",
+      "production_endpoint": "http://customers.inter-sprint.nl + /scripts/cgirpc32.dll/ww0800?103,... (config.ts / url.ts, cites §1.1)",
+      "test_endpoint": "http://test-001.inter-sprint.nl (cites §1.1)",
+      "https": "Transcription documents http:// only; HTTPS support is UNVERIFIED - do not switch without the manual or Inter-Sprint confirmation.",
+      "auth": "HTTP Basic (username:password) header (cites §1.4) plus customer number as the 'kl' query parameter.",
+      "architecture_assessment": "Respects the constraints: gateway client is server-only (supplier-gateway.ts imports 'server-only'); the browser only calls /api/account/*; Authorization header built per request and never stored or logged; logError writes event+message only (no URL, no headers); redirect:'error'; customer payloads rebuilt via toCustomerOffer (no cost/identity fields); refusals return codes + customer basket only. Residual: credentials and customer number cross the network in clear text on every call (security finding 1) - supplier-side fix."
+    },
+    "e2e_customer_journey": {
+      "result": "PARTIAL - proven in code and automated tests; NOT executed in production.",
+      "why_not_in_production": [
+        "No test customer exists (0 customers / locations / customer_accounts after the reset); creating one is a production mutation and the production connector is read-only.",
+        "Gateway username/password missing, so the final submit correctly refuses with LIVE_VERIFICATION_UNAVAILABLE - no order can be created until they are set.",
+        "gommarush.com is not reachable from this sandbox."
+      ],
+      "owner_manual_test": "After credentials: create a TEST customer + deliverable location in /admin, create its portal account (one-time credentials), log in, add 2+ sizes, change a quantity, checkout (bank transfer), submit; expect GR-001001, visible in /account/orders and /admin/sales-orders, status 'In attesa di conferma' / requested, source portal. Then cancel it in SQL or leave it (no status actions exist yet). No supplier order is possible: Protocol 104 is locked by INTERSPRINT_LIVE_ORDERING_ENABLED and the admin confirm button is disabled."
+    },
+    "admin_orders_gaps": {
+      "exists": [
+        "/admin/sales-orders inbox (status='requested' only, oldest first, 200 cap)",
+        "/admin/sales-orders/[id] read-only detail (lines, snapshots, totals, delivery, payment, status raw)",
+        "'Conferma e invia ordine' button, permanently disabled",
+        "DB: status in (requested, confirmed, rejected, cancelled) + confirmed_at/rejected_at/cancelled_at columns"
+      ],
+      "missing": [
+        "Any status transition: no server action/API to confirm, reject or cancel; timestamps never written",
+        "PENDING PAYMENT (and any downstream fulfilment) status: not in the sales_orders status CHECK - needs a migration + owner-approved state machine",
+        "Rejection reason / operator note field; audit history of who changed what (no sales_order_status_history table)",
+        "Delete: none exists; items cascade but no path, and deleting a numbered GR order vs cancelling it is an owner decision",
+        "Lists beyond 'requested' (confirmed/rejected/cancelled views, search by GR number, filter by customer)",
+        "Customer-visible effect of transitions (customer list already maps the 4 statuses; no notification/email)",
+        "The 'Conferma e invia ordine' label conflates commercial confirmation with supplier purchasing; confirmation must be separate from (disabled) purchasing",
+        "Admin detail renders status raw ('requested') - needs the label map"
+      ]
+    },
+    "next_recommended_mission": "Admin Orders workflow: owner-approved state machine (TO REVIEW=requested -> CONFIRMED -> PENDING PAYMENT -> later fulfilment; REJECTED; CANCELLED; delete policy), migration for the new status + history table, admin transitions with audit, separated from supplier purchasing (which stays disabled).",
+    "pr15": "MERGED 2026-09-25T12:55:56Z as 0e737bc793dfca5057402ce158abf9b9e125cd64 (merge commit; PR head 598d813, Vercel preview success).",
+    "production_deployment": {
+      "main": "0e737bc793dfca5057402ce158abf9b9e125cd64",
+      "github_deployment_id": 6661210375,
+      "environment": "Production",
+      "state": "success",
+      "at": "2026-09-25T12:57:12Z",
+      "evidence": "GitHub commit status 'Vercel: Deployment has completed' + deployment status success. Live pages not fetched (sandbox egress denies the site)."
+    }
+  },
+  "m22": {
+    "base": "origin/main 0e737bc793dfca5057402ce158abf9b9e125cd64",
+    "root_cause_account_creation": {
+      "finding": "No Admin screen could create a customer. Nothing in the UI POSTs to /api/admin/customers; customers only came into existence as a side effect of the logistics DDT/order-review flow (resolveCustomer 'newCustomer'). After the production reset there are 0 customers, so no customer detail page - and therefore no 'Accesso area clienti' panel - was reachable. The accounts API itself existed and the 0005/0006 schema is present.",
+      "evidence": [
+        "grep: only CustomerPickerField (GET search), CustomerEditor (PATCH), OrderReviewForm (GET by id) call /api/admin/customers*; no POST caller",
+        "production: customers=0, customer_accounts=0 (read-only query 2026-09-25)",
+        "production API logs: operator loaded GET /rest/v1/customers (empty) at ~16:55 UTC; no customers POST and no auth admin call followed; a separate portal login attempt resolved an auth user with NO customer_accounts binding (a staff identity trying /account)"
+      ],
+      "secondary": "The previous flow had the operator type/generate a temporary password in Admin and read it back - removed per 'no passwords in Admin'."
+    },
+    "activation_design": {
+      "mechanism": "auth.admin.generateLink({type:'invite'}) creates an unconfirmed Supabase Auth identity and returns a single-use hashed token WITHOUT sending email (no SMTP dependency). Binding customer_accounts(auth_user_id -> customer_id) is written immediately from the customer id in the admin URL (never from the email). Admin shows an activation URL on our domain: /account/attiva?token_hash=...&type=invite. The customer sets their own password; /api/account/activate verifies the token (verifyOtp) on SUBMIT (not page load, so link scanners cannot consume it), requires an ACTIVE binding BEFORE setting the password, then updateUser({password}).",
+      "reissue": "Lost/expired link or forgotten password: operator issues a new link (generateLink type 'recovery') scoped by customer id.",
+      "prerequisite": "Granting access requires >=1 active deliverable location (real street + city, isDeliverableLocation) - otherwise LOCATION_REQUIRED.",
+      "existing_email": "If the email already has an auth identity (staff/driver/other customer) -> EMAIL_ALREADY_REGISTERED; existing identities are NOT re-bound (no email-based mapping).",
+      "multiple_users": "Unchanged: several customer_accounts rows per customer allowed.",
+      "link_expiry": "Governed by the Supabase project's email OTP expiry setting (not configured by this repo); the Admin copy says 'scade dopo un tempo limitato'."
+    },
+    "public_site": [
+      "Homepage rebuilt (app/page.tsx + lp* keys in site-content.ts, IT+EN): hero with Area clienti primary / Richiedi un'offerta secondary, how-it-works (3), customer-account section with a labelled size-search example (no products/prices), why (5), delivery (Standard 7 days / Express 24-48h su verifica, from fulfilment.ts), human offer route, ink final CTA, existing footer.",
+      "Removed from homepage: 'Registrati gratuitamente' primary CTA (registration closed), 'Più fornitori/fonti' claims (production has one supplier), empty image placeholder, empty brand strip, mock order card with brand names, fake 'Consegna prevista 48 ore' hero badge. Hero.tsx deleted (unused). Other public pages untouched.",
+      "Checked at 320/375/390/768/1024/1440: no horizontal overflow; phone fold shows headline, body and both CTAs."
+    ],
+    "admin": [
+      "Customers list: 'Nuovo cliente' form (CustomerCreateForm -> POST /api/admin/customers -> redirect to detail); Romanian header 'Comenzi' -> 'Ordini trasporto'; table scrolls horizontally on phones.",
+      "Customer detail: 2-step checklist (deliverable location, portal access), portal panel with ACTIVE/NOT ACTIVE, per-login state (Attivo / In attesa di attivazione / Disattivato), login emails, last sign-in, reissue link, disable/reactivate; company + locations editor; the customer's GR sales orders.",
+      "CustomerEditor: Romanian labels 'Telefon'/'Destinatar' fixed."
+    ],
+    "customer_ui": [
+      "Login page: one-line hint about the activation link. Portal screens unchanged (already aligned in PR #15)."
+    ],
+    "integrity": "Not touched: catalogue, basket, checkout, live verification (forceFresh + D27), accepted-total gate, idempotency, GR numbering, pricing/PFU/VAT, supplier confidentiality, supplier ordering (disabled), logistics/driver systems, customer-session resolution (auth_user_id + active binding only). Middleware: only /account/attiva added to the public customer paths.",
+    "tests": {
+      "vitest": "1366 passed | 6 skipped (78 files; +45 vs 1321: customer-portal-activation 19, public-site-homepage 24, plus parametrised cases)",
+      "tsc": "clean",
+      "lint": "0 errors, 8 warnings (pre-existing)",
+      "build": "compiled successfully; /account/attiva and /api/account/activate built"
+    },
+    "production_actions_required": [
+      "None for schema: 0005/0006 are applied. Optional: 0007 grant hardening (unchanged).",
+      "After merge+deploy: Admin -> Clienti -> Nuovo cliente -> add delivery location (street+city) -> Crea accesso e link di attivazione -> send link -> customer sets password -> log in.",
+      "Use an email that has no existing GommaRush login (staff/driver emails are refused by design)."
+    ]
+  }
+}
