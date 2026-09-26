@@ -1,8 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeading } from "@/components/logistics/AdminShell";
-import { Button } from "@/components/Button";
+import { SalesOrderActions } from "@/components/logistics/SalesOrderActions";
 import { getSalesOrderDetail } from "@/lib/server/sales-orders";
+import { getSalesOrderHistory } from "@/lib/server/sales-order-workflow";
+import { fulfilmentLabel } from "@/lib/commerce/fulfilment";
+import {
+  ADMIN_STATUS_LABELS,
+  isSalesOrderStatus,
+  PAYMENT_METHOD_LABELS,
+} from "@/lib/commerce/sales-order-status";
 import { getTr } from "@/lib/i18n/tr-server";
 import { formatSalesOrderNumber } from "@/lib/commerce/order-number";
 
@@ -51,17 +58,19 @@ export default async function SalesOrderDetail({ params }: { params: Promise<{ i
   const customer = (order.customer_snapshot ?? {}) as Snapshot;
   const delivery = (order.delivery_snapshot ?? {}) as Snapshot;
   const pending = tr("Da confermare");
+  const service = fulfilmentLabel(order.fulfilment_class);
+  const payment = PAYMENT_METHOD_LABELS[order.payment_method as string];
+  // `order` comes from select("*") and is untyped; narrow the status once.
+  const orderStatus: unknown = order.status;
+  const knownStatus = isSalesOrderStatus(orderStatus) ? orderStatus : null;
+  const statusLabel = knownStatus ? tr(ADMIN_STATUS_LABELS[knownStatus]) : String(order.status);
+  const history = await getSalesOrderHistory(order.id).catch(() => null);
 
   return (
     <>
       <PageHeading
         title={`${tr("Ordine cliente")} ${formatSalesOrderNumber(order.order_number)}`}
-        description={tr("Richiesta ricevuta · revisione manuale obbligatoria")}
-        action={
-          <Button disabled title={tr("Ordinazione fornitore non ancora attiva")}>
-            {tr("Conferma e invia ordine")}
-          </Button>
-        }
+        description={statusLabel}
       />
 
       <div className="grid gap-5 lg:grid-cols-3">
@@ -118,19 +127,52 @@ export default async function SalesOrderDetail({ params }: { params: Promise<{ i
           <section className="rounded-xl bg-white p-5 shadow-card">
             <h2 className="font-bold">{tr("Ordine")}</h2>
             <p className="mt-2 text-sm text-ink-soft">
-              {tr("Servizio")}: {order.fulfilment_class}
+              {tr("Servizio")}: {service ? tr(service) : "—"}
               <br />
-              {tr("Pagamento")}: {order.payment_method}
+              {tr("Pagamento")}: {payment ? tr(payment) : "—"}
               <br />
-              {tr("Stato")}: {order.status}
+              {tr("Stato")}: {statusLabel}
             </p>
+            {typeof order.status_note === "string" && order.status_note && (
+              <p className="mt-2 text-sm text-ink">
+                {tr("Motivo")}: {order.status_note}
+              </p>
+            )}
+          </section>
+
+          {knownStatus && <SalesOrderActions orderId={order.id} status={knownStatus} />}
+
+          <section className="rounded-xl bg-white p-5 shadow-card">
+            <h2 className="font-bold">{tr("Storico")}</h2>
+            {history === null ? (
+              <p className="mt-2 text-sm text-ink-soft">
+                {tr("La gestione stati non è ancora attivata nel database (migrazione 0008).")}
+              </p>
+            ) : history.length === 0 ? (
+              <p className="mt-2 text-sm text-ink-soft">{tr("Nessuna modifica di stato.")}</p>
+            ) : (
+              <ol className="mt-2 space-y-2 text-sm">
+                {history.map((entry) => (
+                  <li key={entry.id}>
+                    <span className="font-semibold text-ink">
+                      {isSalesOrderStatus(entry.to_status) ? tr(ADMIN_STATUS_LABELS[entry.to_status]) : entry.to_status}
+                    </span>
+                    <span className="text-ink-soft">
+                      {" "}· {new Date(entry.created_at).toLocaleString("it-IT")}
+                      {entry.actor_label ? ` · ${entry.actor_label}` : ""}
+                    </span>
+                    {entry.note && <div className="text-ink-soft">{entry.note}</div>}
+                  </li>
+                ))}
+              </ol>
+            )}
           </section>
         </aside>
       </div>
 
       <p className="mt-6 text-sm text-ink-soft">
         <Link className="underline" href="/admin/sales-orders">
-          {tr("Torna agli ordini da confermare")}
+          {tr("Torna agli ordini clienti")}
         </Link>
       </p>
     </>
