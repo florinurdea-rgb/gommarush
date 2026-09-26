@@ -5,6 +5,7 @@ import { CustomerSignOutButton } from "@/components/customer/CustomerSignOutButt
 import { CustomerHeaderNav, CustomerMobileNav } from "@/components/customer/CustomerShellNav";
 import { getCustomerSession } from "@/lib/auth/customer-session";
 import { getTr } from "@/lib/i18n/tr-server";
+import { CustomerWidth } from "@/components/customer/CustomerWidth";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +39,7 @@ export default async function CustomerLayout({ children }: { children: React.Rea
         (the logo mark alone is 44px, then 56px) slid that bar partly under it.
       */}
       <header className="sticky top-0 z-40 border-b border-steel-soft bg-white">
-        <div className="mx-auto flex w-full max-w-content h-14 items-center justify-between gap-4 px-4 sm:h-16 sm:px-6">
+        <CustomerWidth className="flex h-14 w-full items-center justify-between gap-4 px-4 sm:h-16 sm:px-6">
           <Link
             href="/account/catalogue"
             aria-label={tr("Area clienti")}
@@ -51,10 +52,12 @@ export default async function CustomerLayout({ children }: { children: React.Rea
             <CustomerHeaderNav />
             <CustomerSignOutButton />
           </div>
-        </div>
+        </CustomerWidth>
       </header>
 
-      <main className="mx-auto max-w-content px-4 py-6 sm:px-6 sm:py-8">{children}</main>
+      <CustomerWidth as="main" className="px-4 py-6 sm:px-6 sm:py-8">
+        {children}
+      </CustomerWidth>
 
       {/* Clears the fixed phone bar, plus the home indicator beneath it. */}
       <div className="h-[calc(56px+env(safe-area-inset-bottom))] md:hidden" aria-hidden="true" />

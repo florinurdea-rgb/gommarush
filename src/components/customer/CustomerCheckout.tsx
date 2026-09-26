@@ -9,7 +9,7 @@ import {
   CommerceTruckIcon,
   CommerceWarningIcon,
 } from "@/components/customer/CommerceIcons";
-import { LineAvailability, type LineState, type VerifiedSource } from "@/components/customer/LineAvailability";
+import { LineAvailability, type LineState } from "@/components/customer/LineAvailability";
 import { QuantityStepper } from "@/components/customer/QuantityStepper";
 import { readBasket, writeBasket, type StoredBasketLine } from "@/lib/customer/basket";
 import { formatSalesOrderNumber } from "@/lib/commerce/order-number";
@@ -31,23 +31,18 @@ import { useTr } from "@/lib/i18n/tr";
  *   PRICE        the order carries the total the customer accepted, and the
  *                server refuses to create it at any other figure.
  *
- * VERIFICATION RUNS TWICE, and the two runs mean different things.
- *
- *   PREVIEW  opening this screen, and every quantity change on it, asks the
- *            preview route, which re-resolves the basket AND live-verifies it
- *            (current quantity and price, D26). A short per-item cache keeps a
- *            burst of edits to one lookup. A check that could not complete is
- *            shown as its own amber, retryable state — never as out of stock.
- *   SUBMIT   pressing the button makes a FRESH authoritative check that
- *            bypasses that cache (forceFresh). If it cannot be completed —
- *            configuration missing, timeout, authentication refused, malformed
- *            answer — no order is created and the request comes back
- *            LIVE_VERIFICATION_UNAVAILABLE (D27, fail closed). If a price
- *            moved, the request comes back refused WITH the recomputed basket,
- *            this screen redraws with it, and the customer confirms again
- *            against what is now on the page. That second press is not
- *            friction for its own sake: it is the difference between a
- *            customer agreeing to a price and a customer being charged one.
+ * THE LIVE SUPPLIER CHECK HAPPENS ONLY ON SUBMIT (owner decision,
+ * 2026-09-26). Opening this screen and changing a quantity ask the preview
+ * route, which re-prices from current CATALOGUE data only — no supplier call,
+ * and nothing about verification is shown. Pressing the button makes the one
+ * authoritative check, force-fresh: live quantity and live price, re-derived
+ * through the pricing engine. If it cannot complete — configuration missing,
+ * timeout, authentication refused, malformed answer — no order is created
+ * (LIVE_VERIFICATION_UNAVAILABLE, D27, fail closed; never shown as out of
+ * stock). If a price moved, the request comes back refused WITH the
+ * recomputed basket, this screen redraws with it, and the customer confirms
+ * again against what is now on the page. That second press is the difference
+ * between a customer agreeing to a price and a customer being charged one.
  */
 
 type Location = {
@@ -75,8 +70,6 @@ type Line = {
   state: LineState;
   availableQuantity: number | null;
   unavailableReason: string | null;
-  verifiedSource: VerifiedSource;
-  verifiedAt: string | null;
   unitTyreNetCents: number | null;
   unitTotalCents: number | null;
 };
@@ -91,7 +84,6 @@ type Basket = {
   monetaryStatus: string;
   orderable: boolean;
   pfuEstimated: boolean;
-  verifiedSource: VerifiedSource;
 };
 
 /** V1 payment methods, owner-confirmed. POS on delivery is not among them. */
@@ -143,7 +135,6 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
   const [basket, setBasket] = useState<Basket | null>(null);
   /** The local basket, so a quantity change here persists like anywhere else. */
   const [stored, setStored] = useState<StoredBasketLine[]>([]);
-  const [validating, setValidating] = useState<Set<string>>(new Set());
   const debounce = useRef<number | null>(null);
   const request = useRef(0);
   const [busy, setBusy] = useState(false);
@@ -171,7 +162,7 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
   const [verificationUnavailable, setVerificationUnavailable] = useState(false);
 
   const verify = useCallback(
-    async (lines?: StoredBasketLine[], touched: string[] = []) => {
+    async (lines?: StoredBasketLine[]) => {
       const current = lines ?? readBasket();
       setStored(current);
       if (!current.length) {
@@ -180,7 +171,6 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
       }
       const ticket = ++request.current;
       setChecking(true);
-      setValidating(new Set(touched));
       try {
         const r = await fetch("/api/account/basket/preview", {
           method: "POST",
@@ -221,10 +211,7 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
         setBlockedReason(tr("Impossibile verificare il carrello."));
         setBasket(null);
       } finally {
-        if (ticket === request.current) {
-          setChecking(false);
-          setValidating(new Set());
-        }
+        if (ticket === request.current) setChecking(false);
       }
     },
     [router, tr]
@@ -248,13 +235,12 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
       setStored(next);
       if (!writeBasket(next)) return;
 
+      // Re-priced from catalogue data only: no supplier call happens here.
       if (debounce.current !== null) window.clearTimeout(debounce.current);
-      const touched = [`${line.productId}:${line.oldDot ? "1" : "0"}`];
       if (immediate) {
-        void verify(next, touched);
+        void verify(next);
       } else {
-        setValidating(new Set(touched));
-        debounce.current = window.setTimeout(() => void verify(next, touched), 500);
+        debounce.current = window.setTimeout(() => void verify(next), 500);
       }
     },
     [stored, verify]
@@ -352,7 +338,6 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
   const complete = basket?.monetaryStatus === "complete";
   const orderable = basket?.orderable === true;
   const blockedLines = basket?.lines.filter((l) => l.state !== "available") ?? [];
-  const lineCheckFailed = basket?.verifiedSource === "feed_after_live_failure";
 
   const canSubmit =
     complete &&
@@ -368,11 +353,11 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
     the button it qualifies. These used to be up to five stacked panels, some
     of which could appear together and contradict each other.
 
-      validating      a check is running                   neutral, live
+      validating      the basket is being re-priced          (no banner)
       load_failed     the basket could not be checked      red, retry
       unavailable     a line cannot be supplied as asked   red, blocks
       price_changed   a unit price moved under the order   amber, re-confirm
-      verification    current figures could not be checked amber, retry
+      verification    the final live check could not run   amber, retry
       pricing         the final total is not yet available amber, blocks
       ready           nothing to say — the button speaks
   */
@@ -385,7 +370,7 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
           ? "unavailable"
           : priceChange
             ? "price_changed"
-            : verificationUnavailable || lineCheckFailed
+            : verificationUnavailable
               ? "verification"
               : blockedReason
                 ? "pricing"
@@ -557,10 +542,7 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
                         availableQuantity={line.availableQuantity}
                         unavailableReason={line.unavailableReason}
                         requestedQuantity={line.quantity}
-                        verifiedSource={line.verifiedSource}
-                        verifiedAt={line.verifiedAt}
                         tyre={line.tyre}
-                        validating={validating.has(key)}
                         onAcceptAvailable={s ? (q) => changeQuantity(s, q, true) : null}
                         /* No per-line retry here: the one status panel above the button carries it. */
                         busy={checking}
@@ -612,13 +594,6 @@ export function CustomerCheckout({ locations }: { locations: Location[] }) {
 
           {/* ---- THE STATUS, one at a time ------------------------------ */}
           <div aria-live="polite">
-            {status === "validating" && (
-              <p className="flex items-center gap-2 rounded-2xl border border-ink/10 bg-white p-4 text-sm text-ink-soft">
-                <CommerceRefreshIcon className="h-4 w-4 flex-none animate-spin motion-reduce:animate-none" />
-                {tr("Verifica di prezzi e disponibilità in corso…")}
-              </p>
-            )}
-
             {status === "load_failed" && (
               <div role="alert" className="rounded-2xl border border-state-danger/30 bg-state-danger-soft p-4">
                 <p className="text-sm font-semibold text-state-danger">

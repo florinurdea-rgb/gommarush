@@ -102,7 +102,7 @@ export function CustomerEditor({
         setError(ops.errorMessage(payload.code));
         return false;
       }
-      setNotice("Salvat.");
+      setNotice("Salvato.");
       router.refresh();
       return true;
     } catch {
@@ -133,64 +133,6 @@ export function CustomerEditor({
     };
   }
 
-  function LocationFields({
-    draft,
-    onChange,
-  }: {
-    draft: LocationDraft;
-    onChange: (patch: Partial<LocationDraft>) => void;
-  }) {
-    return (
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <div>
-          <label className={labelClass}>{tr("Nome del luogo")}</label>
-          <input className={inputClass} value={draft.location_name}
-            onChange={(event) => onChange({ location_name: event.target.value })} />
-        </div>
-        <div>
-          <label className={labelClass}>{tr("Destinatario")}</label>
-          <input className={inputClass} value={draft.recipient_name}
-            onChange={(event) => onChange({ recipient_name: event.target.value })} />
-        </div>
-        <div>
-          <label className={labelClass}>{ops.t("address")}</label>
-          <input className={inputClass} value={draft.address_line1}
-            onChange={(event) => onChange({ address_line1: event.target.value })} />
-        </div>
-        <div>
-          <label className={labelClass}>{ops.t("postalCode")}</label>
-          <input className={inputClass} value={draft.postal_code}
-            onChange={(event) => onChange({ postal_code: event.target.value })} />
-        </div>
-        <div>
-          <label className={labelClass}>{ops.t("city")}</label>
-          <input className={inputClass} value={draft.city}
-            onChange={(event) => onChange({ city: event.target.value })} />
-        </div>
-        <div>
-          <label className={labelClass}>{ops.t("province")}</label>
-          <input className={inputClass} value={draft.province}
-            onChange={(event) => onChange({ province: event.target.value })} />
-        </div>
-        <div>
-          <label className={labelClass}>{tr("Telefono")}</label>
-          <input className={inputClass} value={draft.phone}
-            onChange={(event) => onChange({ phone: event.target.value })} />
-        </div>
-        <div>
-          <label className={labelClass}>{tr("Email")}</label>
-          <input className={inputClass} value={draft.email}
-            onChange={(event) => onChange({ email: event.target.value })} />
-        </div>
-        <div className="sm:col-span-2 lg:col-span-3">
-          <label className={labelClass}>{ops.t("deliveryNotes")}</label>
-          <input className={inputClass} value={draft.delivery_notes}
-            onChange={(event) => onChange({ delivery_notes: event.target.value })} />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-5">
       {(error || notice) && (
@@ -208,7 +150,7 @@ export function CustomerEditor({
         <h2 className="text-base font-bold text-ink">{tr("Dati azienda")}</h2>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div>
-            <label className={labelClass}>{ops.t("companyName")}</label>
+            <label className={labelClass}>{tr("Nome azienda")}</label>
             <input className={inputClass} value={company.name}
               onChange={(event) => setCompany({ ...company, name: event.target.value })} />
           </div>
@@ -343,6 +285,76 @@ export function CustomerEditor({
           })}
         </div>
       </section>
+    </div>
+  );
+}
+
+/**
+ * The fields of one delivery location.
+ *
+ * MODULE LEVEL ON PURPOSE. This used to be declared inside CustomerEditor's
+ * render. Every keystroke updates the editor's state, the editor re-renders,
+ * and a component declared in render is a NEW component type each time — so
+ * React unmounted and remounted every input, and focus was lost after the
+ * first character ("only one character at a time"). Declared here, its type
+ * is stable and the inputs survive re-renders.
+ */
+function LocationFields({
+  draft,
+  onChange,
+}: {
+  draft: LocationDraft;
+  onChange: (patch: Partial<LocationDraft>) => void;
+}) {
+  const tr = useTr();
+  const ops = useOps();
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div>
+        <label className={labelClass}>{tr("Nome del luogo")}</label>
+        <input className={inputClass} value={draft.location_name}
+          onChange={(event) => onChange({ location_name: event.target.value })} />
+      </div>
+      <div>
+        <label className={labelClass}>{tr("Destinatario")}</label>
+        <input className={inputClass} value={draft.recipient_name}
+          onChange={(event) => onChange({ recipient_name: event.target.value })} />
+      </div>
+      <div>
+        <label className={labelClass}>{ops.t("address")}</label>
+        <input className={inputClass} value={draft.address_line1}
+          onChange={(event) => onChange({ address_line1: event.target.value })} />
+      </div>
+      <div>
+        <label className={labelClass}>{ops.t("postalCode")}</label>
+        <input className={inputClass} value={draft.postal_code}
+          onChange={(event) => onChange({ postal_code: event.target.value })} />
+      </div>
+      <div>
+        <label className={labelClass}>{ops.t("city")}</label>
+        <input className={inputClass} value={draft.city}
+          onChange={(event) => onChange({ city: event.target.value })} />
+      </div>
+      <div>
+        <label className={labelClass}>{ops.t("province")}</label>
+        <input className={inputClass} value={draft.province}
+          onChange={(event) => onChange({ province: event.target.value })} />
+      </div>
+      <div>
+        <label className={labelClass}>{tr("Telefono")}</label>
+        <input className={inputClass} value={draft.phone}
+          onChange={(event) => onChange({ phone: event.target.value })} />
+      </div>
+      <div>
+        <label className={labelClass}>{tr("Email")}</label>
+        <input className={inputClass} value={draft.email}
+          onChange={(event) => onChange({ email: event.target.value })} />
+      </div>
+      <div className="sm:col-span-2 lg:col-span-3">
+        <label className={labelClass}>{ops.t("deliveryNotes")}</label>
+        <input className={inputClass} value={draft.delivery_notes}
+          onChange={(event) => onChange({ delivery_notes: event.target.value })} />
+      </div>
     </div>
   );
 }

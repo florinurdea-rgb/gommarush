@@ -1,12 +1,12 @@
 {
   "project": "GommaRush",
-  "mission_id": "M22-PRODUCT-UI-PORTAL-ACTIVATION",
-  "mission_title": "Public homepage redesign + customer portal account activation from Admin",
+  "mission_id": "M23-RECONCILED (admin orders workflow + catalogue/basket UX)",
+  "mission_title": "Reconciliation of PR #17 (admin sales-order workflow) and PR #18 (catalogue/basket UX, browse without live checks) on one branch",
   "status": "IMPLEMENTED_AWAITING_REVIEW",
-  "phase": "main = 0e737bc (PR #15) is live on Vercel Production. M22 on its own branch/PR, not merged. Production DB (read-only, 2026-09-25): 0005/0006 applied; 0 customers, 0 locations, 0 customer_accounts, 0 sales_orders; 6 auth users (staff/driver). Gateway username/password still pending, so final order submit refuses by design.",
-  "last_updated": "2026-09-25",
+  "phase": "main = 832b586 (PR #15 + #16) live on Production. Branch claude/m23-catalogue-basket-ux holds BOTH M23 missions (PR #17 merged in, no conflict outside this file). Migration 0008 (sales-order workflow) is prepared and NOT APPLIED. Supplier ordering disabled. Gateway username/password still pending.",
+  "last_updated": "2026-09-26",
   "canonical_branch": "main",
-  "working_branch": "claude/m22-product-ui-portal-activation (PR open, not merged)",
+  "working_branch": "claude/m23-catalogue-basket-ux (PR #18) now contains PR #17 via a merge commit; neither merged to main.",
   "entry_points": {
     "working_rules": "CLAUDE.md",
     "authority_model": "docs/AI_WORKFLOW.md",
@@ -441,7 +441,7 @@
     "Deldo: unchanged and untouched. Jan has NOT replied.",
     "Vercel env: gateway customer number 21185 / environment production configured is an OWNER STATEMENT, not observed by an agent (no Vercel access)."
   ],
-  "next_recommended_mission": "Merge M22, run the first production customer E2E once gateway credentials are set, then the Admin Orders workflow (see m21_production_gate.admin_orders_gaps).",
+  "next_recommended_mission": "Owner review of PR #18 (now containing #17); merge; apply 0008 afterwards in the SQL Editor; set gateway credentials; first production E2E. Next build missions: delivery-address model (default + per-order confirmation + immutable snapshot), then Visura/customer-document onboarding.",
   "head_at_completion": "see commits on design/m21-customer-commerce-reskin after 5295b9f",
   "owner_decisions_confirmed_m9": {
     "provenance": "POLICY_OWNER - GommaRush business decisions recorded 2026-09-22. NOT Inter-Sprint statements. Never cite these as supplier-documented.",
@@ -852,6 +852,112 @@
       "None for schema: 0005/0006 are applied. Optional: 0007 grant hardening (unchanged).",
       "After merge+deploy: Admin -> Clienti -> Nuovo cliente -> add delivery location (street+city) -> Crea accesso e link di attivazione -> send link -> customer sets password -> log in.",
       "Use an email that has no existing GommaRush login (staff/driver emails are refused by design)."
+    ],
+    "release": {
+      "pr": "https://github.com/florinurdea-rgb/gommarush/pull/16",
+      "merged_as": "832b5869beb2e5ef187dd3a4da5d912c6b3bc7da",
+      "production_deployment": {
+        "id": 6675637515,
+        "state": "success",
+        "at": "2026-09-26T06:33:44Z"
+      },
+      "live_smoke": "NOT performed - this environment's egress policy blocks gommarush.com and *.vercel.app (curl and WebFetch). Owner to spot-check; admin/portal pages need a login regardless.",
+      "production_data_after": "0 customers, 0 accounts, 0 sales_orders, 6 auth users (read-only, 2026-09-26)"
+    }
+  },
+  "m23_catalogue_basket_ux": {
+    "base": "origin/main 832b5869beb2e5ef187dd3a4da5d912c6b3bc7da",
+    "owner_decision_verification_timing": "OWNER DECISION 2026-09-26 (supersedes D26 for browsing): NO live supplier call while browsing, adding, editing quantities, viewing the basket or entering checkout. /api/account/basket/preview now runs resolveBasket only (catalogue data + existing pricing engine). The ONLY live call is createPortalSalesOrder at final submit: verifyBasketLive(resolved, Date.now, {forceFresh:true}) -> LIVE_VERIFICATION_UNAVAILABLE (fail closed, D27) -> BASKET_NOT_ORDERABLE -> PRICE_CHANGED (accepted-total) -> monetary gate -> RPC. Unchanged.",
+    "customer_payloads": "customerBasketView() strips verifiedSource/verifiedAt from the preview response and from every order-refusal basket; provenance still recorded in the order snapshot server-side.",
+    "ui_removed": [
+      "LineAvailability: failed-check amber state with timestamp, 'Verificato ora', 'Disponibilità rilevata alle', per-line 'Verifica in corso…', per-line Riprova",
+      "Checkout: 'Verifica di prezzi e disponibilità in corso…' preview banner; preview-derived verification state (only a refused SUBMIT sets it now)",
+      "Basket/checkout: per-line validating indicator state"
+    ],
+    "ui_added": [
+      "Desktop (lg+) persistent basket rail beside the catalogue: CatalogueBasketRail (same localStorage store + BASKET_CHANGED_EVENT; names/unit net price from the catalogue-only preview; stepper + Rimuovi; own scroll within max-h viewport; no totals by existing decision)",
+      "Catalogue route widened to max-w-shell (1200) via CustomerWidth; every other portal page stays max-w-content (900)",
+      "Result row: brand (eyebrow) / model / size+load-speed as distinct elements, right-aligned price column, restrained existing TyreIcon from sm (hidden at lg, back at xl), memoised rows with a stable keyed quantity setter; MobileBasketBar isolates the basket count re-render; toast hidden from lg (rail confirms)",
+      "Secondary filters wrap with >=10rem per select from sm (sort label was clipped at 1024)"
+    ],
+    "availability_badge": "Kept. 'Disponibile / Su richiesta / Da verificare' come from the catalogue projection's stored availability, not from live verification.",
+    "input_bug": {
+      "root_cause": "CustomerEditor declared LocationFields (a component) INSIDE its render; each keystroke re-rendered the editor, React saw a new component type and remounted every delivery-location input, dropping focus after one character.",
+      "affected": "Admin > customer > delivery locations (new and existing): name, recipient, address, postcode, city, province, phone, email, delivery notes. Company fields were unaffected. No other component-in-render instance exists in src/ or app/ (grep).",
+      "fix": "LocationFields hoisted to module scope (hooks inside).",
+      "proof": "tests/ui/input-typing.test.tsx fails 3/8 against the old file (focus lands on <body>) and passes 8/8 with the fix."
+    },
+    "copy_issue_for_owner": [
+      "CustomerEditor: the `name` field is labelled ops.t('companyName') = 'Ragione sociale' and the next field (`legal_name`) is also 'Ragione sociale'. Wiring is correct (name vs legal_name); the duplicate is a LABEL. Not changed (copy lock). Suggest 'Nome azienda' (already used by the create form) for the first.",
+      "CustomerEditor save notice is Romanian 'Salvat.'; vatNumber label 'Codice fiscale / P.IVA' sits next to a separate 'Codice fiscale' field. Copy, not changed."
+    ],
+    "dropdown_audit": "Native <select>s throughout: full-width click targets, native keyboard/Escape, no custom popups (no z-index/viewport issues). M19 preserved: size lists unfiltered props; brand dependent (from results) with the focus-freeze + missing-value option. Fixed: clipped sort label at 1024. Tests: selection persists through result updates and brand change; keyboard change keeps focus.",
+    "new_dev_dependencies": "jsdom 25, @testing-library/react 16, @testing-library/dom 10, @testing-library/user-event 14 (component tests; vitest include extended to tests/**/*.test.tsx, oxc jsx automatic).",
+    "tests": {
+      "vitest": "1396 passed | 6 skipped (81 files; new: tests/ui/input-typing.test.tsx 8, tests/ui/catalogue-basket.test.tsx 14, tests/browse-no-live-check.test.ts 7; 9 existing tests rewritten to the new owner decision)",
+      "tsc": "clean",
+      "lint": "0 errors, 8 warnings (pre-existing)",
+      "build": "compiled successfully"
+    },
+    "visual_qa": "Harness with mocked APIs at 320/375/390/430/768/1024/1440/1920: no horizontal overflow; rows 114px from sm (7 visible at 1440 after scroll, 5 at 1024); rail sticky under the header with internal scroll and pinned 'Vai al carrello'; mobile sticky bar unchanged.",
+    "unchanged": "Copy (no string added; 5 verification-only strings removed with their UI), pricing/markup/PFU/VAT, order engine and gates, idempotency, GR numbering, customer isolation, auth mapping, supplier confidentiality, supplier ordering disabled, schema, logistics/driver, homepage.",
+    "pr": "https://github.com/florinurdea-rgb/gommarush/pull/18"
+  },
+  "m23_admin_orders_workflow": {
+    "base": "origin/main 832b5869beb2e5ef187dd3a4da5d912c6b3bc7da",
+    "lifecycle": "requested(Da rivedere) -> confirmed | rejected | cancelled; confirmed -> pending_payment | cancelled; pending_payment -> cancelled. rejected/cancelled are final. Reason REQUIRED for rejected/cancelled.",
+    "enforcement": "src/lib/commerce/sales-order-status.ts (pure) + transition_sales_order() in 0008 (security definer, same allowed pairs, compare-and-set on current status -> SALES_ORDER_STATUS_CONFLICT, stamps confirmed_at/pending_payment_at/rejected_at/cancelled_at, writes sales_order_status_history with actor). A test asserts the SQL pairs equal the TS table.",
+    "migration_0008": {
+      "file": "supabase/pending-approval/0008_sales_order_workflow.sql",
+      "state": "PREPARED, NOT APPLIED",
+      "adds": "status 'pending_payment' (CHECK superset), columns pending_payment_at/status_note/status_changed_by, table sales_order_status_history (RLS on, no policies, browser roles revoked), function transition_sales_order (EXECUTE: service_role only)",
+      "safety": "one transaction, pre/post-flight assertions, unchanged row counts asserted, no data rows touched, idempotent (re-run passes)",
+      "dry_run": "PostgreSQL 16 with 0005+0006: legal path requested->confirmed->pending_payment->cancelled OK with timestamps + 3 history rows; skip/reverse/final-state moves refused; empty reason refused; stale second confirm -> STATUS_CONFLICT; anon EXECUTE denied."
+    },
+    "before_0008": "Admin list/detail work (status views, GR search, labels); the action buttons return 'La gestione stati non è ancora attivata nel database (migrazione 0008)' and History says the same. No partial writes.",
+    "admin_ui": [
+      "/admin/sales-orders: tabs Da rivedere (default, oldest first) / Confermato / In attesa di pagamento / Rifiutato / Annullato / Tutti; search by GR number; service and payment shown as labels (were raw values).",
+      "/admin/sales-orders/[id]: status label (was raw), Decisione panel offering only legal moves with confirm step and required reason, reason shown, Storico (history). 'Ordine al fornitore' is a separate permanently disabled control; the old 'Conferma e invia ordine' conflation is gone."
+    ],
+    "customer_ui": "OrderStatusTag gains 'In attesa di pagamento'. Rejection/cancel REASONS are internal only (not shown to the customer) - owner decision if they should be.",
+    "not_built_owner_decisions": [
+      "DELETE of a GR order: none exists and none built (a numbered commercial record should be cancelled, not deleted). Owner decides if deletion is ever allowed.",
+      "Whether pending_payment applies to cash-on-delivery orders the same way as bank transfer.",
+      "Whether the customer should see the rejection/cancellation reason.",
+      "Customer notification (email) on status change - no mail flow exists for it.",
+      "Downstream fulfilment states after pending_payment (paid, sourcing, shipped...)."
+    ],
+    "unchanged": "Checkout, live verification, pricing, GR numbering, order creation RPC, customer scoping, supplier ordering (disabled), logistics/driver.",
+    "tests": {
+      "vitest": "1384 passed | 6 skipped (79 files; +18 tests/sales-order-workflow.test.ts)",
+      "tsc": "clean",
+      "lint": "0 errors, 8 warnings (pre-existing)",
+      "build": "compiled successfully"
+    },
+    "production_action_required": "After merge+deploy: run 0008 in the production SQL Editor (single transaction, prints 'GR 0008: all assertions passed.'). Until then the workflow buttons report not activated.",
+    "pr": "https://github.com/florinurdea-rgb/gommarush/pull/17 (head b3ef336, merged into the reconciliation branch)"
+  },
+  "m23_reconciliation": {
+    "date": "2026-09-26",
+    "inputs": {
+      "main": "832b5869beb2e5ef187dd3a4da5d912c6b3bc7da",
+      "pr17": "claude/m23-admin-orders-workflow @ b3ef336082c65cb516a46905da6159438ebc0752",
+      "pr18": "claude/m23-catalogue-basket-ux @ a7d873f68f514726e18b3a6a35780764ce45ba21",
+      "merge_base": "832b586 (both)"
+    },
+    "strategy": "git merge --no-ff of PR #17 into the PR #18 branch (no rebase, no history rewrite).",
+    "conflicts": "Only .ai/handoff.json (both edited m22.release and the top-level mission fields). Resolved as JSON: union of facts; PR #17's 'm23' section kept whole as 'm23_admin_orders_workflow'; top-level fields rewritten for the combined state. No code file was touched by both PRs.",
+    "approved_copy_fixes": [
+      "Admin customer editor: first company field label 'Ragione sociale' (ops.t('companyName')) -> 'Nome azienda' (tr, existing string; EN 'Company name'). The second field (legal_name) keeps 'Ragione sociale'.",
+      "Admin customer editor save notice 'Salvat.' -> 'Salvato.' (plain string as before; no other text touched)."
+    ],
+    "not_in_scope_next_mission": [
+      "Visura / customer-document onboarding.",
+      "Delivery-address architecture (owner decision recorded for the NEXT mission, not implemented): customer has a changeable default delivery address; checkout always presents the address again for confirmation/editing; every submitted order stores its own immutable delivery snapshot; editing the address for one order must not silently change the default."
     ]
+  },
+  "owner_decisions_confirmed_2026_09_26": {
+    "live_verification_timing": "Supplier live check only at final order confirmation (force-fresh, fail closed). No browse-time checks.",
+    "delivery_address_model_next": "See m23_reconciliation.not_in_scope_next_mission[1]."
   }
 }

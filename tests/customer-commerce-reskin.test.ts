@@ -207,10 +207,16 @@ describe("quantity changes revalidate per line", () => {
       expect(source).toContain("onCommit={(q) => changeQuantity(s, q, true)}");
     });
 
-    it(`${file.split("/").pop()} marks only the touched line as being checked`, () => {
+    /**
+     * CHANGED 2026-09-26 (owner decision): there is no per-line "checking"
+     * indicator any more. The preview re-prices from catalogue data only and
+     * the live supplier check runs at final confirmation, so nothing slow
+     * happens per line to indicate.
+     */
+    it(`${file.split("/").pop()} shows no per-line verification indicator`, () => {
       const source = read(file);
-      expect(source).toContain("setValidating(new Set(touched))");
-      expect(source).toContain("validating={validating.has(key)}");
+      expect(source).not.toContain("setValidating");
+      expect(source).not.toContain("validating=");
     });
 
     /** A superseded response must not overwrite a newer one. */
