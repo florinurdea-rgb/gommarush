@@ -1,12 +1,12 @@
 {
   "project": "GommaRush",
-  "mission_id": "M22-PRODUCT-UI-PORTAL-ACTIVATION",
-  "mission_title": "Public homepage redesign + customer portal account activation from Admin",
+  "mission_id": "M23-ADMIN-ORDERS-WORKFLOW",
+  "mission_title": "Admin sales-order workflow: to review -> confirmed -> pending payment; rejected; cancelled",
   "status": "IMPLEMENTED_AWAITING_REVIEW",
-  "phase": "main = 0e737bc (PR #15) is live on Vercel Production. M22 on its own branch/PR, not merged. Production DB (read-only, 2026-09-25): 0005/0006 applied; 0 customers, 0 locations, 0 customer_accounts, 0 sales_orders; 6 auth users (staff/driver). Gateway username/password still pending, so final order submit refuses by design.",
-  "last_updated": "2026-09-25",
+  "phase": "main = 832b586 (PR #16) live on Vercel Production. M23 on its own branch/PR, not merged; its migration 0008 is prepared, NOT applied. Production: 0005/0006 applied, 0 customers, gateway username/password still pending (final order submit refuses by design).",
+  "last_updated": "2026-09-26",
   "canonical_branch": "main",
-  "working_branch": "claude/m22-product-ui-portal-activation (PR open, not merged)",
+  "working_branch": "claude/m23-admin-orders-workflow (PR open, not merged)",
   "entry_points": {
     "working_rules": "CLAUDE.md",
     "authority_model": "docs/AI_WORKFLOW.md",
@@ -441,7 +441,7 @@
     "Deldo: unchanged and untouched. Jan has NOT replied.",
     "Vercel env: gateway customer number 21185 / environment production configured is an OWNER STATEMENT, not observed by an agent (no Vercel access)."
   ],
-  "next_recommended_mission": "Merge M22, run the first production customer E2E once gateway credentials are set, then the Admin Orders workflow (see m21_production_gate.admin_orders_gaps).",
+  "next_recommended_mission": "Owner: set gateway credentials; create a test customer via Admin (M22) and place the first production order; review/merge M23 and apply 0008; then decide the downstream fulfilment states.",
   "head_at_completion": "see commits on design/m21-customer-commerce-reskin after 5295b9f",
   "owner_decisions_confirmed_m9": {
     "provenance": "POLICY_OWNER - GommaRush business decisions recorded 2026-09-22. NOT Inter-Sprint statements. Never cite these as supplier-documented.",
@@ -852,6 +852,51 @@
       "None for schema: 0005/0006 are applied. Optional: 0007 grant hardening (unchanged).",
       "After merge+deploy: Admin -> Clienti -> Nuovo cliente -> add delivery location (street+city) -> Crea accesso e link di attivazione -> send link -> customer sets password -> log in.",
       "Use an email that has no existing GommaRush login (staff/driver emails are refused by design)."
-    ]
+    ],
+    "release": {
+      "pr": "https://github.com/florinurdea-rgb/gommarush/pull/16",
+      "merged_as": "832b5869beb2e5ef187dd3a4da5d912c6b3bc7da",
+      "production_deployment": {
+        "id": 6675637515,
+        "state": "success",
+        "at": "2026-09-26T06:33:44Z",
+        "url": "https://gommarush-lqx08eyk7-florins-projects-eff558bb.vercel.app"
+      },
+      "live_smoke": "NOT performed - this environment's egress policy blocks gommarush.com and *.vercel.app (curl and WebFetch). Owner to spot-check; admin/portal pages need a login regardless.",
+      "production_data_after": "0 customers, 0 accounts, 0 sales_orders, 6 auth users (read-only, 2026-09-26)"
+    }
+  },
+  "m23": {
+    "base": "origin/main 832b5869beb2e5ef187dd3a4da5d912c6b3bc7da",
+    "lifecycle": "requested(Da rivedere) -> confirmed | rejected | cancelled; confirmed -> pending_payment | cancelled; pending_payment -> cancelled. rejected/cancelled are final. Reason REQUIRED for rejected/cancelled.",
+    "enforcement": "src/lib/commerce/sales-order-status.ts (pure) + transition_sales_order() in 0008 (security definer, same allowed pairs, compare-and-set on current status -> SALES_ORDER_STATUS_CONFLICT, stamps confirmed_at/pending_payment_at/rejected_at/cancelled_at, writes sales_order_status_history with actor). A test asserts the SQL pairs equal the TS table.",
+    "migration_0008": {
+      "file": "supabase/pending-approval/0008_sales_order_workflow.sql",
+      "state": "PREPARED, NOT APPLIED",
+      "adds": "status 'pending_payment' (CHECK superset), columns pending_payment_at/status_note/status_changed_by, table sales_order_status_history (RLS on, no policies, browser roles revoked), function transition_sales_order (EXECUTE: service_role only)",
+      "safety": "one transaction, pre/post-flight assertions, unchanged row counts asserted, no data rows touched, idempotent (re-run passes)",
+      "dry_run": "PostgreSQL 16 with 0005+0006: legal path requested->confirmed->pending_payment->cancelled OK with timestamps + 3 history rows; skip/reverse/final-state moves refused; empty reason refused; stale second confirm -> STATUS_CONFLICT; anon EXECUTE denied."
+    },
+    "before_0008": "Admin list/detail work (status views, GR search, labels); the action buttons return 'La gestione stati non è ancora attivata nel database (migrazione 0008)' and History says the same. No partial writes.",
+    "admin_ui": [
+      "/admin/sales-orders: tabs Da rivedere (default, oldest first) / Confermato / In attesa di pagamento / Rifiutato / Annullato / Tutti; search by GR number; service and payment shown as labels (were raw values).",
+      "/admin/sales-orders/[id]: status label (was raw), Decisione panel offering only legal moves with confirm step and required reason, reason shown, Storico (history). 'Ordine al fornitore' is a separate permanently disabled control; the old 'Conferma e invia ordine' conflation is gone."
+    ],
+    "customer_ui": "OrderStatusTag gains 'In attesa di pagamento'. Rejection/cancel REASONS are internal only (not shown to the customer) - owner decision if they should be.",
+    "not_built_owner_decisions": [
+      "DELETE of a GR order: none exists and none built (a numbered commercial record should be cancelled, not deleted). Owner decides if deletion is ever allowed.",
+      "Whether pending_payment applies to cash-on-delivery orders the same way as bank transfer.",
+      "Whether the customer should see the rejection/cancellation reason.",
+      "Customer notification (email) on status change - no mail flow exists for it.",
+      "Downstream fulfilment states after pending_payment (paid, sourcing, shipped...)."
+    ],
+    "unchanged": "Checkout, live verification, pricing, GR numbering, order creation RPC, customer scoping, supplier ordering (disabled), logistics/driver.",
+    "tests": {
+      "vitest": "1384 passed | 6 skipped (79 files; +18 tests/sales-order-workflow.test.ts)",
+      "tsc": "clean",
+      "lint": "0 errors, 8 warnings (pre-existing)",
+      "build": "compiled successfully"
+    },
+    "production_action_required": "After merge+deploy: run 0008 in the production SQL Editor (single transaction, prints 'GR 0008: all assertions passed.'). Until then the workflow buttons report not activated."
   }
 }
