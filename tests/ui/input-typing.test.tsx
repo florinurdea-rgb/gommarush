@@ -160,3 +160,18 @@ describe("Customer sign-in and activation", () => {
     expect(confirm.value).toBe("Garibaldi-123-àèì");
   });
 });
+
+describe("approved Admin copy fixes (2026-09-26)", () => {
+  it("labels the company-name field 'Nome azienda' and keeps 'Ragione sociale' for the legal name only", () => {
+    renderIt(<CustomerEditor customer={customer} locations={[location]} />);
+    expect(screen.getAllByText("Nome azienda")).toHaveLength(1);
+    expect(screen.getAllByText("Ragione sociale")).toHaveLength(1);
+  });
+
+  it("confirms a save in Italian", async () => {
+    const { readFileSync } = await import("node:fs");
+    const source = readFileSync("src/components/logistics/CustomerEditor.tsx", "utf8");
+    expect(source).toContain('setNotice("Salvato.")');
+    expect(source).not.toContain('"Salvat."');
+  });
+});

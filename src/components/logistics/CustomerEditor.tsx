@@ -102,7 +102,7 @@ export function CustomerEditor({
         setError(ops.errorMessage(payload.code));
         return false;
       }
-      setNotice("Salvat.");
+      setNotice("Salvato.");
       router.refresh();
       return true;
     } catch {
@@ -150,7 +150,7 @@ export function CustomerEditor({
         <h2 className="text-base font-bold text-ink">{tr("Dati azienda")}</h2>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div>
-            <label className={labelClass}>{ops.t("companyName")}</label>
+            <label className={labelClass}>{tr("Nome azienda")}</label>
             <input className={inputClass} value={company.name}
               onChange={(event) => setCompany({ ...company, name: event.target.value })} />
           </div>

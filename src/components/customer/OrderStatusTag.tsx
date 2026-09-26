@@ -21,6 +21,11 @@ const STATUS: Record<
     className: "bg-state-success-soft text-state-success",
     Icon: CommerceCheckIcon,
   },
+  pending_payment: {
+    label: "In attesa di pagamento",
+    className: "bg-state-warning-soft text-ink",
+    Icon: CommerceRefreshIcon,
+  },
   rejected: {
     label: "Rifiutato",
     className: "bg-state-danger-soft text-state-danger",
