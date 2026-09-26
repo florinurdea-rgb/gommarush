@@ -101,9 +101,11 @@ describe("the checkout shows one status at a time", () => {
     expect(block).toContain("verify(stored)");
   });
 
-  it("treats a line whose preview check failed as the verification state", () => {
-    expect(checkout).toContain('basket?.verifiedSource === "feed_after_live_failure"');
-    expect(checkout).toContain("verificationUnavailable || lineCheckFailed");
+  /** 2026-09-26: only the FINAL check (a submit refusal) produces the verification state. */
+  it("enters the verification state only from a refused submit", () => {
+    expect(checkout).not.toContain("lineCheckFailed");
+    expect(checkout).toContain(": verificationUnavailable");
+    expect(checkout).toContain("if (j.code === VERIFICATION_UNAVAILABLE) setVerificationUnavailable(true);");
   });
 
   /** The submit gate itself is unchanged: nothing here weakens it. */
@@ -171,28 +173,17 @@ describe("the checkout layout", () => {
 // Line state
 // ---------------------------------------------------------------------------
 
-describe("a line whose check failed", () => {
+describe("a basket line carries no verification UI (2026-09-26)", () => {
   const shared = read(LINE);
-  const branch = shared.slice(
-    shared.indexOf('if (verifiedSource === "feed_after_live_failure") {'),
-    shared.indexOf("Available. A quiet confirmation")
-  );
 
-  it("is amber with a retry, never green and never red", () => {
-    expect(branch).toContain("state-warning");
-    expect(branch).not.toContain("state-danger");
-    expect(branch).not.toContain("state-success");
-    expect(branch).toContain('tr("Riprova")');
+  it("has no failed-check branch, timestamp or retry", () => {
+    expect(shared).not.toContain("feed_after_live_failure");
+    expect(shared).not.toContain("onRetry");
+    expect(shared).not.toContain("observed");
   });
 
-  it("is checked before the quiet 'available' confirmation can claim it", () => {
-    expect(shared.indexOf('if (verifiedSource === "feed_after_live_failure") {')).toBeLessThan(
-      shared.indexOf('{tr("Disponibile")}')
-    );
-  });
-
-  it("is retried per line from the basket, through the same loader", () => {
-    expect(read(BASKET)).toContain("onRetry={() => void load(stored, [key])}");
+  it("is not retried per line from the basket", () => {
+    expect(read(BASKET)).not.toContain("onRetry");
   });
 });
 
@@ -201,9 +192,10 @@ describe("a line whose check failed", () => {
 // ---------------------------------------------------------------------------
 
 describe("comments describe the verification that actually runs", () => {
-  it("no longer claims the live check happens only on submit", () => {
-    expect(read(CHECKOUT)).not.toContain("HAPPENS ON SUBMIT, not here");
-    expect(read(CHECKOUT)).toContain("forceFresh");
+  /** 2026-09-26: and that is now true again — by owner decision. */
+  it("states that the live check happens only on submit, force-fresh", () => {
+    expect(read(CHECKOUT)).toContain("THE LIVE SUPPLIER CHECK HAPPENS ONLY ON SUBMIT");
+    expect(read(CHECKOUT)).toContain("force-fresh");
   });
 
   it("no longer claims the order path fails open", () => {
@@ -225,7 +217,8 @@ describe("the catalogue on a phone", () => {
     expect(source).toContain('aria-controls="catalogue-secondary-filters"');
     expect(source).toContain('tr("Filtri aggiuntivi")');
     expect(source).toContain('filtersOpen ? "grid" : "hidden"');
-    expect(source).toContain("sm:grid sm:grid-cols-4");
+    // From `sm` a wrapping row where every select gets >= 10rem, so no option text is clipped.
+    expect(source).toContain("sm:flex sm:flex-wrap sm:items-end sm:[&>*]:min-w-[10rem] sm:[&>*]:flex-1");
   });
 
   it("keeps the three size selectors outside the fold, at every width", () => {
@@ -256,7 +249,7 @@ describe("the shell", () => {
    * a header whose height followed its content slid the bar partly under it.
    */
   it("has a fixed header height matching the catalogue's sticky offset", () => {
-    expect(read(LAYOUT)).toContain("h-14 items-center");
+    expect(read(LAYOUT)).toContain("h-14 w-full items-center");
     expect(read(LAYOUT)).toContain("sm:h-16");
     expect(read(CATALOGUE)).toContain("sticky top-[57px]");
     expect(read(CATALOGUE)).toContain("sm:top-[65px]");

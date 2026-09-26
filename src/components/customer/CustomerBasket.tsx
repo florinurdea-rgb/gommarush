@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/Button";
 import { CommerceCartIcon, CommerceTruckIcon, CommerceWarningIcon } from "@/components/customer/CommerceIcons";
-import { LineAvailability, type LineState, type VerifiedSource } from "@/components/customer/LineAvailability";
+import { LineAvailability, type LineState } from "@/components/customer/LineAvailability";
 import { QuantityStepper } from "@/components/customer/QuantityStepper";
 import { readBasket, writeBasket, type StoredBasketLine } from "@/lib/customer/basket";
 import { useTr } from "@/lib/i18n/tr";
@@ -27,9 +27,9 @@ import { useTr } from "@/lib/i18n/tr";
  * total on this screen came back from the server, which re-resolved all of
  * them. A quantity change re-asks rather than recalculating locally.
  *
- * VALIDATION IS PER LINE. Changing one quantity marks THAT line as being
- * re-checked and leaves the rest readable. Blanking the whole basket for a
- * round trip is what makes a two-second check feel like a page that broke.
+ * NO SUPPLIER CALL HERE (owner decision, 2026-09-26). A quantity change
+ * re-asks the preview route, which re-prices from current catalogue data; the
+ * live supplier check runs once, at final order confirmation.
  */
 
 type PreviewLine = {
@@ -50,8 +50,6 @@ type PreviewLine = {
   state: LineState;
   availableQuantity: number | null;
   unavailableReason: string | null;
-  verifiedSource: VerifiedSource;
-  verifiedAt: string | null;
   unitTyreNetCents: number | null;
   pfuStatus: string;
   unitVatCents: number | null;
@@ -71,7 +69,6 @@ type Preview = {
   pfuEstimated: boolean;
   pfuEstimateVersion: string | null;
   orderable: boolean;
-  verifiedSource: VerifiedSource;
   fulfilment: { class: string; maxDays: number };
 };
 
@@ -101,24 +98,20 @@ export function CustomerBasket() {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  /** Which lines are mid-validation, so only those show it. */
-  const [validating, setValidating] = useState<Set<string>>(new Set());
 
   const debounce = useRef<number | null>(null);
   const request = useRef(0);
 
   const load = useCallback(
-    async (lines: StoredBasketLine[], touched: string[] = []) => {
+    async (lines: StoredBasketLine[]) => {
       if (!lines.length) {
         setPreview(null);
         setBusy(false);
-        setValidating(new Set());
         return;
       }
       const ticket = ++request.current;
       setBusy(true);
       setError(null);
-      setValidating(new Set(touched));
       try {
         const r = await fetch("/api/account/basket/preview", {
           method: "POST",
@@ -137,10 +130,7 @@ export function CustomerBasket() {
         // the basket stays exactly as the customer left it.
         setError(tr("Impossibile aggiornare il carrello. Riprova."));
       } finally {
-        if (ticket === request.current) {
-          setBusy(false);
-          setValidating(new Set());
-        }
+        if (ticket === request.current) setBusy(false);
       }
     },
     [tr]
@@ -173,13 +163,12 @@ export function CustomerBasket() {
         return;
       }
 
+      // Re-priced from catalogue data only: no supplier call happens here.
       if (debounce.current !== null) window.clearTimeout(debounce.current);
-      const touched = [lineKey(line)];
       if (immediate) {
-        void load(next, touched);
+        void load(next);
       } else {
-        setValidating(new Set(touched));
-        debounce.current = window.setTimeout(() => void load(next, touched), TYPING_DEBOUNCE_MS);
+        debounce.current = window.setTimeout(() => void load(next), TYPING_DEBOUNCE_MS);
       }
     },
     [stored, load, tr]
@@ -299,12 +288,8 @@ export function CustomerBasket() {
                   availableQuantity={line.availableQuantity}
                   unavailableReason={line.unavailableReason}
                   requestedQuantity={s.quantity}
-                  verifiedSource={line.verifiedSource}
-                  verifiedAt={line.verifiedAt}
                   tyre={line.tyre}
-                  validating={validating.has(key)}
                   onAcceptAvailable={(q) => changeQuantity(s, q, true)}
-                  onRetry={() => void load(stored, [key])}
                   busy={busy}
                   tr={tr}
                 />

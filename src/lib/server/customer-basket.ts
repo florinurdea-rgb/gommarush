@@ -418,3 +418,21 @@ function weakestSource(lines: readonly BasketResolvedLine[]): AvailabilitySource
   }
   return weakest;
 }
+
+/**
+ * The basket as the CUSTOMER receives it: `customerBasketPayload` minus the
+ * verification provenance (which source answered, and when).
+ *
+ * OWNER DECISION, 2026-09-26. The authoritative supplier check happens only at
+ * final order confirmation, and the customer is never shown verification
+ * timestamps, sources or supplier/API health. The provenance stays on the
+ * server — the order snapshot records it — but has no field to travel in on a
+ * response to the browser.
+ */
+export function customerBasketView(basket: ReturnType<typeof customerBasketPayload>) {
+  const { verifiedSource: _basketSource, lines, ...rest } = basket;
+  return {
+    ...rest,
+    lines: lines.map(({ verifiedSource: _source, verifiedAt: _at, ...line }) => line),
+  };
+}

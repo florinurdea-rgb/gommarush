@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/Button";
 import {
   CommerceAllSeasonIcon,
@@ -14,6 +14,7 @@ import {
   CommerceTruckIcon,
 } from "@/components/customer/CommerceIcons";
 import { QuantityStepper } from "@/components/customer/QuantityStepper";
+import { CatalogueBasketRail } from "@/components/customer/CatalogueBasketRail";
 import { addBasketLine, basketQuantity, BASKET_CHANGED_EVENT } from "@/lib/customer/basket";
 import { BRAND_TIER_LABELS } from "@/lib/catalogue/brand-tiers";
 import { catalogueViewState, sameValues, shouldQueryCatalogue } from "@/lib/customer/catalogue-view";
@@ -274,8 +275,10 @@ export function CustomerCatalogue({
    */
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const quantityOf = (key: string) => quantities[key] ?? 1;
-  const setQuantity = (key: string, quantity: number) =>
-    setQuantities((current) => ({ ...current, [key]: quantity }));
+  const setQuantity = useCallback(
+    (key: string, quantity: number) => setQuantities((current) => ({ ...current, [key]: quantity })),
+    []
+  );
 
   const add = useCallback(
     (o: Offer, quantity: number) => {
@@ -306,7 +309,7 @@ export function CustomerCatalogue({
         tr("Impossibile salvare il carrello: il browser blocca l'archiviazione locale.")
       );
     },
-    [tr]
+    [tr, setQuantity]
   );
 
   /** Clears every selection, including the size, and empties the results. */
@@ -334,10 +337,15 @@ export function CustomerCatalogue({
   /** Phone only: whether season/brand/sort are unfolded. Always shown from `sm`. */
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const basketCount = useBasketCount();
-
   return (
-    <div>
+    /*
+      DESKTOP: results left, the persistent basket rail right (from `lg`).
+      PHONE/TABLET: one column; the sticky bar (phone) and the header count
+      (tablet) are the route to the basket. Exactly one basket control per
+      breakpoint: bar `md:hidden`, rail `hidden lg:block`.
+    */
+    <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start lg:gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+    <div className="min-w-0">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h1 className="text-xl font-extrabold tracking-tight text-ink sm:text-2xl">
           {tr("Catalogo pneumatici")}
@@ -443,7 +451,13 @@ export function CustomerCatalogue({
         {/* SECONDARY — season, brand, sort. Quieter, and on their own row. */}
         <div
           id="catalogue-secondary-filters"
-          className={`mt-2 grid-cols-2 gap-2 border-t border-ink/10 pt-2 sm:grid sm:grid-cols-4 ${
+          /*
+            Phone: a 2-column grid when unfolded. From `sm`: a wrapping row in
+            which every select gets at least 10rem and grows to share the
+            width, so the longest option ("Prezzo più basso") is never
+            clipped; the reset link takes only its own width at the end.
+          */
+          className={`mt-2 grid-cols-2 gap-2 border-t border-ink/10 pt-2 sm:flex sm:flex-wrap sm:items-end sm:[&>*]:min-w-[10rem] sm:[&>*]:flex-1 ${
             filtersOpen ? "grid" : "hidden"
           }`}
         >
@@ -497,7 +511,7 @@ export function CustomerCatalogue({
 
           {/* From `sm` the reset sits at the end of the secondary row. */}
           {hasSelection && (
-            <div className="hidden items-end justify-end sm:flex">
+            <div className="hidden items-end justify-end sm:flex sm:!min-w-0 sm:!flex-none">
               <button
                 type="button"
                 onClick={reset}
@@ -554,9 +568,10 @@ export function CustomerCatalogue({
                   <OfferCard
                     key={key}
                     offer={o}
+                    offerKey={key}
                     deliveryDays={deliveryDays}
                     quantity={quantityOf(key)}
-                    onQuantityChange={(q) => setQuantity(key, q)}
+                    onQuantityChange={setQuantity}
                     onAdd={add}
                     added={added === key}
                     tr={tr}
@@ -592,14 +607,28 @@ export function CustomerCatalogue({
       </div>
 
       {toast && <AddedToast key={toast.id} tyre={toast.tyre} quantity={toast.quantity} tr={tr} />}
-      {basketCount > 0 && (
-        <>
-          {/* Reserves the sticky bar's height, so it never covers the last result or the pager. */}
-          <div className="h-[60px] md:hidden" aria-hidden="true" />
-          <StickyBasketBar count={basketCount} tr={tr} />
-        </>
-      )}
+      <MobileBasketBar tr={tr} />
     </div>
+    <CatalogueBasketRail />
+    </div>
+  );
+}
+
+/**
+ * The phone's route to the basket, and the space it needs.
+ *
+ * Its own component so the basket count it listens to re-renders THIS, not
+ * the whole results list, every time a line is added or changed.
+ */
+function MobileBasketBar({ tr }: { tr: Tr }) {
+  const basketCount = useBasketCount();
+  if (basketCount <= 0) return null;
+  return (
+    <>
+      {/* Reserves the sticky bar's height, so it never covers the last result or the pager. */}
+      <div className="h-[60px] md:hidden" aria-hidden="true" />
+      <StickyBasketBar count={basketCount} tr={tr} />
+    </>
   );
 }
 
@@ -745,7 +774,7 @@ function AddedToast({ tyre, quantity, tr }: { tyre: string; quantity: number; tr
         the customer to use. On desktop neither exists, so it returns to the
         bottom of the viewport.
       */
-      className="pointer-events-none fixed inset-x-0 bottom-[calc(116px+env(safe-area-inset-bottom))] z-50 flex justify-center px-4 md:bottom-4"
+      className="pointer-events-none fixed inset-x-0 bottom-[calc(116px+env(safe-area-inset-bottom))] z-50 flex justify-center px-4 md:bottom-4 lg:hidden"
     >
       <div className="gr-toast pointer-events-auto flex max-w-full items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-white shadow-modal">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-state-success">
@@ -778,20 +807,28 @@ const SEASON_ICONS: Record<string, (props: { className?: string }) => JSX.Elemen
 /**
  * One result.
  *
- * MOBILE IS NOT THE DESKTOP ROW SQUEEZED. Under `sm` identity and price share
- * the first row and a full-width action row follows, with the stepper and
- * Aggiungi side by side and both at 44px. From `sm` it becomes a single
- * scanning row — identity left, price right, action right — so a shop can run
- * down fifty of them and add from several without the eye leaving one column.
+ * SCANNING ORDER: brand → model → size (with load/speed) → attributes and
+ * delivery → price and PFU → quantity + add. Brand, model and size are three
+ * separate elements, not one concatenated headline, so a shop running down
+ * the list compares sizes and prices in straight vertical lines.
  *
- * ONLY WHAT THE PROJECTION ACTUALLY CARRIES is drawn: brand, model, size,
- * load/speed, season, XL, run-flat, older DOT, availability, price, PFU and
- * the GommaRush delivery promise. There is no photograph, no brand mark and no
- * label value, because the catalogue holds none of those and inventing one
- * would be inventing a product claim.
+ * SHAPES. Phone: identity and price share the first row, attributes run full
+ * width, the stepper and Aggiungi take the last row. From `sm`: one row —
+ * a restrained tyre mark, identity, a right-aligned price column, then the
+ * action. With the desktop basket rail beside it the row stays compact
+ * enough to show several results per screen.
+ *
+ * MEMOISED. Quantity state lives in the parent; `onQuantityChange` is stable
+ * and keyed, so typing in one row re-renders that row only.
+ *
+ * ONLY WHAT THE PROJECTION CARRIES is drawn: no photograph, no brand mark, no
+ * label value, and no live-verification state — availability here is the
+ * catalogue's own figure (owner decision: the supplier is asked only at final
+ * order confirmation).
  */
-function OfferCard({
+const OfferCard = memo(function OfferCard({
   offer,
+  offerKey,
   deliveryDays,
   quantity,
   onQuantityChange,
@@ -800,9 +837,10 @@ function OfferCard({
   tr,
 }: {
   offer: Offer;
+  offerKey: string;
   deliveryDays: number;
   quantity: number;
-  onQuantityChange: (quantity: number) => void;
+  onQuantityChange: (key: string, quantity: number) => void;
   onAdd: (o: Offer, quantity: number) => void;
   added: boolean;
   tr: Tr;
@@ -814,32 +852,30 @@ function OfferCard({
 
   return (
     <article
-      className={`rounded-2xl border bg-white p-3 transition-colors sm:p-4 ${
+      className={`rounded-xl border bg-white px-3 py-3 transition-colors sm:px-4 ${
         added ? "border-state-success" : "border-ink/10"
       }`}
     >
-      {/*
-        ONE GRID, TWO SHAPES. Phone: identity and price share the first row,
-        the stepper and Aggiungi take the full second row. From `sm`: one
-        scanning row — identity, price, action. The eye runs brand/model →
-        size → attributes → availability and delivery → price → quantity + add,
-        and a phone shows roughly twice as many results per screen as the
-        stacked card did.
-      */}
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center sm:gap-x-4 sm:gap-y-2">
-        {/* ---- IDENTITY ------------------------------------------------ */}
-        <div className="min-w-0">
-          <div className="truncate text-[15px] font-extrabold text-ink">
-            {name || tr("Marca non indicata")}
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 sm:grid-cols-[auto_minmax(0,1fr)_auto_auto] sm:items-center sm:gap-x-4">
+        {/* A restrained technical mark, from `sm`. Aids scanning, carries no product claim. */}
+        <TyreIcon className="hidden h-9 w-9 text-ink/25 sm:col-start-1 sm:row-span-2 sm:row-start-1 sm:block lg:hidden xl:block" />
+
+        {/* ---- IDENTITY: brand / model / size ---------------------------- */}
+        <div className="min-w-0 sm:col-start-2">
+          <div className="truncate text-[11px] font-bold uppercase tracking-[0.08em] text-ink-soft">
+            {t.brand || tr("Marca non indicata")}
           </div>
-          <div className="mt-0.5 text-sm font-semibold text-ink-soft">
+          {t.modelPattern && (
+            <div className="truncate text-[15px] font-extrabold leading-tight text-ink" title={t.modelPattern}>{t.modelPattern}</div>
+          )}
+          <div className="mt-0.5 text-[15px] font-bold tabular-nums text-ink">
             {t.sizeDisplay ?? tr("Misura non indicata")}
-            {loadSpeed ? ` · ${loadSpeed}` : ""}
+            {loadSpeed ? <span className="font-semibold text-ink-soft"> · {loadSpeed}</span> : null}
           </div>
         </div>
 
-        {/* Attributes, availability, delivery: full width on a phone, under the name from `sm`. */}
-        <div className="col-span-2 -mt-1 flex flex-wrap items-center gap-1.5 sm:col-span-1 sm:col-start-1 sm:row-start-2 sm:mt-0">
+        {/* ---- ATTRIBUTES, availability, delivery ------------------------ */}
+        <div className="col-span-2 flex flex-wrap items-center gap-1.5 sm:col-start-2 sm:row-start-2">
           {t.season && SEASON_LABELS[t.season] && (
             <Tag>
               {SeasonIcon && <SeasonIcon className="h-3.5 w-3.5" />}
@@ -856,26 +892,26 @@ function OfferCard({
           </span>
         </div>
 
-        {/* ---- PRICE ---------------------------------------------------
+        {/* ---- PRICE: the right-hand anchor ------------------------------
             Selling price and PFU. No VAT line and no VAT-inclusive total:
             owner decision, recorded at the top of this file. Nothing about
             PFU provenance changes — this is what is drawn, not what is held.
         */}
-        <div className="col-start-2 row-start-1 text-right sm:row-span-2">
-          <div className="whitespace-nowrap text-lg font-extrabold leading-none text-ink">
+        <div className="col-start-2 row-start-1 text-right sm:col-start-3 sm:min-w-[7rem] sm:self-center">
+          <div className="whitespace-nowrap text-lg font-extrabold leading-none tabular-nums text-ink">
             {money(offer.tyreSaleNetCents)}{" "}
             <span className="text-xs font-semibold text-ink-soft">{tr("netto")}</span>
           </div>
-          <div className="mt-1 whitespace-nowrap text-xs font-semibold text-ink-soft">
+          <div className="mt-1 whitespace-nowrap text-xs font-semibold tabular-nums text-ink-soft">
             {tr("PFU")} {money(offer.pfuAmountCents)}
           </div>
         </div>
 
-        {/* ---- ACTION --------------------------------------------------- */}
-        <div className="col-span-2 flex items-center gap-2 sm:col-span-1 sm:col-start-3 sm:row-span-2 sm:row-start-1">
+        {/* ---- ACTION ----------------------------------------------------- */}
+        <div className="col-span-2 flex items-center gap-2 sm:col-span-1 sm:col-start-4 sm:row-span-2 sm:row-start-1">
           <QuantityStepper
             value={quantity}
-            onChange={onQuantityChange}
+            onChange={(q) => onQuantityChange(offerKey, q)}
             disabled={!offer.priceAvailable}
             label={`${tr("Quantità")} ${name} ${t.sizeDisplay ?? ""}`.trim()}
           />
@@ -903,7 +939,7 @@ function OfferCard({
       </div>
     </article>
   );
-}
+});
 
 function Tag({ children }: { children: React.ReactNode }) {
   return (

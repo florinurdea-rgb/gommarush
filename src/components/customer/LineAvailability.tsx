@@ -2,7 +2,6 @@
 import Link from "next/link";
 import {
   CommerceCheckIcon,
-  CommerceRefreshIcon,
   CommerceWarningIcon,
 } from "@/components/customer/CommerceIcons";
 import { alternativesHref, type AlternativesTyre } from "@/lib/customer/alternatives";
@@ -19,63 +18,26 @@ import { alternativesHref, type AlternativesTyre } from "@/lib/customer/alternat
  * feed or a check — those exist behind this component and must not surface
  * through it.
  *
- * A VERIFICATION FAILURE IS NOT OUT OF STOCK, and the two must never look
- * alike. Out of stock is red and blocks the order; "temporarily unable to
- * confirm" is amber, carries the time of the figure being used, and offers a
- * retry. It does not stop the customer reaching checkout, but the order
- * itself is only created after a fresh check succeeds (D27): the final submit
- * fails closed with LIVE_VERIFICATION_UNAVAILABLE, never with out-of-stock.
+ * NO VERIFICATION UI. Owner decision, 2026-09-26: the live supplier check
+ * runs only at final order confirmation, so nothing here shows a verification
+ * source, a timestamp, a retry or an in-progress check. The state drawn is the
+ * one the server derived from current catalogue data; the order gate makes
+ * the authoritative check, and a failed check there is reported by the
+ * checkout — never as out of stock.
  */
 
 export type LineState = "available" | "limited" | "unavailable";
-export type VerifiedSource = "live" | "feed" | "feed_after_live_failure";
 
 export interface LineStatusProps {
   state: LineState;
   availableQuantity: number | null;
   unavailableReason: string | null;
   requestedQuantity: number;
-  verifiedSource: VerifiedSource;
-  verifiedAt: string | null;
   tyre: AlternativesTyre | null;
   /** Null on the checkout, where the basket is not composed. */
   onAcceptAvailable?: ((quantity: number) => void) | null;
   busy?: boolean;
-  /** True while a line-level validation is in flight. */
-  validating?: boolean;
-  /** Re-asks for this line after a check that did not complete. */
-  onRetry?: (() => void) | null;
   tr: (text: string) => string;
-}
-
-/**
- * When the figure behind this line was established.
- *
- * A time, not an adjective. A tyre shop can judge for itself whether an
- * hour-old figure is good enough for what it is about to promise its own
- * customer; "recente" takes that judgement away from them.
- */
-function observedLabel(
-  source: VerifiedSource,
-  at: string | null,
-  tr: (t: string) => string
-): string {
-  const time = at
-    ? new Date(at).toLocaleString("it-IT", {
-        hour: "2-digit",
-        minute: "2-digit",
-        day: "2-digit",
-        month: "2-digit",
-      })
-    : null;
-
-  if (source === "live") {
-    return time ? `${tr("Verificato ora")} · ${time}` : tr("Verificato ora");
-  }
-  if (source === "feed_after_live_failure") {
-    return time ? `${tr("Verifica non riuscita — dato del")} ${time}` : tr("Verifica non riuscita");
-  }
-  return time ? `${tr("Disponibilità rilevata alle")} ${time}` : tr("Disponibilità da rilevare");
 }
 
 const PANEL = "mt-3 rounded-xl border p-3";
@@ -85,32 +47,12 @@ export function LineAvailability({
   availableQuantity,
   unavailableReason,
   requestedQuantity,
-  verifiedSource,
-  verifiedAt,
   tyre,
   onAcceptAvailable,
   busy,
-  validating,
-  onRetry,
   tr,
 }: LineStatusProps) {
   const href = alternativesHref(tyre);
-  const observed = observedLabel(verifiedSource, verifiedAt, tr);
-
-  /*
-    Verification in progress. Its own state rather than a spinner over the
-    line: the figure on screen is still the last good one, and blanking it
-    while a quantity is re-checked makes a two-second round trip look like a
-    tyre that vanished.
-  */
-  if (validating) {
-    return (
-      <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-ink-soft" role="status">
-        <CommerceRefreshIcon className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
-        {tr("Verifica in corso…")}
-      </p>
-    );
-  }
 
   if (state === "unavailable") {
     return (
@@ -150,7 +92,6 @@ export function LineAvailability({
           <CommerceWarningIcon className="h-4 w-4 flex-none text-state-warning" />
           {tr("Disponibili solo")} {available} {tr("su")} {requestedQuantity}
         </p>
-        <p className="mt-1 text-xs text-ink">{observed}</p>
         <div className="mt-3 flex flex-wrap gap-2">
           {/*
             One press to make the line orderable again, rather than asking the
@@ -182,38 +123,6 @@ export function LineAvailability({
   }
 
   /*
-    The check did not complete. AMBER, with the time of the figure in use and
-    a retry — never green, because nothing was confirmed, and never red,
-    because nothing is known to be missing. The order step makes its own fresh
-    check and refuses to proceed on a line it cannot confirm, so this is the
-    place to try again rather than a verdict.
-  */
-  if (verifiedSource === "feed_after_live_failure") {
-    return (
-      <div
-        role="status"
-        className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-state-warning/40 bg-state-warning-soft px-3 py-1.5"
-      >
-        <p className="flex items-center gap-1.5 text-xs font-bold text-ink">
-          <CommerceRefreshIcon className="h-3.5 w-3.5 flex-none text-state-warning" />
-          {observed}
-        </p>
-        {/* Compact on purpose: when every line failed at once, a panel per line was a wall of amber. */}
-        {onRetry && (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={onRetry}
-            className="min-h-[44px] px-1 text-xs font-bold text-ink underline underline-offset-2 disabled:opacity-50"
-          >
-            {tr("Riprova")}
-          </button>
-        )}
-      </div>
-    );
-  }
-
-  /*
     Available. A quiet confirmation — one line, no panel. The eye should be
     drawn to the lines that need something, and a green box on every row makes
     the one red box harder to find rather than easier.
@@ -224,7 +133,6 @@ export function LineAvailability({
         <CommerceCheckIcon className="h-3.5 w-3.5" />
         {tr("Disponibile")}
       </span>
-      <span className="text-ink-soft">{observed}</span>
     </p>
   );
 }

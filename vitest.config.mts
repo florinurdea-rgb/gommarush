@@ -5,6 +5,9 @@ import { fileURLToPath } from "node:url";
 const rootDir = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
+  // Component tests (tests/**/*.test.tsx) render real React; Next's tsconfig
+  // keeps JSX as "preserve", so vitest needs the automatic runtime itself.
+  oxc: { jsx: { runtime: "automatic" } },
   resolve: {
     alias: {
       "@": resolve(rootDir, "./src"),
@@ -16,6 +19,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["tests/**/*.test.ts"],
+    // .tsx files opt into jsdom per file with `// @vitest-environment jsdom`.
+    include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
   },
 });

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireCustomerSession } from "@/lib/auth/customer-session";
 import { logError } from "@/lib/logger";
 import { readJsonBody } from "@/lib/server/route-helpers";
-import { validateBasketLines } from "@/lib/server/customer-basket";
+import { customerBasketView, validateBasketLines } from "@/lib/server/customer-basket";
 import {
   createPortalSalesOrder,
   FULFILMENT_CLASSES,
@@ -91,7 +91,8 @@ export async function POST(request: NextRequest) {
     */
     if (error instanceof OrderRefusal) {
       return NextResponse.json(
-        { ok: false, code: error.code, basket: error.basket },
+        // Provenance stays server-side: the customer sees figures, not sources.
+        { ok: false, code: error.code, basket: customerBasketView(error.basket) },
         { status: CLIENT_SAFE[error.code] ?? 409 }
       );
     }

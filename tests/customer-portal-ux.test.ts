@@ -874,23 +874,18 @@ describe("what gets checked live, and when", () => {
   const read = (path: string) => require("node:fs").readFileSync(path, "utf8") as string;
 
   /**
-   * THIS TEST ASSERTED THE OPPOSITE, AND THE REVERSAL IS THE POINT.
-   *
-   * Under D21 the preview deliberately made no supplier call and answered
-   * quantity changes from imported catalogue state. The approved requirement
-   * is now that a quantity change is checked against the real current price
-   * and quantity — otherwise a customer can reduce a line until the stored
-   * figure accepts it, be told it is fine, and have the order refused seconds
-   * later by the check that actually counts.
+   * REVERSED AGAIN, 2026-09-26 — OWNER DECISION. Under D26 the preview called
+   * the supplier on every basket view and quantity change. The owner has moved
+   * the live check to final order confirmation only: browsing, adding,
+   * editing quantities, the basket and entering checkout make NO supplier
+   * call. The order gate (next test) is where the authoritative, force-fresh
+   * check happens, and it still fails closed.
    */
-  it("checks the real current figures from the basket preview", () => {
+  it("makes no supplier call from the basket preview", () => {
     const route = read("app/api/account/basket/preview/route.ts");
-    expect(route).toContain("verifyBasketLive");
-    // Resolve first, then verify: the same two stages, in the same order, as
-    // the order path — not a second engine.
-    expect(route.indexOf("await resolveBasket(lines)")).toBeLessThan(
-      route.indexOf("await verifyBasketLive")
-    );
+    expect(route).not.toContain("verifyBasketLive");
+    expect(route).not.toContain("live-availability");
+    expect(route).toContain("await resolveBasket(lines)");
   });
 
   it("uses the same two stages at order creation, but never from cache", () => {
@@ -1019,17 +1014,27 @@ describe("an order records what was actually verified", () => {
    * brief forbids supplier terminology on a customer screen. What the line
    * must still do is distinguish a confirmed figure from a stored one.
    */
-  it("says on screen when the check did not complete, without naming a source", () => {
+  /**
+   * CHANGED 2026-09-26 (owner decision): the line shows NO verification
+   * source, timestamp or retry. The customer sees the catalogue's state; the
+   * authoritative check happens at final confirmation.
+   */
+  it("shows no verification source, timestamp or retry on a line", () => {
     const shared = read("src/components/customer/LineAvailability.tsx");
-    expect(shared).toContain('tr("Verifica non riuscita — dato del")');
-    expect(shared).toContain('tr("Verificato ora")');
+    for (const gone of ["Verifica non riuscita", "Verificato ora", "Disponibilità rilevata alle", "verifiedAt", "onRetry", "Verifica in corso"]) {
+      expect(shared, gone).not.toContain(gone);
+    }
     expect(shared.toLowerCase(), "no supplier wording").not.toContain("fornitore");
   });
 
-  /** A verification failure is amber and non-blocking; out of stock is red. */
-  it("never dresses a failed check as out of stock", () => {
-    const shared = read("src/components/customer/LineAvailability.tsx");
-    const failure = shared.slice(shared.indexOf("feed_after_live_failure"));
-    expect(failure.slice(0, 200)).not.toContain("Non disponibile");
+  /** A failed FINAL check is amber at checkout, never "Non disponibile". */
+  it("never dresses a failed final check as out of stock", () => {
+    const checkout = read("src/components/customer/CustomerCheckout.tsx");
+    const panel = checkout.slice(
+      checkout.indexOf('{status === "verification" && ('),
+      checkout.indexOf('{status === "pricing"')
+    );
+    expect(panel).toContain("state-warning");
+    expect(panel).not.toContain("Non disponibile");
   });
 });
